@@ -62,7 +62,7 @@ logger = get_logger(__name__)
 
 
 class PlannerService:
-    """Convert a user''s natural-language message into a ``QueryPlan``."""
+    """Convert a user's natural-language message into a ``QueryPlan``."""
 
     def __init__(
         self,
