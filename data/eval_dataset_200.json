@@ -1,0 +1,2002 @@
+[
+  {
+    "id": "p01",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Onay bekleyen satınalma siparişlerini listele",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "authorization_status filter"
+  },
+  {
+    "id": "p02",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Son 30 günde açılan PO başlıklarını getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "creation_date window"
+  },
+  {
+    "id": "p03",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Kapalı siparişleri göster",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "status closed"
+  },
+  {
+    "id": "p04",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Açık siparişleri listele",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "status != CLOSED"
+  },
+  {
+    "id": "p05",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "USD para birimindeki siparişleri getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "currency filter"
+  },
+  {
+    "id": "p06",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Tedarikçi 501 için sipariş başlıklarını listele",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "vendor filter"
+  },
+  {
+    "id": "p07",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Bu ay oluşturulan siparişleri getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "current month window"
+  },
+  {
+    "id": "p08",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Son oluşturulan 10 PO kaydını göster",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "order+limit"
+  },
+  {
+    "id": "p09",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Standart tip siparişleri listele",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "type_lookup_code risk"
+  },
+  {
+    "id": "p10",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Onaysız siparişleri getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "authorization_status"
+  },
+  {
+    "id": "p11",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Tedarikçiye göre PO sayısını ver",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count group by vendor"
+  },
+  {
+    "id": "p12",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Para birimine göre sipariş sayısını getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count group by currency"
+  },
+  {
+    "id": "p13",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Toplam PO başlığı sayısını ver",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count all"
+  },
+  {
+    "id": "p14",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Onay durumuna göre dağılımı göster",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "status histogram"
+  },
+  {
+    "id": "p15",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Dağıtım tablosunda toplam quantity_ordered nedir",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "sum quantity_ordered"
+  },
+  {
+    "id": "p16",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Kalem bazında toplam miktarları göster",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "sum quantity by line"
+  },
+  {
+    "id": "p17",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Aylık PO oluşturma sayısını ver",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "date trunc"
+  },
+  {
+    "id": "p18",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Kaç farklı tedarikçiden sipariş var",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "distinct risk"
+  },
+  {
+    "id": "p19",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "PO_LINES_ALL kaydını say",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "line count"
+  },
+  {
+    "id": "p20",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "PO_DISTRIBUTIONS_ALL kaydını say",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "dist count"
+  },
+  {
+    "id": "p21",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Son 7 günde açılan PO'ları getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "7-day window"
+  },
+  {
+    "id": "p22",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Son 1 yıldaki siparişleri listele",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "365-day window"
+  },
+  {
+    "id": "p23",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "APPROVED durumundaki siparişleri getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "status filter"
+  },
+  {
+    "id": "p24",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "CLOSED olmayan siparişleri getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "status neq"
+  },
+  {
+    "id": "p25",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Geçen ay açılan siparişleri ver",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "prev month"
+  },
+  {
+    "id": "p26",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Teslim alınan miktarı 0 olan sevkiyatları getir",
+    "expected_table": "PO_LINE_LOCATIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "shipment filter"
+  },
+  {
+    "id": "p27",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Fatura edilen miktarı 0 olan sevkiyatları getir",
+    "expected_table": "PO_LINE_LOCATIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "quantity_billed filter"
+  },
+  {
+    "id": "p28",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Tedarikçi site kodu BESTI olan siparişleri göster",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "metadata gap risk"
+  },
+  {
+    "id": "p29",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Toplam tutarı 100000 üstü siparişler",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "needs computed amount"
+  },
+  {
+    "id": "p30",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Teslim tarihi geçmiş sevkiyatları getir",
+    "expected_table": "PO_LINE_LOCATIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "date column ambiguity"
+  },
+  {
+    "id": "p31",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Ürün koduna göre sipariş satır sayısı",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "high",
+    "notes": "join with items"
+  },
+  {
+    "id": "p32",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Malzeme açıklamasıyla kalemleri listele",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "lines-items join"
+  },
+  {
+    "id": "p33",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Dağıtım bazında miktar analizi",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "header-line-ship-dist"
+  },
+  {
+    "id": "p34",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "PO dağıtım tutarlarını satır satır göster",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "join chain"
+  },
+  {
+    "id": "p35",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Kalem ve sevkiyat detaylarını birlikte getir",
+    "expected_table": "PO_LINE_LOCATIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "line-shipment join"
+  },
+  {
+    "id": "p36",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Hesap kombinasyonu bazında dağıtım adetleri",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "group by code_combination_id"
+  },
+  {
+    "id": "p37",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Bilgisayar geçen sipariş kalemlerini getir",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "description like"
+  },
+  {
+    "id": "p38",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Yazıcı geçen kalemlere ait PO başlıklarını getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "header-line projection"
+  },
+  {
+    "id": "p39",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Kalem miktarı ile birim fiyatı birlikte göster",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "p40",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Satır ve dağıtım tablolarını birleştirip getir",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "join chain"
+  },
+  {
+    "id": "p41",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Bugün oluşturulan siparişleri listele",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "today"
+  },
+  {
+    "id": "p42",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Son 90 günün PO başlıklarını getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "90-day window"
+  },
+  {
+    "id": "p43",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "PRE-APPROVED siparişleri göster",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "status value variant"
+  },
+  {
+    "id": "p44",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "EUR para birimli siparişleri getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "currency filter"
+  },
+  {
+    "id": "p45",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Son 20 siparişi listele",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "order+limit"
+  },
+  {
+    "id": "p46",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "PO numarası ve durumuyla siparişleri getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "p47",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Tedarikçi bazlı sipariş özetini getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "may become aggregation"
+  },
+  {
+    "id": "p48",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Açık ve onay bekleyen siparişleri getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "multi-status"
+  },
+  {
+    "id": "p49",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Bu hafta açılan PO'ları göster",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "week window"
+  },
+  {
+    "id": "p50",
+    "domain": "PO",
+    "category": "LISTING",
+    "text": "Type STANDARD olan siparişleri getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "type filter"
+  },
+  {
+    "id": "p51",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Her para biriminde kaç sipariş var",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "group currency"
+  },
+  {
+    "id": "p52",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Gün bazında sipariş adedi",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "date group"
+  },
+  {
+    "id": "p53",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Tedarikçi başına ortalama kalem sayısı",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "high",
+    "notes": "needs multi-step agg"
+  },
+  {
+    "id": "p54",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Sevkiyat tablosunda toplam quantity_received",
+    "expected_table": "PO_LINE_LOCATIONS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "sum"
+  },
+  {
+    "id": "p55",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Dağıtım başına toplam unit_price",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "unit_price sum"
+  },
+  {
+    "id": "p56",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "En çok sipariş verilen tedarikçileri say",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "group+order"
+  },
+  {
+    "id": "p57",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "PO kalem adedini satıcıya göre kır",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "high",
+    "notes": "join to header for vendor"
+  },
+  {
+    "id": "p58",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "Onay durumuna göre toplam kayıt sayısı",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "group status"
+  },
+  {
+    "id": "p59",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "PO_LINE_LOCATIONS_ALL satırlarını say",
+    "expected_table": "PO_LINE_LOCATIONS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count"
+  },
+  {
+    "id": "p60",
+    "domain": "PO",
+    "category": "AGGREGATION",
+    "text": "PO_HEADERS_ALL içinde toplam kayıt sayısı",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count"
+  },
+  {
+    "id": "p61",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Son 15 günde açılan siparişler",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "current_date-15"
+  },
+  {
+    "id": "p62",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Bu yıl açılan siparişler",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "year-start"
+  },
+  {
+    "id": "p63",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Onay durumu INCOMPLETE olan siparişler",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "status filter"
+  },
+  {
+    "id": "p64",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Vendor id 700 ve üstü siparişler",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "numeric range"
+  },
+  {
+    "id": "p65",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Birim fiyatı 0'dan büyük kalemleri getir",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "unit_price filter"
+  },
+  {
+    "id": "p66",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Quantity 100 üstü satırlar",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "quantity filter"
+  },
+  {
+    "id": "p67",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Quantity_received quantity_billed'dan büyük sevkiyatlar",
+    "expected_table": "PO_LINE_LOCATIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "column-ref filter"
+  },
+  {
+    "id": "p68",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Code_combination_id dolu dağıtımları getir",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "not null"
+  },
+  {
+    "id": "p69",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Item açıklaması boş olmayan kalemler",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "not null"
+  },
+  {
+    "id": "p70",
+    "domain": "PO",
+    "category": "FILTER",
+    "text": "Son 2 yılda açılan açık siparişler",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "date+status"
+  },
+  {
+    "id": "p71",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "PO başlığına bağlı kalemleri satıcıyla beraber getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "header-lines"
+  },
+  {
+    "id": "p72",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Kalem, sevkiyat ve dağıtım zincirini listele",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "3-step join"
+  },
+  {
+    "id": "p73",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Ürün segmenti ve kalem miktarını getir",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "item join"
+  },
+  {
+    "id": "p74",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Dağıtım bazında toplam amount hesapla",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "high",
+    "notes": "computed metric"
+  },
+  {
+    "id": "p75",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "PO başlığı ve sevkiyat miktarını birlikte getir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "header-lines-ship"
+  },
+  {
+    "id": "p76",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Item description ile vendor id eşleştir",
+    "expected_table": "PO_HEADERS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "multi-table projection"
+  },
+  {
+    "id": "p77",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Dağıtımları item bazında grupla",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "high",
+    "notes": "dist-lines-items"
+  },
+  {
+    "id": "p78",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Sevkiyat ve dağıtım ilişkisini doğrula",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "line_location join"
+  },
+  {
+    "id": "p79",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Kalem numarası ve hesap kombinasyonunu birlikte ver",
+    "expected_table": "PO_DISTRIBUTIONS_ALL",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "lines+dist join"
+  },
+  {
+    "id": "p80",
+    "domain": "PO",
+    "category": "JOIN",
+    "text": "Ürün koduna göre toplam sipariş miktarı",
+    "expected_table": "PO_LINES_ALL",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "high",
+    "notes": "item join aggregation"
+  },
+  {
+    "id": "e01",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Aktif çalışanları listele",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "cikis_tarihi null"
+  },
+  {
+    "id": "e02",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "IT birimindeki çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "birim filter"
+  },
+  {
+    "id": "e03",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "İstanbul lokasyonundaki çalışanları göster",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "location filter"
+  },
+  {
+    "id": "e04",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Bordrolu personeli listele",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "bordrolu flag"
+  },
+  {
+    "id": "e05",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Stajyer çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "stajyer flag"
+  },
+  {
+    "id": "e06",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Yönetici unvanlı personeli listele",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "title semantics"
+  },
+  {
+    "id": "e07",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "E-postası olan çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "email not null"
+  },
+  {
+    "id": "e08",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Son işe başlayan 10 çalışanı getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "order+limit"
+  },
+  {
+    "id": "e09",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Masraf merkezi BT-01 olan çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "cost center"
+  },
+  {
+    "id": "e10",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Çıkış tarihi olmayan çalışanları listele",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "active synonym"
+  },
+  {
+    "id": "e11",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Departman başına çalışan sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count by birim"
+  },
+  {
+    "id": "e12",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "İstanbul'daki çalışan sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count+location"
+  },
+  {
+    "id": "e13",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Organizasyon bazında personel dağılımı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count by organization"
+  },
+  {
+    "id": "e14",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Toplam aktif personel sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "active count"
+  },
+  {
+    "id": "e15",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Unvana göre çalışan sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count by title"
+  },
+  {
+    "id": "e16",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Lokasyon bazında çalışan dağılımı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count by location"
+  },
+  {
+    "id": "e17",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Masraf merkezi bazında kişi sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "count by cost center"
+  },
+  {
+    "id": "e18",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "2024 yılında işe giren kişi sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "year filter"
+  },
+  {
+    "id": "e19",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Birim ve lokasyona göre çalışan sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "double group"
+  },
+  {
+    "id": "e20",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Bordrolu çalışan sayısını getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "flag count"
+  },
+  {
+    "id": "e21",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "Son 1 yılda işe giren çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "365-day"
+  },
+  {
+    "id": "e22",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "2024 yılında işe başlayanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "year range"
+  },
+  {
+    "id": "e23",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "Son 6 ayda işe girenler",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "6 month range"
+  },
+  {
+    "id": "e24",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "10 yıldan uzun süredir çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "long tenure"
+  },
+  {
+    "id": "e25",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "Maaşı 50000 üzeri çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "no salary column"
+  },
+  {
+    "id": "e26",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "2023 öncesi işe giren personel",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "date range"
+  },
+  {
+    "id": "e27",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "Son 30 günde işe başlayanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "30-day"
+  },
+  {
+    "id": "e28",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "BT birimindeki personel",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "birim like"
+  },
+  {
+    "id": "e29",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "Dahili telefonu dolu çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "dahili not null"
+  },
+  {
+    "id": "e30",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "Performans notu 4 üstü çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "no performance column"
+  },
+  {
+    "id": "e31",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "En yüksek maaşlı 5 çalışan",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "no salary column"
+  },
+  {
+    "id": "e32",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Yönetici pozisyonundaki çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "title semantics"
+  },
+  {
+    "id": "e33",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Her birimde aktif çalışan sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "active+group"
+  },
+  {
+    "id": "e34",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Organizasyon adıyla çalışan detayları",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "e35",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Unvan ve birim bilgisiyle çalışan listesi",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "e36",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Görev tanımı dolu çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "not null"
+  },
+  {
+    "id": "e37",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "En uzun süredir çalışan 10 kişi",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "order asc"
+  },
+  {
+    "id": "e38",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Son 6 ayda terfi edenler",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "no promotion column"
+  },
+  {
+    "id": "e39",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Sicil numarasıyla personel listesi",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "e40",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "2025'te ayrılan çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "exit range"
+  },
+  {
+    "id": "e41",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Ankara lokasyonundaki çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "location"
+  },
+  {
+    "id": "e42",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Ünvanı uzman olan çalışanları listele",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "title filter"
+  },
+  {
+    "id": "e43",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "E-mail adresi olmayan çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "null check"
+  },
+  {
+    "id": "e44",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Masraf merkezi dolu personeli getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "not null"
+  },
+  {
+    "id": "e45",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Son 20 işe giriş kaydını listele",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "order+limit"
+  },
+  {
+    "id": "e46",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Ad ve soyad ile çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "e47",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Departman ve lokasyon bilgisiyle çalışan listesi",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "e48",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Aktif bordrolu çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "compound filter"
+  },
+  {
+    "id": "e49",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Stajyer olmayan çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "neq filter"
+  },
+  {
+    "id": "e50",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Kurumsal e-postası olan yöneticileri getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "title+not null"
+  },
+  {
+    "id": "e51",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Departman bazında aktif kişi sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "active+group"
+  },
+  {
+    "id": "e52",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Lokasyona göre bordrolu personel sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "flag+group"
+  },
+  {
+    "id": "e53",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Aylık işe giriş adedi",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "date group"
+  },
+  {
+    "id": "e54",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Organizasyon başına stajyer sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "flag+group"
+  },
+  {
+    "id": "e55",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Birim bazında e-postasız çalışan adedi",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "null+group"
+  },
+  {
+    "id": "e56",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Ünvan bazında ayrılan çalışan sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "exit not null"
+  },
+  {
+    "id": "e57",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Masraf merkezi bazında aktif kişi sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "group"
+  },
+  {
+    "id": "e58",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Yıl bazında işe giriş trendi",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "medium",
+    "notes": "year extraction"
+  },
+  {
+    "id": "e59",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Toplam ayrılan çalışan sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "exit not null count"
+  },
+  {
+    "id": "e60",
+    "domain": "EMP",
+    "category": "AGGREGATION",
+    "text": "Toplam stajyer çalışan sayısı",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "aggregation",
+    "wrong_plan_risk": "low",
+    "notes": "stajyer count"
+  },
+  {
+    "id": "e61",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "Bu yıl işe başlayan çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "year start"
+  },
+  {
+    "id": "e62",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "Son 90 günde işe girenler",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "90-day"
+  },
+  {
+    "id": "e63",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "Çıkış tarihi dolu çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "not null"
+  },
+  {
+    "id": "e64",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "EMAIL alanı null olan personel",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "null filter"
+  },
+  {
+    "id": "e65",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "UNVAN içinde müdür geçen çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "like filter"
+  },
+  {
+    "id": "e66",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "BIRIM_ADI içinde satış geçen çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "like filter"
+  },
+  {
+    "id": "e67",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "LOCATION_ADI içinde depo geçen çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "like filter"
+  },
+  {
+    "id": "e68",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "SICIL_NO'su 1000 üstü çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "numeric-like field"
+  },
+  {
+    "id": "e69",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "AD alanı A ile başlayan çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "starts with"
+  },
+  {
+    "id": "e70",
+    "domain": "EMP",
+    "category": "FILTER",
+    "text": "SOYAD alanı Y ile başlayan çalışanlar",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "starts with"
+  },
+  {
+    "id": "e71",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Son işe giriş tarihine göre personeli sırala",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "order by hire"
+  },
+  {
+    "id": "e72",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Ayrılma tarihine göre son ayrılanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "order by exit"
+  },
+  {
+    "id": "e73",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Birim bazında personel detaylarını getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "e74",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Lokasyon ve organizasyon ile personel listesi",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "e75",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Yönetici olmayan çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "medium",
+    "notes": "title negation"
+  },
+  {
+    "id": "e76",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Dahili numarası olmayan personeli getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "null check"
+  },
+  {
+    "id": "e77",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Masraf merkezi ve unvanı birlikte göster",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "projection"
+  },
+  {
+    "id": "e78",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Tam adı dolu çalışanları getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "full_name not null"
+  },
+  {
+    "id": "e79",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Organizasyon adı dolu personeli getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "not null"
+  },
+  {
+    "id": "e80",
+    "domain": "EMP",
+    "category": "LISTING",
+    "text": "Son 14 günde işe başlayan personel",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "low",
+    "notes": "14-day window"
+  },
+  {
+    "id": "x01",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Çalışanlar",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "single token"
+  },
+  {
+    "id": "x02",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Siparişler",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "single token"
+  },
+  {
+    "id": "x03",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Departmanlar",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "no domain"
+  },
+  {
+    "id": "x04",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Veri getir",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "generic"
+  },
+  {
+    "id": "x05",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Listele",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "verb only"
+  },
+  {
+    "id": "x06",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Kaç tane var",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "no entity"
+  },
+  {
+    "id": "x07",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Bilgi ver",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "generic"
+  },
+  {
+    "id": "x08",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Göster",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "verb only"
+  },
+  {
+    "id": "x09",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Tedarikçi mi çalışan mı getireyim",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "explicit cross"
+  },
+  {
+    "id": "x10",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Organizasyon bilgilerini getir",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "medium",
+    "notes": "cross risk"
+  },
+  {
+    "id": "x11",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Tüm kayıtları getir",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "high",
+    "notes": "unsafe broad"
+  },
+  {
+    "id": "x12",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Sistem verilerini listele",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "medium",
+    "notes": "unclear domain"
+  },
+  {
+    "id": "x13",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Bütün verileri göster",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "high",
+    "notes": "unclear domain"
+  },
+  {
+    "id": "x14",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Hem PO hem personel bilgisi istiyorum",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "multi-domain"
+  },
+  {
+    "id": "x15",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Kredi kartı numaralarını getir",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "low",
+    "notes": "out of scope"
+  },
+  {
+    "id": "x16",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Gizli verilere erişmek istiyorum",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "low",
+    "notes": "out of scope"
+  },
+  {
+    "id": "x17",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Doğum tarihlerini listele",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "validation_error",
+    "wrong_plan_risk": "low",
+    "notes": "restricted field"
+  },
+  {
+    "id": "x18",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Şifreleri ver",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "low",
+    "notes": "out of scope"
+  },
+  {
+    "id": "x19",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Kişisel verileri listele",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "medium",
+    "notes": "privacy"
+  },
+  {
+    "id": "x20",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Maaş bilgilerini göster",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "no salary column"
+  },
+  {
+    "id": "x21",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Rapor ver",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "generic"
+  },
+  {
+    "id": "x22",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Durumu göster",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "generic"
+  },
+  {
+    "id": "x23",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Liste çıkar",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "generic"
+  },
+  {
+    "id": "x24",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Özet ver",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "generic"
+  },
+  {
+    "id": "x25",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Satınalma ve İK özetini aynı anda ver",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "multi-domain"
+  },
+  {
+    "id": "x26",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Vendor ve çalışan sayısını birlikte getir",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "medium",
+    "notes": "cross entity"
+  },
+  {
+    "id": "x27",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "PO ile personeli joinle",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "high",
+    "notes": "unsupported cross join"
+  },
+  {
+    "id": "x28",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Organizasyon ve tedarikçi performansı ver",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "medium",
+    "notes": "mixed concepts"
+  },
+  {
+    "id": "x29",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Banka hesaplarını getir",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "low",
+    "notes": "out of scope"
+  },
+  {
+    "id": "x30",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "TC kimlik numaralarını ver",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "low",
+    "notes": "sensitive"
+  },
+  {
+    "id": "x31",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Gizli maaş bordrolarını indir",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "low",
+    "notes": "sensitive"
+  },
+  {
+    "id": "x32",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Tüm kullanıcı şifrelerini listele",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "low",
+    "notes": "sensitive"
+  },
+  {
+    "id": "x33",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Dünkü durum nedir",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "entity missing"
+  },
+  {
+    "id": "x34",
+    "domain": "AMBIGUOUS",
+    "category": "AMBIGUOUS",
+    "text": "Bu haftayı göster",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "low",
+    "notes": "entity missing"
+  },
+  {
+    "id": "x35",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "İnsan kaynakları ve satınalma birleşik raporu",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "medium",
+    "notes": "cross-domain"
+  },
+  {
+    "id": "x36",
+    "domain": "CROSS",
+    "category": "CROSS_DOMAIN",
+    "text": "Personel ve PO trendini karşılaştır",
+    "expected_table": null,
+    "expected_intent_type": "clarification",
+    "wrong_plan_risk": "medium",
+    "notes": "cross-domain"
+  },
+  {
+    "id": "x37",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Yetkisiz alanları dök",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "low",
+    "notes": "security"
+  },
+  {
+    "id": "x38",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Sistem admin parolasını getir",
+    "expected_table": null,
+    "expected_intent_type": "clarification_or_error",
+    "wrong_plan_risk": "low",
+    "notes": "security"
+  },
+  {
+    "id": "x39",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "DOGUM_TARIHI kolonunu herkese aç",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "validation_error",
+    "wrong_plan_risk": "low",
+    "notes": "restricted"
+  },
+  {
+    "id": "x40",
+    "domain": "INVALID",
+    "category": "INVALID",
+    "text": "Maaş ve prim detaylarını getir",
+    "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+    "expected_intent_type": "list",
+    "wrong_plan_risk": "high",
+    "notes": "non-existing columns"
+  }
+]
