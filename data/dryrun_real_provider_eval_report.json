@@ -1,0 +1,2701 @@
+{
+  "dataset_path": "data\\eval_dataset_100.json",
+  "dataset_size": 100,
+  "summary": {
+    "total_questions": 100,
+    "counts": {
+      "success": 72,
+      "wrong_plan": 26,
+      "validation_error": 1,
+      "clarification": 1
+    },
+    "success_rate": 0.72,
+    "clarification_rate": 0.01,
+    "wrong_plan_rate": 0.3023255813953488,
+    "validation_error_rate": 0.01,
+    "compile_error_rate": 0.0,
+    "execution_error_rate": 0.0,
+    "avg_latency_ms": 0.86,
+    "p95_latency_ms": 1.0,
+    "timeout_count": 0,
+    "row_count_distribution": {
+      "1_10": 93,
+      "unknown": 2,
+      "0": 5
+    },
+    "heavy_join_queries": [
+      {
+        "id": "p15",
+        "question": "Toplam dagitim miktarini hesapla",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p19",
+        "question": "Dagitim tablosundaki toplam kalem sayisi",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p25",
+        "question": "Dagitim tutari sifir olan kalemleri listele",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p31",
+        "question": "Urun bazinda PO satir sayisi",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p32",
+        "question": "Dagitim bazinda tutar analizi",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p33",
+        "question": "PO dagitim tutarlarini kalem kalem goster",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p34",
+        "question": "Malzeme aciklamasiyla siparis kalemlerini listele",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p36",
+        "question": "Hesap kombinasyonu bazinda dagitim tutari",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      }
+    ],
+    "top_slowest_queries": [
+      {
+        "id": "p01",
+        "question": "Onay bekleyen satinalma siparislerini listele",
+        "latency_ms": 2,
+        "status": "success",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "e38",
+        "question": "Son 6 ayda terfi eden calisanlar",
+        "latency_ms": 2,
+        "status": "success",
+        "tables": [
+          "XXBT_PDKS_PER_DETAILS_V"
+        ]
+      },
+      {
+        "id": "p02",
+        "question": "Son 30 gunde olusturulan PO basliklarini goster",
+        "latency_ms": 1,
+        "status": "success",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p03",
+        "question": "Acik siparisleri getir",
+        "latency_ms": 1,
+        "status": "success",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p05",
+        "question": "Iptal edilmis siparisleri getir",
+        "latency_ms": 1,
+        "status": "success",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p06",
+        "question": "USD cinsinden siparis basliklarini listele",
+        "latency_ms": 1,
+        "status": "success",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p07",
+        "question": "Standart tipte siparisleri listele",
+        "latency_ms": 1,
+        "status": "success",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p08",
+        "question": "Tedarikci ID 501'e ait siparisleri getir",
+        "latency_ms": 1,
+        "status": "success",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p11",
+        "question": "Tedarikciye gore PO sayisini goster",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p12",
+        "question": "Para birimine gore siparis sayisini goster",
+        "latency_ms": 1,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      }
+    ],
+    "clarification_breakdown": {
+      "genuine_ambiguity": 1
+    },
+    "safety_checks": {
+      "sqlguard_select_only": true,
+      "multi_statement_block": true,
+      "bind_param_usage": true,
+      "bind_param_usage_count": 98,
+      "row_limit_enforced": true,
+      "row_limit_enforced_count": 98,
+      "timeout_enforced": true,
+      "sql_leak_count": 0,
+      "restricted_fields_exposure_count": 0
+    },
+    "manual_review_list_size": 27,
+    "readiness_decision": "not_ready"
+  },
+  "results": [
+    {
+      "id": "p01",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "Onay bekleyen satinalma siparislerini listele",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Onaysız veya bekleyen PO'ları listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 2,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p02",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "Son 30 gunde olusturulan PO basliklarini goster",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Son 30 günde açılan satın alma siparişlerini göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE creation_date >= TRUNC(SYSDATE)-30\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p03",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "Acik siparisleri getir",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Kapatılmamış açık PO'ları listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p04",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "Kapali PO basliklarini listele",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p05",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "Iptal edilmis siparisleri getir",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p06",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "USD cinsinden siparis basliklarini listele",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p07",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "Standart tipte siparisleri listele",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p08",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "Tedarikci ID 501'e ait siparisleri getir",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p09",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "Bu hafta olusturulan siparisleri listele",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p10",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "En son olusturulan 10 siparis kaydini getir",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p11",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "Tedarikciye gore PO sayisini goster",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_aggregation"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p12",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "Para birimine gore siparis sayisini goster",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_aggregation"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p13",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "Siparis basliklarini say",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_aggregation"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p14",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "Onay durumuna gore PO dagilimi",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_aggregation",
+        "wrong_filter_column"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p15",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "Toplam dagitim miktarini hesapla",
+      "expected_table": "PO_DISTRIBUTIONS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Dağıtım bazında sipariş tutar analizini göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+        "left_table='PO_LINES_ALL' right_table='PO_LINE_LOCATIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='po_line_id', right_table='PO_LINE_LOCATIONS_ALL', right_column='po_line_id')]",
+        "left_table='PO_LINE_LOCATIONS_ALL' right_table='PO_DISTRIBUTIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINE_LOCATIONS_ALL', left_column='line_location_id', right_table='PO_DISTRIBUTIONS_ALL', right_column='line_location_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT p4.code_combination_id, SUM(p4.quantity_ordered) AS ordered_qty, SUM(p2.unit_price) AS price_sum, (p2.quantity * p2.unit_price) AS total_amount\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN PO_LINE_LOCATIONS_ALL p3 ON p2.po_line_id = p3.po_line_id\nINNER JOIN PO_DISTRIBUTIONS_ALL p4 ON p3.line_location_id = p4.line_location_id\nGROUP BY p4.code_combination_id\nORDER BY p4.quantity_ordered DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p16",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "Siparis basina ortalama kalem sayisi",
+      "expected_table": "PO_LINES_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT p2.line_num, p2.item_description, SUM(p2.quantity) AS total_qty\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nGROUP BY p2.line_num, p2.item_description\nORDER BY p.creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p17",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "Hangi tedarikci kac siparis vermis",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Tedarikçiye göre PO sayısını göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT vendor_id, COUNT(*) AS po_count\nFROM PO_HEADERS_ALL\nGROUP BY vendor_id\nORDER BY po_count DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p18",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "Aylik PO olusturma sayisini goster",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_aggregation"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p19",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "Dagitim tablosundaki toplam kalem sayisi",
+      "expected_table": "PO_DISTRIBUTIONS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Dağıtım bazında sipariş tutar analizini göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+        "left_table='PO_LINES_ALL' right_table='PO_LINE_LOCATIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='po_line_id', right_table='PO_LINE_LOCATIONS_ALL', right_column='po_line_id')]",
+        "left_table='PO_LINE_LOCATIONS_ALL' right_table='PO_DISTRIBUTIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINE_LOCATIONS_ALL', left_column='line_location_id', right_table='PO_DISTRIBUTIONS_ALL', right_column='line_location_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT p4.code_combination_id, SUM(p4.quantity_ordered) AS ordered_qty, SUM(p2.unit_price) AS price_sum, (p2.quantity * p2.unit_price) AS total_amount\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN PO_LINE_LOCATIONS_ALL p3 ON p2.po_line_id = p3.po_line_id\nINNER JOIN PO_DISTRIBUTIONS_ALL p4 ON p3.line_location_id = p4.line_location_id\nGROUP BY p4.code_combination_id\nORDER BY p4.quantity_ordered DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p20",
+      "domain": "PO",
+      "category": "AGGREGATION",
+      "question": "PO_HEADERS_ALL tablosundaki kayitlari say",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_aggregation"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p21",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "Son 1 yilda olusturulan siparisleri getir",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p22",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "Bugun onaylanan siparisleri getir",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p23",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "Toplam tutari 100.000 TL uzerinde olan siparisler",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p24",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "APPROVED durumundaki siparisleri getir",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p25",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "Dagitim tutari sifir olan kalemleri listele",
+      "expected_table": "PO_DISTRIBUTIONS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Dağıtım bazında sipariş tutar analizini göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+        "left_table='PO_LINES_ALL' right_table='PO_LINE_LOCATIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='po_line_id', right_table='PO_LINE_LOCATIONS_ALL', right_column='po_line_id')]",
+        "left_table='PO_LINE_LOCATIONS_ALL' right_table='PO_DISTRIBUTIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINE_LOCATIONS_ALL', left_column='line_location_id', right_table='PO_DISTRIBUTIONS_ALL', right_column='line_location_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT p4.code_combination_id, SUM(p4.quantity_ordered) AS ordered_qty, SUM(p2.unit_price) AS price_sum, (p2.quantity * p2.unit_price) AS total_amount\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN PO_LINE_LOCATIONS_ALL p3 ON p2.po_line_id = p3.po_line_id\nINNER JOIN PO_DISTRIBUTIONS_ALL p4 ON p3.line_location_id = p4.line_location_id\nGROUP BY p4.code_combination_id\nORDER BY p4.quantity_ordered DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p26",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "Kapali olmayan tum siparisleri getir",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p27",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "Gecen ay acilan PO'lari getir",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p28",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "Son 7 gunde acilan onay bekleyen PO'lar",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Onaysız veya bekleyen PO'ları listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p29",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "Tedarikci site kodu BESTI olan siparisleri goster",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p30",
+      "domain": "PO",
+      "category": "FILTER",
+      "question": "Teslim tarihi gecmis siparis satirlari",
+      "expected_table": "PO_LINE_LOCATIONS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p31",
+      "domain": "PO",
+      "category": "JOIN",
+      "question": "Urun bazinda PO satir sayisi",
+      "expected_table": "PO_LINES_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Ürün bazında PO satır sayısını göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+        "left_table='PO_LINES_ALL' right_table='MTL_SYSTEM_ITEMS_B' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='item_id', right_table='MTL_SYSTEM_ITEMS_B', right_column='inventory_item_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT m.segment1, m.description, COUNT(*) AS line_count\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN MTL_SYSTEM_ITEMS_B m ON p2.item_id = m.inventory_item_id\nGROUP BY m.segment1, m.description\nORDER BY line_count DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p32",
+      "domain": "PO",
+      "category": "JOIN",
+      "question": "Dagitim bazinda tutar analizi",
+      "expected_table": "PO_DISTRIBUTIONS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Dağıtım bazında sipariş tutar analizini göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+        "left_table='PO_LINES_ALL' right_table='PO_LINE_LOCATIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='po_line_id', right_table='PO_LINE_LOCATIONS_ALL', right_column='po_line_id')]",
+        "left_table='PO_LINE_LOCATIONS_ALL' right_table='PO_DISTRIBUTIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINE_LOCATIONS_ALL', left_column='line_location_id', right_table='PO_DISTRIBUTIONS_ALL', right_column='line_location_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT p4.code_combination_id, SUM(p4.quantity_ordered) AS ordered_qty, SUM(p2.unit_price) AS price_sum, (p2.quantity * p2.unit_price) AS total_amount\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN PO_LINE_LOCATIONS_ALL p3 ON p2.po_line_id = p3.po_line_id\nINNER JOIN PO_DISTRIBUTIONS_ALL p4 ON p3.line_location_id = p4.line_location_id\nGROUP BY p4.code_combination_id\nORDER BY p4.quantity_ordered DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p33",
+      "domain": "PO",
+      "category": "JOIN",
+      "question": "PO dagitim tutarlarini kalem kalem goster",
+      "expected_table": "PO_DISTRIBUTIONS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Dağıtım bazında sipariş tutar analizini göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+        "left_table='PO_LINES_ALL' right_table='PO_LINE_LOCATIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='po_line_id', right_table='PO_LINE_LOCATIONS_ALL', right_column='po_line_id')]",
+        "left_table='PO_LINE_LOCATIONS_ALL' right_table='PO_DISTRIBUTIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINE_LOCATIONS_ALL', left_column='line_location_id', right_table='PO_DISTRIBUTIONS_ALL', right_column='line_location_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT p4.code_combination_id, SUM(p4.quantity_ordered) AS ordered_qty, SUM(p2.unit_price) AS price_sum, (p2.quantity * p2.unit_price) AS total_amount\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN PO_LINE_LOCATIONS_ALL p3 ON p2.po_line_id = p3.po_line_id\nINNER JOIN PO_DISTRIBUTIONS_ALL p4 ON p3.line_location_id = p4.line_location_id\nGROUP BY p4.code_combination_id\nORDER BY p4.quantity_ordered DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p34",
+      "domain": "PO",
+      "category": "JOIN",
+      "question": "Malzeme aciklamasiyla siparis kalemlerini listele",
+      "expected_table": "PO_LINES_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Ürün bazında PO satır sayısını göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+        "left_table='PO_LINES_ALL' right_table='MTL_SYSTEM_ITEMS_B' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='item_id', right_table='MTL_SYSTEM_ITEMS_B', right_column='inventory_item_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT m.segment1, m.description, COUNT(*) AS line_count\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN MTL_SYSTEM_ITEMS_B m ON p2.item_id = m.inventory_item_id\nGROUP BY m.segment1, m.description\nORDER BY line_count DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_filter_column",
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p35",
+      "domain": "PO",
+      "category": "JOIN",
+      "question": "Sevkiyat lokasyonu bilgisiyle siparis detayi",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 0,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_filter_column",
+        "wrong_join"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p36",
+      "domain": "PO",
+      "category": "JOIN",
+      "question": "Hesap kombinasyonu bazinda dagitim tutari",
+      "expected_table": "PO_DISTRIBUTIONS_ALL",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Dağıtım bazında sipariş tutar analizini göster",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+        "left_table='PO_LINES_ALL' right_table='PO_LINE_LOCATIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='po_line_id', right_table='PO_LINE_LOCATIONS_ALL', right_column='po_line_id')]",
+        "left_table='PO_LINE_LOCATIONS_ALL' right_table='PO_DISTRIBUTIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINE_LOCATIONS_ALL', left_column='line_location_id', right_table='PO_DISTRIBUTIONS_ALL', right_column='line_location_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT p4.code_combination_id, SUM(p4.quantity_ordered) AS ordered_qty, SUM(p2.unit_price) AS price_sum, (p2.quantity * p2.unit_price) AS total_amount\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN PO_LINE_LOCATIONS_ALL p3 ON p2.po_line_id = p3.po_line_id\nINNER JOIN PO_DISTRIBUTIONS_ALL p4 ON p3.line_location_id = p4.line_location_id\nGROUP BY p4.code_combination_id\nORDER BY p4.quantity_ordered DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p37",
+      "domain": "PO",
+      "category": "JOIN",
+      "question": "Bilgisayar iceren siparisleri getir",
+      "expected_table": "PO_LINES_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_join",
+        "wrong_table"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "p38",
+      "domain": "PO",
+      "category": "JOIN",
+      "question": "Yazici kalemlerini iceren PO basliklarini goster",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Açık satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [
+        "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]"
+      ],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT p2.line_num, p2.item_description, SUM(p2.quantity) AS total_qty\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nWHERE p.authorization_status != :p1\nGROUP BY p2.line_num, p2.item_description\nORDER BY p.creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p39",
+      "domain": "PO",
+      "category": "JOIN",
+      "question": "Fatura edilmis miktari sifir olan sevkiyatlari goster",
+      "expected_table": "PO_LINE_LOCATIONS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "AP_INVOICES_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": null,
+      "execution_status": "validation_error",
+      "row_count": null,
+      "latency_ms": 0,
+      "narrator_response": "İstenen alan erişime kapalı olduğu için sorgu çalıştırılamadı.",
+      "status": "validation_error",
+      "raw_status": "validation_error",
+      "error_detail": "Tablo bulunamadı: 'AP_INVOICES_ALL'.",
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "p40",
+      "domain": "PO",
+      "category": "LISTING",
+      "question": "Son 7 gunde acilan ve onay bekleyen PO basliklarini tedarikci adiyla listele",
+      "expected_table": "PO_HEADERS_ALL",
+      "expected_intent_type": "list",
+      "semantic_intent": "Onaysız veya bekleyen PO'ları listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e01",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Aktif calisanlari listele",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Aktif çalışanlar",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE CIKIS_TARIHI IS NULL\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 7,
+      "latency_ms": 1,
+      "narrator_response": "7 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e02",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "IT departmanindaki calisanlari goster",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_filter_column"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "e03",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Istanbul'daki calisanlari getir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_filter_column"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "e04",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Bordrolu calisanlari listele",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Bordrolu çalışanlar",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE BORDROLU = :p1\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 8,
+      "latency_ms": 1,
+      "narrator_response": "8 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e05",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Stajyer calisanlari goster",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Stajyerler",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE STAJYER = :p1\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 1,
+      "latency_ms": 1,
+      "narrator_response": "1 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e06",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Yonetici unvanli calisanlari listele",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e07",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "E-posta adresi olan calisanlari getir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Email olanlar",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE EMAIL IS NOT NULL\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e08",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Son ise alinan 10 calisani getir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e09",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Masraf merkezi BT-01 olan calisanlari getir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e10",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Cikis tarihi olmayan calisanlari listele",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e11",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Departman basina calisan sayisi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "birim bazında sayı",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT BIRIM_ADI, COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\nGROUP BY BIRIM_ADI\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e12",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Istanbul'daki calisanlari say",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Toplam sayı",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 1,
+      "latency_ms": 1,
+      "narrator_response": "1 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e13",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Organizasyon bazinda personel dagilimi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Toplam sayı",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 1,
+      "latency_ms": 0,
+      "narrator_response": "1 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e14",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Toplam aktif calisan sayisi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Toplam sayı + Aktif çalışanlar",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE CIKIS_TARIHI IS NULL\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 1,
+      "latency_ms": 1,
+      "narrator_response": "1 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e15",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Unvana gore calisan sayisi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "unvan bazında sayı",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT UNVAN, COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\nGROUP BY UNVAN\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e16",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Hangi departmanda kac calisan var",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "birim bazında sayı",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT BIRIM_ADI, COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\nGROUP BY BIRIM_ADI\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e17",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Lokasyon bazinda personel sayisi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "location bazında sayı",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT LOCATION_ADI, COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\nGROUP BY LOCATION_ADI\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 3,
+      "latency_ms": 1,
+      "narrator_response": "3 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e18",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "2024 yilinda ise alinan calisan sayisi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Toplam sayı + 2024 yılında işe giren",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE ISE_GIRIS_TARIHI >= :p1 AND ISE_GIRIS_TARIHI < :p2\n)\nWHERE ROWNUM <= :p3",
+      "execution_status": "success",
+      "row_count": 1,
+      "latency_ms": 1,
+      "narrator_response": "1 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e19",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Masraf merkezi bazinda calisan dagilimi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "Toplam sayı",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 1,
+      "latency_ms": 0,
+      "narrator_response": "1 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e20",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Birim ve lokasyon bazinda gruplandirmali calisan sayisi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "birim bazında sayı",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT BIRIM_ADI, COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\nGROUP BY BIRIM_ADI\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e21",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "Son 1 yil icinde ise alinanlar",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Son 1 yılda işe başlayan",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE ISE_GIRIS_TARIHI >= :p1\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 0,
+      "latency_ms": 1,
+      "narrator_response": "Aradığınız kriterlere uygun kayıt bulunamadı.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e22",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "2024 yilinda ise giren calisanlar kimler",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "2024 yılında işe giren",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE ISE_GIRIS_TARIHI >= :p1 AND ISE_GIRIS_TARIHI < :p2\n)\nWHERE ROWNUM <= :p3",
+      "execution_status": "success",
+      "row_count": 1,
+      "latency_ms": 1,
+      "narrator_response": "1 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e23",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "Son 6 ayda ise giren calisanlar",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Son 6 ayda işe giriş / değişim",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE ISE_GIRIS_TARIHI >= :p1\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 0,
+      "latency_ms": 1,
+      "narrator_response": "Aradığınız kriterlere uygun kayıt bulunamadı.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e24",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "10 yildan fazla suredir calisan personel",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "10 yıldan uzun süredir çalışan",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE ISE_GIRIS_TARIHI <= :p1\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 3,
+      "latency_ms": 1,
+      "narrator_response": "3 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e25",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "Maasi 50.000 TL uzerinde olan calisanlari bul",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Maaş/bordro bilgisi",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BORDROLU\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e26",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "2023 oncesinde ise giren calisanlar",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e27",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "Son 30 gunde ise baslayan yeni calisanlar",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e28",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "BT birimi calisanlarini getir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_filter_column"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "e29",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "Dahili telefonu olan calisanlari getir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Telefon dahili olanlar",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE DAHILI IS NOT NULL\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 0,
+      "latency_ms": 1,
+      "narrator_response": "Aradığınız kriterlere uygun kayıt bulunamadı.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e30",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "Performans notu 4 ve uzeri olan calisanlari getir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e31",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "En yuksek maasli 5 calisan kimdir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Maaş/bordro bilgisi",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BORDROLU\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e32",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Yonetici pozisyonundaki calisanlari listele",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e33",
+      "domain": "EMP",
+      "category": "AGGREGATION",
+      "question": "Her birimin aktif calisan sayisi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "aggregation",
+      "semantic_intent": "birim bazında sayı + Aktif çalışanlar",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT BIRIM_ADI, COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE CIKIS_TARIHI IS NULL\nGROUP BY BIRIM_ADI\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 3,
+      "latency_ms": 1,
+      "narrator_response": "3 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e34",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Organizasyon adiyla birlikte calisan detayi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e35",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Unvan ve birim bilgisiyle calisan listesi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "wrong_filter_column"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "e36",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Gorev tanimi dolu olan calisanlari getir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e37",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "En uzun suredir calisan 10 kisi",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e38",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Son 6 ayda terfi eden calisanlar",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Son 6 ayda işe giriş / değişim",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE ISE_GIRIS_TARIHI >= :p1\n)\nWHERE ROWNUM <= :p2",
+      "execution_status": "success",
+      "row_count": 0,
+      "latency_ms": 2,
+      "narrator_response": "Aradığınız kriterlere uygun kayıt bulunamadı.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e39",
+      "domain": "EMP",
+      "category": "LISTING",
+      "question": "Sicil numarasiyla birlikte tum personeli listele",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Ad soyad / sicil listeleme",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "e40",
+      "domain": "EMP",
+      "category": "FILTER",
+      "question": "Cikis tarihi 2025 yilinda olan calisanlari getir",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "2025 yılında işe giren",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE ISE_GIRIS_TARIHI >= :p1 AND ISE_GIRIS_TARIHI < :p2\n)\nWHERE ROWNUM <= :p3",
+      "execution_status": "success",
+      "row_count": 0,
+      "latency_ms": 1,
+      "narrator_response": "Aradığınız kriterlere uygun kayıt bulunamadı.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x01",
+      "domain": "AMBIGUOUS",
+      "category": "AMBIGUOUS",
+      "question": "Calisanlar",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x02",
+      "domain": "AMBIGUOUS",
+      "category": "AMBIGUOUS",
+      "question": "Siparisler",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x03",
+      "domain": "AMBIGUOUS",
+      "category": "AMBIGUOUS",
+      "question": "Departmanlar",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Belirsiz sorgu",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": null,
+      "execution_status": "clarification",
+      "row_count": null,
+      "latency_ms": 0,
+      "narrator_response": "Hangi alanları görmek istediğinizi belirtir misiniz?",
+      "status": "clarification",
+      "raw_status": "clarification",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": "genuine_ambiguity"
+    },
+    {
+      "id": "x04",
+      "domain": "AMBIGUOUS",
+      "category": "AMBIGUOUS",
+      "question": "Veri getir",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x05",
+      "domain": "AMBIGUOUS",
+      "category": "AMBIGUOUS",
+      "question": "Listele",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x06",
+      "domain": "AMBIGUOUS",
+      "category": "AMBIGUOUS",
+      "question": "Kac tane var",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Toplam sayı",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 1,
+      "latency_ms": 0,
+      "narrator_response": "1 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x07",
+      "domain": "AMBIGUOUS",
+      "category": "AMBIGUOUS",
+      "question": "Bilgi ver",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x08",
+      "domain": "AMBIGUOUS",
+      "category": "AMBIGUOUS",
+      "question": "Goster",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x09",
+      "domain": "CROSS",
+      "category": "CROSS_DOMAIN",
+      "question": "Tedarikci mi calisan mi getireyim",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x10",
+      "domain": "CROSS",
+      "category": "CROSS_DOMAIN",
+      "question": "Organizasyon bilgilerini goster",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x11",
+      "domain": "CROSS",
+      "category": "CROSS_DOMAIN",
+      "question": "Tum kayitlari getir",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x12",
+      "domain": "CROSS",
+      "category": "CROSS_DOMAIN",
+      "question": "Sistem verilerini listele",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x13",
+      "domain": "CROSS",
+      "category": "CROSS_DOMAIN",
+      "question": "Butun verileri goster",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x14",
+      "domain": "CROSS",
+      "category": "CROSS_DOMAIN",
+      "question": "Hem PO hem personel bilgisi istiyorum",
+      "expected_table": null,
+      "expected_intent_type": "clarification",
+      "semantic_intent": "Satın alma siparişlerini listele",
+      "predicted_tables": [
+        "PO_HEADERS_ALL"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 4,
+      "latency_ms": 1,
+      "narrator_response": "4 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x15",
+      "domain": "INVALID",
+      "category": "INVALID",
+      "question": "Kredi karti numaralarini getir",
+      "expected_table": null,
+      "expected_intent_type": "clarification_or_error",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "semantically_incorrect_result"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "x16",
+      "domain": "INVALID",
+      "category": "INVALID",
+      "question": "Gizli verilere erismek istiyorum",
+      "expected_table": null,
+      "expected_intent_type": "clarification_or_error",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "semantically_incorrect_result"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "x17",
+      "domain": "INVALID",
+      "category": "INVALID",
+      "question": "Dogum tarihlerini listele",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "validation_error",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 0,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    },
+    {
+      "id": "x18",
+      "domain": "INVALID",
+      "category": "INVALID",
+      "question": "Sifreleri ver",
+      "expected_table": null,
+      "expected_intent_type": "clarification_or_error",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "semantically_incorrect_result"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "x19",
+      "domain": "INVALID",
+      "category": "INVALID",
+      "question": "Kisisel verileri listele",
+      "expected_table": null,
+      "expected_intent_type": "clarification_or_error",
+      "semantic_intent": "Çalışanları listele",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "wrong_plan",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": true,
+      "wrong_plan_reasons": [
+        "semantically_incorrect_result"
+      ],
+      "clarification_class": null
+    },
+    {
+      "id": "x20",
+      "domain": "INVALID",
+      "category": "INVALID",
+      "question": "Maas bilgilerini goster",
+      "expected_table": "XXBT_PDKS_PER_DETAILS_V",
+      "expected_intent_type": "list",
+      "semantic_intent": "Maaş/bordro bilgisi",
+      "predicted_tables": [
+        "XXBT_PDKS_PER_DETAILS_V"
+      ],
+      "join_path": [],
+      "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BORDROLU\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+      "execution_status": "success",
+      "row_count": 9,
+      "latency_ms": 1,
+      "narrator_response": "9 kayıt bulundu.",
+      "status": "success",
+      "raw_status": "success",
+      "error_detail": null,
+      "wrong_plan": false,
+      "wrong_plan_reasons": [],
+      "clarification_class": null
+    }
+  ]
+}

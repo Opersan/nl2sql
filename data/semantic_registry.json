@@ -1,0 +1,314 @@
+{
+  "version": "1.0",
+  "intent_join_paths": {
+    "po_line_quantity": "po.header_lines",
+    "po_pending_delivery": "po.header_lines_shipments",
+    "po_distribution_amount": "po.header_lines_shipments_distributions",
+    "po_item_line_count": "po.header_lines_items"
+  },
+  "entities": [
+    {
+      "entity_id": "PO_PURCHASING",
+      "root_table": "PO_HEADERS_ALL",
+      "child_tables": [
+        "PO_LINES_ALL",
+        "PO_LINE_LOCATIONS_ALL",
+        "PO_DISTRIBUTIONS_ALL",
+        "MTL_SYSTEM_ITEMS_B"
+      ],
+      "join_paths": [
+        {
+          "path_id": "po.header_lines",
+          "steps": [
+            {
+              "left_table": "PO_HEADERS_ALL",
+              "left_column": "po_header_id",
+              "right_table": "PO_LINES_ALL",
+              "right_column": "po_header_id"
+            }
+          ]
+        },
+        {
+          "path_id": "po.header_lines_shipments",
+          "steps": [
+            {
+              "left_table": "PO_HEADERS_ALL",
+              "left_column": "po_header_id",
+              "right_table": "PO_LINES_ALL",
+              "right_column": "po_header_id"
+            },
+            {
+              "left_table": "PO_LINES_ALL",
+              "left_column": "po_line_id",
+              "right_table": "PO_LINE_LOCATIONS_ALL",
+              "right_column": "po_line_id"
+            }
+          ]
+        },
+        {
+          "path_id": "po.header_lines_shipments_distributions",
+          "steps": [
+            {
+              "left_table": "PO_HEADERS_ALL",
+              "left_column": "po_header_id",
+              "right_table": "PO_LINES_ALL",
+              "right_column": "po_header_id"
+            },
+            {
+              "left_table": "PO_LINES_ALL",
+              "left_column": "po_line_id",
+              "right_table": "PO_LINE_LOCATIONS_ALL",
+              "right_column": "po_line_id"
+            },
+            {
+              "left_table": "PO_LINE_LOCATIONS_ALL",
+              "left_column": "line_location_id",
+              "right_table": "PO_DISTRIBUTIONS_ALL",
+              "right_column": "line_location_id"
+            }
+          ]
+        },
+        {
+          "path_id": "po.header_lines_items",
+          "steps": [
+            {
+              "left_table": "PO_HEADERS_ALL",
+              "left_column": "po_header_id",
+              "right_table": "PO_LINES_ALL",
+              "right_column": "po_header_id"
+            },
+            {
+              "left_table": "PO_LINES_ALL",
+              "left_column": "item_id",
+              "right_table": "MTL_SYSTEM_ITEMS_B",
+              "right_column": "inventory_item_id"
+            }
+          ]
+        }
+      ],
+      "dimensions": {
+        "vendor": "vendor_id",
+        "line": "line_num",
+        "item": "segment1",
+        "distribution": "code_combination_id"
+      },
+      "measures": {
+        "po_count": "COUNT(*)",
+        "ordered_qty": "SUM(quantity)",
+        "line_count": "COUNT(*)",
+        "distribution_qty": "SUM(quantity_ordered)",
+        "price_sum": "SUM(unit_price)"
+      },
+      "status_semantics": {
+        "open": "authorization_status != CLOSED",
+        "unapproved": "authorization_status != APPROVED"
+      },
+      "time_semantics": {
+        "last_30_days": "creation_date >= TRUNC(SYSDATE)-30"
+      },
+      "keywords": [
+        "satınalma",
+        "satın alma",
+        "sipariş",
+        "tedarikçi",
+        "kalem",
+        "dağıtım",
+        "ürün",
+        "item",
+        "satır",
+        "teslim"
+      ],
+      "default_intent": "po_generic",
+      "intent_rules": [
+        { "intent": "po_last_30_days",        "any_of": ["son 30", "son bir ay"] },
+        { "intent": "po_vendor_count",        "any_of": ["tedarikçi", "vendor", "satıcı"] },
+        { "intent": "po_pending_delivery",    "all_of": ["teslim"], "any_of": ["bekleyen", "açık"] },
+        { "intent": "po_distribution_amount", "any_of": ["dağıt", "dagit", "distribution"] },
+        { "intent": "po_item_line_count",     "any_of": ["ürün", "item", "malzeme"] },
+        { "intent": "po_line_quantity",       "any_of": ["kalem", "satır", "line"] },
+        { "intent": "po_unapproved",          "any_of": ["onaysız", "bekleyen"] },
+        { "intent": "po_open_orders",         "any_of": ["kapatılmam", "açık"] }
+      ],
+      "intent_defaults": {
+        "po_line_quantity": {
+          "stable": true,
+          "group_by": ["line_num", "item_description"],
+          "aggregations": [
+            { "function": "SUM", "column": "quantity", "table": "PO_LINES_ALL", "alias": "total_qty" }
+          ],
+          "filters": [],
+          "computed_measures": []
+        },
+        "po_pending_delivery": {
+          "stable": true,
+          "group_by": [],
+          "aggregations": [],
+          "filters": [
+            { "column": "quantity_received", "table": "PO_LINE_LOCATIONS_ALL", "op": "<", "value": "__COLUMN_REF__quantity" }
+          ],
+          "computed_measures": []
+        },
+        "po_distribution_amount": {
+          "stable": true,
+          "group_by": ["code_combination_id"],
+          "aggregations": [
+            { "function": "SUM", "column": "quantity_ordered", "table": "PO_DISTRIBUTIONS_ALL", "alias": "ordered_qty" },
+            { "function": "SUM", "column": "unit_price",       "table": "PO_LINES_ALL",          "alias": "price_sum"  }
+          ],
+          "filters": [],
+          "computed_measures": [
+            { "name": "total_amount", "expression_ref": "PO_LINE_AMOUNT", "alias": "total_amount", "table": "PO_LINES_ALL" }
+          ]
+        },
+        "po_item_line_count": {
+          "stable": true,
+          "group_by": ["segment1", "description"],
+          "aggregations": [
+            { "function": "COUNT", "column": "*", "alias": "line_count" }
+          ],
+          "filters": [],
+          "computed_measures": []
+        },
+        "po_open_orders": {
+          "stable": true,
+          "select_columns": ["po_header_id", "vendor_id", "creation_date", "authorization_status"],
+          "group_by": [],
+          "aggregations": [],
+          "filters": [
+            { "column": "authorization_status", "table": "PO_HEADERS_ALL", "op": "!=", "value": "CLOSED" }
+          ],
+          "computed_measures": []
+        },
+        "po_unapproved": {
+          "stable": true,
+          "select_columns": ["po_header_id", "vendor_id", "creation_date", "authorization_status"],
+          "group_by": [],
+          "aggregations": [],
+          "filters": [
+            { "column": "authorization_status", "table": "PO_HEADERS_ALL", "op": "!=", "value": "APPROVED" }
+          ],
+          "computed_measures": []
+        },
+        "po_vendor_count": {
+          "stable": true,
+          "group_by": ["vendor_id"],
+          "aggregations": [
+            { "function": "COUNT", "column": "*", "alias": "po_count" }
+          ],
+          "filters": [],
+          "computed_measures": []
+        },
+        "po_last_30_days": {
+          "stable": true,
+          "select_columns": ["po_header_id", "vendor_id", "creation_date", "authorization_status"],
+          "group_by": [],
+          "aggregations": [],
+          "filters": [
+            { "column": "creation_date", "table": "PO_HEADERS_ALL", "op": ">=", "value": "__EXPR__TRUNC(SYSDATE)-30" }
+          ],
+          "computed_measures": []
+        }
+      }
+    },
+    {
+      "entity_id": "AP_PAYABLES",
+      "root_table": "AP_INVOICES_ALL",
+      "child_tables": [],
+      "join_paths": [],
+      "dimensions": {},
+      "measures": {},
+      "status_semantics": {},
+      "time_semantics": {},
+      "keywords": [
+        "ap",
+        "fatura",
+        "invoice"
+      ]
+    },
+    {
+      "entity_id": "INV_INVENTORY",
+      "root_table": "MTL_MATERIAL_TRANSACTIONS",
+      "child_tables": [],
+      "join_paths": [],
+      "dimensions": {},
+      "measures": {},
+      "status_semantics": {},
+      "time_semantics": {},
+      "keywords": [
+        "inv",
+        "inventory",
+        "stok"
+      ]
+    },
+    {
+      "entity_id": "WIP_MANUFACTURING",
+      "root_table": "WIP_DISCRETE_JOBS",
+      "child_tables": [],
+      "join_paths": [],
+      "dimensions": {},
+      "measures": {},
+      "status_semantics": {},
+      "time_semantics": {},
+      "keywords": [
+        "wip",
+        "üretim",
+        "production"
+      ]
+    },
+    {
+      "entity_id": "BOM_ENGINEERING",
+      "root_table": "BOM_STRUCTURES_B",
+      "child_tables": [],
+      "join_paths": [],
+      "dimensions": {},
+      "measures": {},
+      "status_semantics": {},
+      "time_semantics": {},
+      "keywords": [
+        "bom",
+        "reçete",
+        "bill of material"
+      ]
+    },
+    {
+      "entity_id": "HR_EMPLOYEES",
+      "root_table": "XXBT_PDKS_PER_DETAILS_V",
+      "child_tables": [],
+      "join_paths": [],
+      "dimensions": {
+        "birim": "BIRIM_ADI",
+        "departman": "BIRIM_ADI",
+        "lokasyon": "LOCATION_ADI",
+        "unvan": "UNVAN"
+      },
+      "measures": {},
+      "status_semantics": {
+        "active": "CIKIS_TARIHI IS NULL",
+        "terminated": "CIKIS_TARIHI IS NOT NULL"
+      },
+      "time_semantics": {
+        "hire_date": "ISE_GIRIS_TARIHI"
+      },
+      "keywords": [
+        "calisan",
+        "calisanlar",
+        "çalışan",
+        "çalışanlar",
+        "personel",
+        "eleman"
+      ],
+      "default_intent": "emp_generic_list",
+      "intent_rules": [],
+      "intent_defaults": {
+        "emp_generic_list": {
+          "stable": false,
+          "select_columns": ["SICIL_NO", "AD", "SOYAD", "BIRIM_ADI"],
+          "group_by": [],
+          "aggregations": [],
+          "filters": [],
+          "computed_measures": []
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,520 @@
+[
+  {
+    "id": "q01",
+    "domain": "PO",
+    "question": "Onay bekleyen satin alma siparislerini listele",
+    "outcome": "success",
+    "intent": "Onaysız veya bekleyen PO'ları listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q02",
+    "domain": "PO",
+    "question": "Son 30 gunde olusturulan PO basliklarini goster",
+    "outcome": "success",
+    "intent": "Son 30 günde açılan satın alma siparişlerini göster",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE creation_date >= TRUNC(SYSDATE)-30\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q03",
+    "domain": "PO",
+    "question": "Toplam tutari 100.000 TL uzerinde olan siparisler hangileri?",
+    "outcome": "success",
+    "intent": "Satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q04",
+    "domain": "PO",
+    "question": "ACME Tedarikciye ait acik siparisleri bul",
+    "outcome": "success",
+    "intent": "Kapatılmamış açık PO'ları listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q05",
+    "domain": "PO",
+    "question": "Iptal edilmis siparisleri getir",
+    "outcome": "success",
+    "intent": "Açık satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q06",
+    "domain": "PO",
+    "question": "Bu ay teslim edilmesi gereken siparisleri listele",
+    "outcome": "success",
+    "intent": "Açık satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.015000000013969839
+  },
+  {
+    "id": "q07",
+    "domain": "PO",
+    "question": "PO dagitim tutarlarini kalem kalem goster",
+    "outcome": "success",
+    "intent": "Dağıtım bazında sipariş tutar analizini göster",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [
+      "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+      "left_table='PO_LINES_ALL' right_table='PO_LINE_LOCATIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='po_line_id', right_table='PO_LINE_LOCATIONS_ALL', right_column='po_line_id')]",
+      "left_table='PO_LINE_LOCATIONS_ALL' right_table='PO_DISTRIBUTIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINE_LOCATIONS_ALL', left_column='line_location_id', right_table='PO_DISTRIBUTIONS_ALL', right_column='line_location_id')]"
+    ],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT p4.code_combination_id, SUM(p4.quantity_ordered) AS ordered_qty, SUM(p2.unit_price) AS price_sum, (p2.quantity * p2.unit_price) AS total_amount\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN PO_LINE_LOCATIONS_ALL p3 ON p2.po_line_id = p3.po_line_id\nINNER JOIN PO_DISTRIBUTIONS_ALL p4 ON p3.line_location_id = p4.line_location_id\nGROUP BY p4.code_combination_id\nORDER BY p4.quantity_ordered DESC\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q08",
+    "domain": "PO",
+    "question": "Kapali PO basliklarini goster",
+    "outcome": "success",
+    "intent": "Açık satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q09",
+    "domain": "PO",
+    "question": "Birden fazla satiri olan siparisleri listele",
+    "outcome": "success",
+    "intent": "Açık satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q10",
+    "domain": "PO",
+    "question": "Teslim tarihi gecmis siparisleri bul",
+    "outcome": "success",
+    "intent": "Satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q11",
+    "domain": "PO",
+    "question": "PO_HEADERS_ALL tablosundaki kayitlari say",
+    "outcome": "success",
+    "intent": "Satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q12",
+    "domain": "PO",
+    "question": "Bugün onaylanan siparisleri getir",
+    "outcome": "success",
+    "intent": "Açık satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q13",
+    "domain": "PO",
+    "question": "Dagitim tutari sifir olan kalemleri listele",
+    "outcome": "success",
+    "intent": "Dağıtım bazında sipariş tutar analizini göster",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [
+      "left_table='PO_HEADERS_ALL' right_table='PO_LINES_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_HEADERS_ALL', left_column='po_header_id', right_table='PO_LINES_ALL', right_column='po_header_id')]",
+      "left_table='PO_LINES_ALL' right_table='PO_LINE_LOCATIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINES_ALL', left_column='po_line_id', right_table='PO_LINE_LOCATIONS_ALL', right_column='po_line_id')]",
+      "left_table='PO_LINE_LOCATIONS_ALL' right_table='PO_DISTRIBUTIONS_ALL' join_type=<JoinType.INNER: 'INNER'> on=[JoinCondition(left_table='PO_LINE_LOCATIONS_ALL', left_column='line_location_id', right_table='PO_DISTRIBUTIONS_ALL', right_column='line_location_id')]"
+    ],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT p4.code_combination_id, SUM(p4.quantity_ordered) AS ordered_qty, SUM(p2.unit_price) AS price_sum, (p2.quantity * p2.unit_price) AS total_amount\nFROM PO_HEADERS_ALL p\nINNER JOIN PO_LINES_ALL p2 ON p.po_header_id = p2.po_header_id\nINNER JOIN PO_LINE_LOCATIONS_ALL p3 ON p2.po_line_id = p3.po_line_id\nINNER JOIN PO_DISTRIBUTIONS_ALL p4 ON p3.line_location_id = p4.line_location_id\nGROUP BY p4.code_combination_id\nORDER BY p4.quantity_ordered DESC\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q14",
+    "domain": "PO",
+    "question": "Tedarikci site kodu BESTI olan siparisleri goster",
+    "outcome": "success",
+    "intent": "Açık satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q15",
+    "domain": "PO",
+    "question": "En son olusturulan 10 siparis kaydi nedir?",
+    "outcome": "success",
+    "intent": "Satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q16",
+    "domain": "EMP",
+    "question": "Aktif calisanlari listele",
+    "outcome": "success",
+    "intent": "Aktif çalışanlar",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE CIKIS_TARIHI IS NULL\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 7,
+    "narrator_response": "7 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q17",
+    "domain": "EMP",
+    "question": "IT departmanindaki calisanlari goster",
+    "outcome": "success",
+    "intent": "Çalışanları listele",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 9,
+    "narrator_response": "9 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q18",
+    "domain": "EMP",
+    "question": "Maasi 50.000 TL uzerinde olan calisanlari bul",
+    "outcome": "success",
+    "intent": "Maaş/bordro bilgisi",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BORDROLU\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 9,
+    "narrator_response": "9 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q19",
+    "domain": "EMP",
+    "question": "2024 yilinda ise giren calisanlar kimler?",
+    "outcome": "success",
+    "intent": "2024 yılında işe giren",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE ISE_GIRIS_TARIHI >= :p1 AND ISE_GIRIS_TARIHI < :p2\n)\nWHERE ROWNUM <= :p3",
+    "execution_status": null,
+    "rows_returned": 1,
+    "narrator_response": "1 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q20",
+    "domain": "EMP",
+    "question": "Yonetici pozisyonundaki calisanlari listele",
+    "outcome": "success",
+    "intent": "Çalışanları listele",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 9,
+    "narrator_response": "9 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.3280000000959262
+  },
+  {
+    "id": "q21",
+    "domain": "EMP",
+    "question": "Istanbul'daki calisanlari say",
+    "outcome": "success",
+    "intent": "Toplam sayı",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 1,
+    "narrator_response": "1 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q22",
+    "domain": "EMP",
+    "question": "Son 6 ayda terfi eden calisanlar",
+    "outcome": "success",
+    "intent": "Son 6 ayda işe giriş / değişim",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD\nFROM XXBT_PDKS_PER_DETAILS_V\nWHERE ISE_GIRIS_TARIHI >= :p1\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": null,
+    "narrator_response": "Aradığınız kriterlere uygun kayıt bulunamadı.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q23",
+    "domain": "EMP",
+    "question": "Performans notu 4 ve uzeri olan calisanlari getir",
+    "outcome": "success",
+    "intent": "Çalışanları listele",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 9,
+    "narrator_response": "9 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q24",
+    "domain": "EMP",
+    "question": "Hangi departmanda kac calisan var?",
+    "outcome": "success",
+    "intent": "birim bazında sayı",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT BIRIM_ADI, COUNT(*) AS sayi\nFROM XXBT_PDKS_PER_DETAILS_V\nGROUP BY BIRIM_ADI\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q25",
+    "domain": "EMP",
+    "question": "En yuksek maasli 5 calisan kimdir?",
+    "outcome": "success",
+    "intent": "Maaş/bordro bilgisi",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BORDROLU\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 9,
+    "narrator_response": "9 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.015999999945051968
+  },
+  {
+    "id": "q26",
+    "domain": "PO",
+    "question": "Siparisleri getir",
+    "outcome": "success",
+    "intent": "Açık satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status, currency_code\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q27",
+    "domain": "PO",
+    "question": "Butun verileri goster",
+    "outcome": "success",
+    "intent": "Çalışanları listele",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 9,
+    "narrator_response": "9 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q28",
+    "domain": "EMP",
+    "question": "Calisanlar",
+    "outcome": "success",
+    "intent": "Çalışanları listele",
+    "tables": [
+      "XXBT_PDKS_PER_DETAILS_V"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT SICIL_NO, AD, SOYAD, BIRIM_ADI\nFROM XXBT_PDKS_PER_DETAILS_V\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 9,
+    "narrator_response": "9 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  },
+  {
+    "id": "q29",
+    "domain": "PO",
+    "question": "Gecen yilki PO ozetini cikar",
+    "outcome": "success",
+    "intent": "Satın alma siparişlerini listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p1",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.125
+  },
+  {
+    "id": "q30",
+    "domain": "PO",
+    "question": "Son 7 gunde acilan ve toplam tutari 50.000 TL'yi gecen onay bekleyen PO basliklarini tedarikci adiyla birlikte listele",
+    "outcome": "success",
+    "intent": "Onaysız veya bekleyen PO'ları listele",
+    "tables": [
+      "PO_HEADERS_ALL"
+    ],
+    "joins": [],
+    "compiled_sql": "SELECT *\nFROM (\nSELECT po_header_id, vendor_id, creation_date, authorization_status\nFROM PO_HEADERS_ALL\nWHERE authorization_status != :p1\nORDER BY creation_date DESC\n)\nWHERE ROWNUM <= :p2",
+    "execution_status": null,
+    "rows_returned": 4,
+    "narrator_response": "4 kayıt bulundu.",
+    "error_detail": null,
+    "elapsed_s": 0.0
+  }
+]
