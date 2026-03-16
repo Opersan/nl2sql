@@ -1,0 +1,1376 @@
+{
+  "tables": [
+    {
+      "name": "XXBT_PDKS_PER_DETAILS_V",
+      "description": "PDKS ile entegre çalışan personel görünümüdür. Her satır bir çalışanı temsil eder. ISE_GIRIS_TARIHI işe giriş tarihini, CIKIS_TARIHI ise işten ayrılma tarihini tutar. CIKIS_TARIHI NULL olan kayıtlar aktif çalışanlardır.",
+      "aliases": [
+        "employee",
+        "employees",
+        "personel",
+        "calisan",
+        "çalışan",
+        "pdks personel",
+        "ik personel"
+      ],
+      "primary_key": [
+        "PERSON_ID"
+      ],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "PERSON_ID",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Çalışanın sistem içindeki benzersiz personel kimliğidir.",
+          "aliases": []
+        },
+        {
+          "name": "LOCATION_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın bağlı olduğu lokasyonun teknik anahtarıdır.",
+          "aliases": []
+        },
+        {
+          "name": "LOCATION_ADI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın bağlı olduğu lokasyonun görünen adıdır.",
+          "aliases": []
+        },
+        {
+          "name": "ORGANIZATION_ADI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın bağlı olduğu organizasyonun adıdır.",
+          "aliases": []
+        },
+        {
+          "name": "BIRIM_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın bağlı olduğu birimin teknik anahtarıdır.",
+          "aliases": []
+        },
+        {
+          "name": "BIRIM_ADI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın bağlı olduğu birimin adıdır.",
+          "aliases": []
+        },
+        {
+          "name": "BIRIM_ETKINLIK_SONU",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "Birim etkinlik bitiş tarihidir.",
+          "aliases": []
+        },
+        {
+          "name": "SICIL_NO",
+          "data_type": "VARCHAR",
+          "nullable": false,
+          "restricted": false,
+          "description": "Çalışanın sicil numarasıdır.",
+          "aliases": []
+        },
+        {
+          "name": "AD",
+          "data_type": "VARCHAR",
+          "nullable": false,
+          "restricted": false,
+          "description": "Çalışanın adıdır.",
+          "aliases": []
+        },
+        {
+          "name": "SOYAD",
+          "data_type": "VARCHAR",
+          "nullable": false,
+          "restricted": false,
+          "description": "Çalışanın soyadıdır.",
+          "aliases": []
+        },
+        {
+          "name": "KANGRUBU",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın kan grubu bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "ISE_GIRIS_TARIHI",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın işe giriş tarihidir.",
+          "aliases": []
+        },
+        {
+          "name": "CIKIS_TARIHI",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın işten ayrılış tarihidir. NULL ise çalışan aktiftir.",
+          "aliases": []
+        },
+        {
+          "name": "ISTEN_CIKTI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın işten çıkış durumunu gösteren alandır.",
+          "aliases": []
+        },
+        {
+          "name": "LAST_UPDATE_DATE",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "Kaydın son güncellenme tarihidir.",
+          "aliases": []
+        },
+        {
+          "name": "LAST_UPDATED_BY",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Kaydı son güncelleyen kullanıcıdır.",
+          "aliases": []
+        },
+        {
+          "name": "CREATION_DATE",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "Kaydın oluşturulma tarihidir.",
+          "aliases": []
+        },
+        {
+          "name": "CREATED_BY",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Kaydı oluşturan kullanıcıdır.",
+          "aliases": []
+        },
+        {
+          "name": "CALISAN_TIPI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışan tipi bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "GOREV_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın görev kimliğidir.",
+          "aliases": []
+        },
+        {
+          "name": "GOREV_TANIMI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın görev tanımıdır.",
+          "aliases": []
+        },
+        {
+          "name": "DOGUM_TARIHI",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın doğum tarihidir.",
+          "aliases": []
+        },
+        {
+          "name": "RESIM",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışana ait resim/veri referans alanıdır.",
+          "aliases": []
+        },
+        {
+          "name": "EMAIL",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Kurumsal e-posta adresidir.",
+          "aliases": []
+        },
+        {
+          "name": "USER_NAME",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Uygulama kullanıcı adıdır.",
+          "aliases": []
+        },
+        {
+          "name": "YON_SICIL_NO",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın yöneticisinin sicil numarasıdır.",
+          "aliases": []
+        },
+        {
+          "name": "AD_USER",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Active Directory kullanıcı hesabıdır.",
+          "aliases": []
+        },
+        {
+          "name": "BORDROLU",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın bordrolu olduğunu gösteren bayraktır.",
+          "aliases": []
+        },
+        {
+          "name": "DG_GOSTER",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "DG_GOSTER bayrak alanıdır.",
+          "aliases": []
+        },
+        {
+          "name": "ASSG_START_DATE",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "Assignment başlangıç tarihidir.",
+          "aliases": []
+        },
+        {
+          "name": "ASSG_END_DATE",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "Assignment bitiş tarihidir.",
+          "aliases": []
+        },
+        {
+          "name": "STAJYER",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın stajyer olduğunu gösteren bayraktır.",
+          "aliases": []
+        },
+        {
+          "name": "FULL_NAME",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın ad soyad bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "GOREV_GURUBU",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın görev grubudur.",
+          "aliases": []
+        },
+        {
+          "name": "BOLUM",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın bölüm bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "YON_FULL_NAME",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Yöneticinin ad soyad bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "CODE_COMBINATION",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Muhasebe veya dağıtım amaçlı kod kombinasyonudur.",
+          "aliases": []
+        },
+        {
+          "name": "MASRAF_MERKEZI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Masraf merkezi bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "ISYERI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "İşyeri bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "MOBILE",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın mobil telefon numarasıdır.",
+          "aliases": []
+        },
+        {
+          "name": "IBAN_TR",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın TL IBAN bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "IBAN_USD",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın USD IBAN bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "IBAN_EUR",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın EUR IBAN bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "IZIN_KIDEM_TARIHI",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "İzin kıdem tarihidir.",
+          "aliases": []
+        },
+        {
+          "name": "UNVAN",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın unvanıdır.",
+          "aliases": []
+        },
+        {
+          "name": "UNVAN_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışanın unvan teknik kimliğidir.",
+          "aliases": []
+        },
+        {
+          "name": "GOREV_FULL",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Görev tam adıdır.",
+          "aliases": []
+        },
+        {
+          "name": "EMPLOYEE_CATEGORY",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Çalışan kategori bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "DAHILI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Şirket içi dahili telefon numarasıdır.",
+          "aliases": []
+        },
+        {
+          "name": "CINSIYET",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın cinsiyet bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "MEDENI_HAL",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın medeni hal bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "OGRENIM_DURUMU",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın öğrenim durumu bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "PER_START_DATE",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "Person başlangıç tarihidir.",
+          "aliases": []
+        },
+        {
+          "name": "YON_USER_NAME",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "Yöneticinin kullanıcı adıdır.",
+          "aliases": []
+        },
+        {
+          "name": "YON_PERSON_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Yöneticinin personel kimliğidir.",
+          "aliases": []
+        },
+        {
+          "name": "TC_NO",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": true,
+          "description": "Çalışanın T.C. kimlik numarasıdır.",
+          "aliases": []
+        },
+        {
+          "name": "PDS_UST_DEPARTMAN",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "PDS üst departman bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "PDS_KATEGORI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "PDS kategori bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "PDS_ILK_YONETICI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "PDS ilk yönetici bilgisidir.",
+          "aliases": []
+        },
+        {
+          "name": "PDS_IKINCI_YONETICI",
+          "data_type": "VARCHAR",
+          "nullable": true,
+          "restricted": false,
+          "description": "PDS ikinci yönetici bilgisidir.",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "name": "PO_HEADERS_ALL",
+      "description": "Oracle Purchasing belge başlık tablosudur. Her satır bir satın alma belgesinin üst bilgisini temsil eder. PO_HEADER_ID sistem tarafından üretilen benzersiz anahtardır. SEGMENT1 kullanıcıların gördüğü PO numarasıdır; tek başına global benzersiz değildir, TYPE_LOOKUP_CODE ve ORG_ID ile birlikte iş anahtarı olarak anlam kazanır. AUTHORIZATION_STATUS ve APPROVED_FLAG alanları belgenin onay durumunu gösterir.",
+      "aliases": [
+        "po header",
+        "purchase order header",
+        "po",
+        "satın alma siparişi",
+        "satınalma siparişi",
+        "satın alma belgesi",
+        "po başlık",
+        "po numarası"
+      ],
+      "primary_key": [
+        "po_header_id"
+      ],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "po_header_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Belge başlığının benzersiz teknik anahtarıdır.",
+          "aliases": [
+            "po header id",
+            "header id",
+            "belge id"
+          ]
+        },
+        {
+          "name": "segment1",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Kullanıcıların gördüğü PO numarasıdır. Tek başına tüm tablo için benzersiz değildir.",
+          "aliases": [
+            "po number",
+            "po no",
+            "sipariş no",
+            "belge no"
+          ]
+        },
+        {
+          "name": "type_lookup_code",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Belge tipini tutar. SEGMENT1 ve ORG_ID ile birlikte iş anahtarı oluşturmada kullanılır.",
+          "aliases": [
+            "document type",
+            "po type",
+            "belge tipi"
+          ]
+        },
+        {
+          "name": "authorization_status",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "PO'nun yetkilendirme/onay statüsüdür.",
+          "aliases": [
+            "approval status",
+            "onay durumu",
+            "auth status",
+            "authorization"
+          ]
+        },
+        {
+          "name": "approved_flag",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Belgenin onaylı olup olmadığını gösteren bayrak alanıdır.",
+          "aliases": [
+            "approved",
+            "onaylı mı",
+            "approve flag"
+          ]
+        },
+        {
+          "name": "vendor_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Tedarikçinin teknik anahtarıdır.",
+          "aliases": [
+            "supplier id",
+            "vendor id",
+            "tedarikçi id"
+          ]
+        },
+        {
+          "name": "vendor_site_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Tedarikçi site/adres bilgisinin teknik anahtarıdır.",
+          "aliases": [
+            "supplier site id",
+            "vendor site",
+            "tedarikçi site id"
+          ]
+        },
+        {
+          "name": "agent_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Buyer/satın almacı kimliğidir.",
+          "aliases": [
+            "buyer id",
+            "agent",
+            "satın almacı",
+            "buyer"
+          ]
+        },
+        {
+          "name": "creation_date",
+          "data_type": "DATE",
+          "nullable": false,
+          "restricted": false,
+          "description": "Belgenin oluşturulma tarihidir.",
+          "aliases": [
+            "created date",
+            "creation date",
+            "oluşturulma tarihi",
+            "po date"
+          ]
+        },
+        {
+          "name": "org_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Operating unit / organizasyon kimliğidir.",
+          "aliases": [
+            "organization id",
+            "org",
+            "operating unit",
+            "iş birimi id"
+          ]
+        },
+        {
+          "name": "currency_code",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Belgenin para birimidir.",
+          "aliases": [
+            "currency",
+            "para birimi",
+            "döviz cinsi"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PO_LINES_ALL",
+      "description": "Oracle Purchasing belge satır tablosudur. Her satır bir PO line'ı temsil eder ve PO_HEADERS_ALL'a PO_HEADER_ID ile bağlıdır. ITEM_ID üzerinden item master'a bağlanır. Satırdaki miktar, birim fiyat, UOM ve açıklama gibi ticari detaylar burada tutulur.",
+      "aliases": [
+        "po line",
+        "purchase order line",
+        "po satırı",
+        "satın alma satırı",
+        "order line",
+        "line item",
+        "po kalemi"
+      ],
+      "primary_key": [
+        "po_line_id"
+      ],
+      "foreign_keys": [
+        {
+          "column": "po_header_id",
+          "referenced_table": "PO_HEADERS_ALL",
+          "referenced_column": "po_header_id",
+          "description": "Satırın bağlı olduğu PO başlığı"
+        },
+        {
+          "column": "item_id",
+          "referenced_table": "MTL_SYSTEM_ITEMS_B",
+          "referenced_column": "inventory_item_id",
+          "description": "Satırdaki stok/item kartı"
+        }
+      ],
+      "columns": [
+        {
+          "name": "po_line_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "PO satırının benzersiz teknik anahtarıdır.",
+          "aliases": [
+            "po line id",
+            "line id",
+            "satır id"
+          ]
+        },
+        {
+          "name": "po_header_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Satırın bağlı olduğu PO başlığının teknik anahtarıdır.",
+          "aliases": [
+            "header id",
+            "po header id",
+            "başlık id"
+          ]
+        },
+        {
+          "name": "line_num",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Belge üzerindeki görünen satır numarasıdır.",
+          "aliases": [
+            "line number",
+            "satır numarası",
+            "kalem no"
+          ]
+        },
+        {
+          "name": "item_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Item master üzerindeki inventory item anahtarıdır.",
+          "aliases": [
+            "inventory item id",
+            "item",
+            "malzeme id",
+            "stok id"
+          ]
+        },
+        {
+          "name": "item_description",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Satırın görünen item açıklamasıdır.",
+          "aliases": [
+            "description",
+            "ürün açıklaması",
+            "item description",
+            "kalem açıklaması"
+          ]
+        },
+        {
+          "name": "unit_meas_lookup_code",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Satır miktarı için kullanılan ölçü birimidir.",
+          "aliases": [
+            "uom",
+            "unit of measure",
+            "ölçü birimi",
+            "birim"
+          ]
+        },
+        {
+          "name": "unit_price",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Satırın birim fiyatıdır.",
+          "aliases": [
+            "price",
+            "unit price",
+            "birim fiyat"
+          ]
+        },
+        {
+          "name": "quantity",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Satırda sipariş edilen miktardır.",
+          "aliases": [
+            "qty",
+            "quantity",
+            "miktar",
+            "sipariş miktarı"
+          ]
+        },
+        {
+          "name": "cancel_flag",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Satırın iptal edilip edilmediğini gösterir.",
+          "aliases": [
+            "cancelled",
+            "cancel flag",
+            "iptal mi"
+          ]
+        },
+        {
+          "name": "from_header_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Satırın kopyalandığı quotation/global agreement başlığına referans olabilir.",
+          "aliases": [
+            "source header",
+            "from header",
+            "kaynak başlık"
+          ]
+        },
+        {
+          "name": "creation_date",
+          "data_type": "DATE",
+          "nullable": false,
+          "restricted": false,
+          "description": "Satırın oluşturulma tarihidir.",
+          "aliases": [
+            "created date",
+            "creation date",
+            "oluşturulma tarihi"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PO_LINE_LOCATIONS_ALL",
+      "description": "PO shipment/schedule tablosudur. Her satır bir PO line'ın teslimat planı veya shipment schedule kaydını temsil eder. Need-by, promised date, shipment numarası ve alınan miktar gibi operasyonel alanlar bu tabloda tutulur.",
+      "aliases": [
+        "shipment",
+        "po shipment",
+        "shipment schedule",
+        "line location",
+        "schedule",
+        "teslimat planı",
+        "shipment line",
+        "satır sevkiyat planı"
+      ],
+      "primary_key": [
+        "line_location_id"
+      ],
+      "foreign_keys": [
+        {
+          "column": "po_header_id",
+          "referenced_table": "PO_HEADERS_ALL",
+          "referenced_column": "po_header_id",
+          "description": "Shipment'ın bağlı olduğu PO başlığı"
+        },
+        {
+          "column": "po_line_id",
+          "referenced_table": "PO_LINES_ALL",
+          "referenced_column": "po_line_id",
+          "description": "Shipment'ın bağlı olduğu PO satırı"
+        }
+      ],
+      "columns": [
+        {
+          "name": "line_location_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Shipment/schedule kaydının benzersiz teknik anahtarıdır.",
+          "aliases": [
+            "line location id",
+            "shipment id",
+            "schedule id"
+          ]
+        },
+        {
+          "name": "po_header_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Shipment'ın bağlı olduğu PO başlığının teknik anahtarıdır.",
+          "aliases": [
+            "po header id",
+            "header id"
+          ]
+        },
+        {
+          "name": "po_line_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Shipment'ın bağlı olduğu PO satırının teknik anahtarıdır.",
+          "aliases": [
+            "po line id",
+            "line id"
+          ]
+        },
+        {
+          "name": "shipment_num",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Belge üzerindeki shipment line numarasıdır.",
+          "aliases": [
+            "shipment number",
+            "schedule number",
+            "teslimat satır no"
+          ]
+        },
+        {
+          "name": "quantity",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Shipment schedule üzerindeki sipariş miktarıdır.",
+          "aliases": [
+            "shipment qty",
+            "schedule qty",
+            "miktar"
+          ]
+        },
+        {
+          "name": "quantity_received",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Bugüne kadar teslim alınan miktardır.",
+          "aliases": [
+            "received qty",
+            "quantity received",
+            "alınan miktar",
+            "teslim alınan miktar"
+          ]
+        },
+        {
+          "name": "quantity_billed",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Faturalanmış miktardır.",
+          "aliases": [
+            "billed qty",
+            "quantity billed",
+            "faturalanan miktar"
+          ]
+        },
+        {
+          "name": "need_by_date",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "İhtiyaç/talep edilen teslim tarihidir.",
+          "aliases": [
+            "need by",
+            "need by date",
+            "ihtiyaç tarihi",
+            "istenen teslim tarihi"
+          ]
+        },
+        {
+          "name": "promised_date",
+          "data_type": "DATE",
+          "nullable": true,
+          "restricted": false,
+          "description": "Tedarikçinin söz verdiği teslim tarihidir.",
+          "aliases": [
+            "promised date",
+            "supplier promised date",
+            "taahhüt tarihi"
+          ]
+        },
+        {
+          "name": "ship_to_organization_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Teslimatın gideceği organizasyon kimliğidir.",
+          "aliases": [
+            "ship to org",
+            "destination organization",
+            "teslim organizasyonu"
+          ]
+        },
+        {
+          "name": "closed_code",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Shipment kapanış durumudur.",
+          "aliases": [
+            "closed status",
+            "closure status",
+            "kapanış durumu"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PO_DISTRIBUTIONS_ALL",
+      "description": "PO shipment satırının muhasebe ve dağıtım bilgisini tutar. Her satır bir shipment schedule dağıtımını temsil eder. Muhasebe hesabı, sipariş edilen/teslim edilen/faturalanan miktarlar ve requisition bağlantısı gibi alanlar burada yer alır.",
+      "aliases": [
+        "po distribution",
+        "distribution",
+        "account distribution",
+        "muhasebe dağıtımı",
+        "po accounting",
+        "charge account",
+        "masraf dağıtımı"
+      ],
+      "primary_key": [
+        "po_distribution_id"
+      ],
+      "foreign_keys": [
+        {
+          "column": "po_header_id",
+          "referenced_table": "PO_HEADERS_ALL",
+          "referenced_column": "po_header_id",
+          "description": "Dağıtımın bağlı olduğu PO başlığı"
+        },
+        {
+          "column": "po_line_id",
+          "referenced_table": "PO_LINES_ALL",
+          "referenced_column": "po_line_id",
+          "description": "Dağıtımın bağlı olduğu PO satırı"
+        },
+        {
+          "column": "line_location_id",
+          "referenced_table": "PO_LINE_LOCATIONS_ALL",
+          "referenced_column": "line_location_id",
+          "description": "Dağıtımın bağlı olduğu shipment/schedule"
+        }
+      ],
+      "columns": [
+        {
+          "name": "po_distribution_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Dağıtım satırının benzersiz teknik anahtarıdır.",
+          "aliases": [
+            "distribution id",
+            "po distribution id",
+            "dağıtım id"
+          ]
+        },
+        {
+          "name": "po_header_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Dağıtımın bağlı olduğu PO başlığının teknik anahtarıdır.",
+          "aliases": [
+            "header id",
+            "po header id"
+          ]
+        },
+        {
+          "name": "po_line_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Dağıtımın bağlı olduğu PO satırının teknik anahtarıdır.",
+          "aliases": [
+            "line id",
+            "po line id"
+          ]
+        },
+        {
+          "name": "line_location_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Dağıtımın bağlı olduğu shipment schedule teknik anahtarıdır.",
+          "aliases": [
+            "shipment id",
+            "schedule id",
+            "line location id"
+          ]
+        },
+        {
+          "name": "code_combination_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "GL charge account kombinasyonunun teknik anahtarıdır.",
+          "aliases": [
+            "gl account",
+            "charge account",
+            "account combination",
+            "hesap kodu"
+          ]
+        },
+        {
+          "name": "quantity_ordered",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Dağıtım seviyesinde sipariş edilen miktardır.",
+          "aliases": [
+            "ordered qty",
+            "quantity ordered",
+            "sipariş edilen miktar"
+          ]
+        },
+        {
+          "name": "quantity_delivered",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Dağıtım seviyesinde teslim edilen miktardır.",
+          "aliases": [
+            "delivered qty",
+            "quantity delivered",
+            "teslim edilen miktar"
+          ]
+        },
+        {
+          "name": "quantity_billed",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Dağıtım seviyesinde faturalanan miktardır.",
+          "aliases": [
+            "billed qty",
+            "quantity billed",
+            "faturalanan miktar"
+          ]
+        },
+        {
+          "name": "quantity_cancelled",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Dağıtım seviyesinde iptal edilen miktardır.",
+          "aliases": [
+            "cancelled qty",
+            "quantity cancelled",
+            "iptal edilen miktar"
+          ]
+        },
+        {
+          "name": "req_distribution_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "PO requisition dağıtımıyla köprü kuran anahtardır.",
+          "aliases": [
+            "requisition distribution",
+            "req distribution id",
+            "talep dağıtımı"
+          ]
+        },
+        {
+          "name": "deliver_to_person_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Teslim alınacak kişi/requester kimliğidir.",
+          "aliases": [
+            "requester",
+            "deliver to person",
+            "teslim alacak kişi",
+            "isteyen kişi"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "MTL_SYSTEM_ITEMS_B",
+      "description": "Oracle Inventory item master tablosudur. Inventory item tanımını organization seviyesinde tutar. INVENTORY_ITEM_ID ve ORGANIZATION_ID birlikte benzersiz kaydı tanımlar. DESCRIPTION base dilde tutulur; çok dilli açıklamalar için MTL_SYSTEM_ITEMS_TL kullanılır.",
+      "aliases": [
+        "item master",
+        "inventory item",
+        "item",
+        "material master",
+        "stok kartı",
+        "malzeme kartı",
+        "ürün kartı",
+        "item master"
+      ],
+      "primary_key": [
+        "inventory_item_id",
+        "organization_id"
+      ],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "inventory_item_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Item kaydının teknik anahtarıdır.",
+          "aliases": [
+            "inventory item id",
+            "item id",
+            "stok id",
+            "malzeme id"
+          ]
+        },
+        {
+          "name": "organization_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Item tanımının bağlı olduğu inventory organization kimliğidir.",
+          "aliases": [
+            "inventory org",
+            "organization id",
+            "envanter organizasyonu"
+          ]
+        },
+        {
+          "name": "segment1",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Item numarası/kodu genellikle bu kolonda tutulur.",
+          "aliases": [
+            "item number",
+            "item code",
+            "stok kodu",
+            "malzeme kodu"
+          ]
+        },
+        {
+          "name": "description",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Item açıklaması installation base language içinde tutulur.",
+          "aliases": [
+            "item description",
+            "açıklama",
+            "ürün açıklaması",
+            "malzeme açıklaması"
+          ]
+        },
+        {
+          "name": "primary_uom_code",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Oracle Manufacturing tarafında kullanılan 3 karakterlik ana ölçü birimidir.",
+          "aliases": [
+            "primary uom",
+            "uom code",
+            "ana ölçü birimi"
+          ]
+        },
+        {
+          "name": "primary_unit_of_measure",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Oracle Purchasing tarafında görülen ana ölçü birimidir.",
+          "aliases": [
+            "unit of measure",
+            "measure",
+            "ölçü birimi"
+          ]
+        },
+        {
+          "name": "purchasing_enabled_flag",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Item'ın satınalma işlemlerinde kullanılabilir olup olmadığını gösterir.",
+          "aliases": [
+            "purchasable",
+            "purchasing enabled",
+            "satın alınabilir"
+          ]
+        },
+        {
+          "name": "buyer_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Item için tanımlı buyer kimliğidir.",
+          "aliases": [
+            "buyer id",
+            "item buyer",
+            "satın almacı"
+          ]
+        },
+        {
+          "name": "list_price_per_unit",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Varsayılan liste birim fiyatıdır.",
+          "aliases": [
+            "list price",
+            "unit list price",
+            "liste fiyatı"
+          ]
+        },
+        {
+          "name": "market_price",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Piyasa fiyatı bilgisidir; bazı PO satırlarına default olabilir.",
+          "aliases": [
+            "market price",
+            "piyasa fiyatı"
+          ]
+        },
+        {
+          "name": "enabled_flag",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Item master segmentinin aktif olup olmadığını gösterir.",
+          "aliases": [
+            "enabled",
+            "active flag",
+            "aktif mi"
+          ]
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from_table": "PO_LINES_ALL",
+      "from_column": "po_header_id",
+      "to_table": "PO_HEADERS_ALL",
+      "to_column": "po_header_id",
+      "relationship_type": "many_to_one",
+      "description": "PO satırı -> PO başlığı: Her PO line bir PO header'a bağlıdır"
+    },
+    {
+      "from_table": "PO_LINE_LOCATIONS_ALL",
+      "from_column": "po_header_id",
+      "to_table": "PO_HEADERS_ALL",
+      "to_column": "po_header_id",
+      "relationship_type": "many_to_one",
+      "description": "Shipment schedule -> PO başlığı"
+    },
+    {
+      "from_table": "PO_LINE_LOCATIONS_ALL",
+      "from_column": "po_line_id",
+      "to_table": "PO_LINES_ALL",
+      "to_column": "po_line_id",
+      "relationship_type": "many_to_one",
+      "description": "Shipment schedule -> PO satırı"
+    },
+    {
+      "from_table": "PO_DISTRIBUTIONS_ALL",
+      "from_column": "po_header_id",
+      "to_table": "PO_HEADERS_ALL",
+      "to_column": "po_header_id",
+      "relationship_type": "many_to_one",
+      "description": "Dağıtım -> PO başlığı"
+    },
+    {
+      "from_table": "PO_DISTRIBUTIONS_ALL",
+      "from_column": "po_line_id",
+      "to_table": "PO_LINES_ALL",
+      "to_column": "po_line_id",
+      "relationship_type": "many_to_one",
+      "description": "Dağıtım -> PO satırı"
+    },
+    {
+      "from_table": "PO_DISTRIBUTIONS_ALL",
+      "from_column": "line_location_id",
+      "to_table": "PO_LINE_LOCATIONS_ALL",
+      "to_column": "line_location_id",
+      "relationship_type": "many_to_one",
+      "description": "Dağıtım -> Shipment schedule"
+    },
+    {
+      "from_table": "PO_LINES_ALL",
+      "from_column": "item_id",
+      "to_table": "MTL_SYSTEM_ITEMS_B",
+      "to_column": "inventory_item_id",
+      "relationship_type": "many_to_one",
+      "description": "PO satırı -> Item master: Item eşleşmesinde organization bağlamı ayrıca dikkate alınmalıdır"
+    }
+  ]
+}

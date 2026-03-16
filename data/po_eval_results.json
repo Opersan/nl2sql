@@ -1,0 +1,279 @@
+[
+  {
+    "id": "q_101",
+    "nl": "Açık satınalma siparişlerini listele",
+    "table": "PO_HEADERS_ALL",
+    "clarification": false,
+    "clarification_msg": null,
+    "filters": [
+      [
+        "authorization_status",
+        "PO_HEADERS_ALL",
+        "!=",
+        "CLOSED"
+      ]
+    ],
+    "aggregations": [],
+    "group_by": [],
+    "joins": [],
+    "semantic_intent": "po_open_orders",
+    "join_path_id": null,
+    "root_entity": "PO_PURCHASING",
+    "error": null,
+    "gaps": [
+      "no_gap"
+    ]
+  },
+  {
+    "id": "q_102",
+    "nl": "Onaysız bekleyen PO'ları getir",
+    "table": "PO_HEADERS_ALL",
+    "clarification": false,
+    "clarification_msg": null,
+    "filters": [
+      [
+        "authorization_status",
+        "PO_HEADERS_ALL",
+        "!=",
+        "APPROVED"
+      ]
+    ],
+    "aggregations": [],
+    "group_by": [],
+    "joins": [],
+    "semantic_intent": "po_unapproved",
+    "join_path_id": null,
+    "root_entity": "PO_PURCHASING",
+    "error": null,
+    "gaps": [
+      "no_gap"
+    ]
+  },
+  {
+    "id": "q_103",
+    "nl": "Kapatılmamış PO'ları göster",
+    "table": "PO_HEADERS_ALL",
+    "clarification": false,
+    "clarification_msg": null,
+    "filters": [
+      [
+        "authorization_status",
+        "PO_HEADERS_ALL",
+        "!=",
+        "CLOSED"
+      ]
+    ],
+    "aggregations": [],
+    "group_by": [],
+    "joins": [],
+    "semantic_intent": "po_open_orders",
+    "join_path_id": null,
+    "root_entity": "PO_PURCHASING",
+    "error": null,
+    "gaps": [
+      "no_gap"
+    ]
+  },
+  {
+    "id": "q_104",
+    "nl": "Tedarikçiye göre PO sayısı",
+    "table": "PO_HEADERS_ALL",
+    "clarification": false,
+    "clarification_msg": null,
+    "filters": [],
+    "aggregations": [
+      [
+        "COUNT",
+        "*",
+        null,
+        "po_count"
+      ]
+    ],
+    "group_by": [
+      "vendor_id"
+    ],
+    "joins": [],
+    "semantic_intent": "po_vendor_count",
+    "join_path_id": null,
+    "root_entity": "PO_PURCHASING",
+    "error": null,
+    "gaps": [
+      "no_gap"
+    ]
+  },
+  {
+    "id": "q_105",
+    "nl": "Kalem bazında sipariş miktarı",
+    "table": "PO_HEADERS_ALL",
+    "clarification": false,
+    "clarification_msg": null,
+    "filters": [],
+    "aggregations": [
+      [
+        "SUM",
+        "quantity",
+        "PO_LINES_ALL",
+        "total_qty"
+      ]
+    ],
+    "group_by": [
+      "line_num",
+      "item_description"
+    ],
+    "joins": [
+      [
+        "PO_HEADERS_ALL",
+        "PO_LINES_ALL"
+      ]
+    ],
+    "semantic_intent": "po_line_quantity",
+    "join_path_id": "po.header_lines",
+    "root_entity": "PO_PURCHASING",
+    "error": null,
+    "gaps": [
+      "no_gap"
+    ]
+  },
+  {
+    "id": "q_106",
+    "nl": "Teslim bekleyen satırları göster",
+    "table": "PO_HEADERS_ALL",
+    "clarification": false,
+    "clarification_msg": null,
+    "filters": [
+      [
+        "quantity_received",
+        "PO_LINE_LOCATIONS_ALL",
+        "<",
+        "__COLUMN_REF__quantity"
+      ]
+    ],
+    "aggregations": [],
+    "group_by": [],
+    "joins": [
+      [
+        "PO_HEADERS_ALL",
+        "PO_LINES_ALL"
+      ],
+      [
+        "PO_LINES_ALL",
+        "PO_LINE_LOCATIONS_ALL"
+      ]
+    ],
+    "semantic_intent": "po_pending_delivery",
+    "join_path_id": "po.header_lines_shipments",
+    "root_entity": "PO_PURCHASING",
+    "error": null,
+    "gaps": [
+      "no_gap"
+    ]
+  },
+  {
+    "id": "q_107",
+    "nl": "Dağıtım bazında tutar analizi",
+    "table": "PO_HEADERS_ALL",
+    "clarification": false,
+    "clarification_msg": null,
+    "filters": [],
+    "aggregations": [
+      [
+        "SUM",
+        "quantity_ordered",
+        "PO_DISTRIBUTIONS_ALL",
+        "ordered_qty"
+      ],
+      [
+        "SUM",
+        "unit_price",
+        "PO_LINES_ALL",
+        "price_sum"
+      ]
+    ],
+    "group_by": [
+      "code_combination_id"
+    ],
+    "joins": [
+      [
+        "PO_HEADERS_ALL",
+        "PO_LINES_ALL"
+      ],
+      [
+        "PO_LINES_ALL",
+        "PO_LINE_LOCATIONS_ALL"
+      ],
+      [
+        "PO_LINE_LOCATIONS_ALL",
+        "PO_DISTRIBUTIONS_ALL"
+      ]
+    ],
+    "semantic_intent": "po_distribution_amount",
+    "join_path_id": "po.header_lines_shipments_distributions",
+    "root_entity": "PO_PURCHASING",
+    "error": null,
+    "gaps": [
+      "no_gap"
+    ]
+  },
+  {
+    "id": "q_108",
+    "nl": "Ürün bazında PO satırları",
+    "table": "PO_HEADERS_ALL",
+    "clarification": false,
+    "clarification_msg": null,
+    "filters": [],
+    "aggregations": [
+      [
+        "COUNT",
+        "*",
+        null,
+        "line_count"
+      ]
+    ],
+    "group_by": [
+      "segment1",
+      "description"
+    ],
+    "joins": [
+      [
+        "PO_HEADERS_ALL",
+        "PO_LINES_ALL"
+      ],
+      [
+        "PO_LINES_ALL",
+        "MTL_SYSTEM_ITEMS_B"
+      ]
+    ],
+    "semantic_intent": "po_item_line_count",
+    "join_path_id": "po.header_lines_items",
+    "root_entity": "PO_PURCHASING",
+    "error": null,
+    "gaps": [
+      "no_gap"
+    ]
+  },
+  {
+    "id": "q_109",
+    "nl": "Son 30 günde açılan PO'lar",
+    "table": "PO_HEADERS_ALL",
+    "clarification": false,
+    "clarification_msg": null,
+    "filters": [
+      [
+        "creation_date",
+        "PO_HEADERS_ALL",
+        ">=",
+        "__EXPR__TRUNC(SYSDATE)-30"
+      ]
+    ],
+    "aggregations": [],
+    "group_by": [],
+    "joins": [],
+    "semantic_intent": "po_last_30_days",
+    "join_path_id": null,
+    "root_entity": "PO_PURCHASING",
+    "error": null,
+    "gaps": [
+      "no_gap"
+    ]
+  }
+]
