@@ -46,6 +46,15 @@ def _snapshot() -> CatalogSnapshot:
                     ColumnMetadata(name="segment1", data_type=ColumnType.VARCHAR2),
                 ],
             ),
+            TableMetadata(
+                name="XXBT_PDKS_PER_DETAILS_V",
+                columns=[
+                    ColumnMetadata(name="SICIL_NO", data_type=ColumnType.VARCHAR2),
+                    ColumnMetadata(name="BIRIM_ADI", data_type=ColumnType.VARCHAR2),
+                    ColumnMetadata(name="LOCATION_ADI", data_type=ColumnType.VARCHAR2),
+                    ColumnMetadata(name="UNVAN", data_type=ColumnType.VARCHAR2),
+                ],
+            ),
         ]
     )
 

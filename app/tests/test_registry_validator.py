@@ -57,6 +57,7 @@ def _po_headers(**overrides) -> TableMetadata:
         _col("po_header_id"),
         _col("vendor_id"),
         _col("creation_date", ColumnType.DATE),
+        _col("currency_code", ColumnType.VARCHAR),
         _col("authorization_status", ColumnType.VARCHAR),
     ]
     kwargs = {"name": "PO_HEADERS_ALL", "columns": cols}

@@ -9,6 +9,8 @@ Verifies that:
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.domain.query_plan import AggregateFn, FilterOp, QueryPlan
@@ -20,6 +22,15 @@ from app.services.semantic_planning import (
     _match_entity,
     apply_semantic_normalization,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_registry_cache_between_tests() -> None:
+    from app.services import semantic_planning
+
+    semantic_planning._load_registry.cache_clear()
+    yield
+    semantic_planning._load_registry.cache_clear()
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +92,141 @@ def test_po_entity_has_intent_defaults() -> None:
 def test_intent_join_paths_populated() -> None:
     registry = _load_registry()
     assert len(registry.intent_join_paths) >= 1
+
+
+def test_registry_reads_policy_rules_and_column_aliases() -> None:
+    registry = _load_registry()
+    assert "password" in registry.policy_rules.sensitive_intent_patterns
+    assert registry.column_aliases.global_aliases.get("email") == "EMAIL"
+    scoped = registry.column_aliases.table_scoped.get("XXBT_PDKS_PER_DETAILS_V", {})
+    assert scoped.get("giris_tarihi") == "ISE_GIRIS_TARIHI"
+
+
+def test_registry_backward_compat_defaults_when_new_fields_missing() -> None:
+    legacy_payload = {
+        "version": "1.0",
+        "entities": [],
+        "intent_join_paths": {},
+    }
+    registry = SemanticRegistry.model_validate(legacy_payload)
+
+    assert registry.policy_rules.sensitive_intent_patterns == []
+    assert registry.column_aliases.global_aliases == {}
+    assert registry.column_aliases.table_scoped == {}
+
+
+def test_registry_backward_compat_defaults_when_policy_rules_missing() -> None:
+    payload = {
+        "version": "1.0",
+        "entities": [],
+        "intent_join_paths": {},
+        "column_aliases": {
+            "global": {"mail": "EMAIL"},
+            "table_scoped": {},
+        },
+    }
+    registry = SemanticRegistry.model_validate(payload)
+
+    assert registry.policy_rules.sensitive_intent_patterns == []
+    assert registry.column_aliases.global_aliases.get("mail") == "EMAIL"
+
+
+def test_registry_backward_compat_defaults_when_column_aliases_missing() -> None:
+    payload = {
+        "version": "1.0",
+        "entities": [],
+        "intent_join_paths": {},
+        "policy_rules": {
+            "sensitive_intent_patterns": ["password"],
+        },
+    }
+    registry = SemanticRegistry.model_validate(payload)
+
+    assert registry.policy_rules.sensitive_intent_patterns == ["password"]
+    assert registry.column_aliases.global_aliases == {}
+    assert registry.column_aliases.table_scoped == {}
+
+
+def test_registry_loader_file_missing_returns_safe_defaults_with_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.services import semantic_planning
+
+    semantic_planning._load_registry.cache_clear()
+    missing = Path("C:/this/path/does/not/exist/semantic_registry.json")
+    monkeypatch.setattr(semantic_planning, "_REGISTRY_PATH", missing)
+
+    registry = semantic_planning._load_registry()
+
+    assert isinstance(registry, SemanticRegistry)
+    assert registry.policy_rules.sensitive_intent_patterns == []
+    assert registry.column_aliases.global_aliases == {}
+    assert "Semantic registry file not found" in caplog.text
+
+
+def test_registry_loader_invalid_global_alias_type_falls_back_with_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.services import semantic_planning
+
+    bad = tmp_path / "semantic_registry_bad_global.json"
+    bad.write_text(
+        """
+{
+  "version": "1.0",
+  "entities": [],
+  "intent_join_paths": {},
+  "column_aliases": {
+    "global": ["mail", "EMAIL"],
+    "table_scoped": {}
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    semantic_planning._load_registry.cache_clear()
+    monkeypatch.setattr(semantic_planning, "_REGISTRY_PATH", bad)
+    registry = semantic_planning._load_registry()
+
+    assert registry.column_aliases.global_aliases == {}
+    assert registry.column_aliases.table_scoped == {}
+    assert "Semantic registry validation failed" in caplog.text
+
+
+def test_registry_loader_invalid_table_scoped_alias_type_falls_back_with_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.services import semantic_planning
+
+    bad = tmp_path / "semantic_registry_bad_scoped.json"
+    bad.write_text(
+        """
+{
+  "version": "1.0",
+  "entities": [],
+  "intent_join_paths": {},
+  "column_aliases": {
+    "global": {},
+    "table_scoped": "XXBT_PDKS_PER_DETAILS_V"
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    semantic_planning._load_registry.cache_clear()
+    monkeypatch.setattr(semantic_planning, "_REGISTRY_PATH", bad)
+    registry = semantic_planning._load_registry()
+
+    assert registry.column_aliases.global_aliases == {}
+    assert registry.column_aliases.table_scoped == {}
+    assert "Semantic registry validation failed" in caplog.text
 
 
 # ---------------------------------------------------------------------------

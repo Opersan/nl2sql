@@ -117,12 +117,31 @@ class BusinessEntitySemantic(BaseModel):
         return None
 
 
+class PolicyRules(BaseModel):
+    """Policy rules loaded from semantic registry."""
+
+    sensitive_intent_patterns: list[str] = Field(default_factory=list)
+
+
+class ColumnAliases(BaseModel):
+    """Column alias mappings loaded from semantic registry."""
+
+    global_aliases: dict[str, str] = Field(default_factory=dict, alias="global")
+    table_scoped: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
+
 class SemanticRegistry(BaseModel):
     """Top-level semantic registry loaded from external metadata."""
 
     version: str = "1.0"
     entities: list[BusinessEntitySemantic] = Field(default_factory=list)
     intent_join_paths: dict[str, str] = Field(default_factory=dict)
+    policy_rules: PolicyRules = Field(default_factory=PolicyRules)
+    column_aliases: ColumnAliases = Field(default_factory=ColumnAliases)
 
     def get_entity(self, entity_id: str) -> BusinessEntitySemantic | None:
         for e in self.entities:

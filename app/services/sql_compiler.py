@@ -20,6 +20,7 @@ If there is a collision, a numeric suffix is appended.
 from __future__ import annotations
 
 import re
+from datetime import date
 from collections.abc import Callable
 
 from app.core.exceptions import CompilationError
@@ -44,6 +45,43 @@ from app.utils.turkish import casefold_tr
 
 _COLUMN_REF_PREFIX = "__COLUMN_REF__"
 _EXPR_PREFIX = "__EXPR__"
+
+_RELATIVE_DATE_SQL_RE = re.compile(
+    r"^(?:TRUNC\(\s*SYSDATE\s*\)|SYSDATE|CURRENT_DATE)\s*-\s*(\d+)\s*$",
+    re.IGNORECASE,
+)
+
+_EXTRACT_YEAR_RE = re.compile(
+    r"^EXTRACT\s*\(\s*YEAR\s+FROM\s+([A-Za-z_][A-Za-z0-9_\.]+)\s*\)$",
+    re.IGNORECASE,
+)
+
+_ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+
+
+def _normalize_relative_date_sql(expr: str) -> str:
+    """Normalize relative date expressions to Oracle-safe canonical form."""
+    raw = expr.strip()
+    m = _RELATIVE_DATE_SQL_RE.match(raw)
+    if m:
+        return f"TRUNC(SYSDATE)-{m.group(1)}"
+    return raw
+
+
+def _normalize_expression_sql(
+    expr: str,
+    resolve_col: Callable[[str], str],
+) -> str:
+    """Normalize supported SQL expressions to canonical Oracle form."""
+    raw = _normalize_relative_date_sql(expr)
+
+    # EXTRACT(YEAR FROM date_column) -> TO_CHAR(date_column,'YYYY')
+    m = _EXTRACT_YEAR_RE.match(raw)
+    if m:
+        date_col = m.group(1)
+        return f"TO_CHAR({resolve_col(date_col)},'YYYY')"
+
+    return raw
 
 
 def _render_filter_value(
@@ -70,7 +108,8 @@ def _render_filter_value(
                 return resolve_col(col_name), None
             return col_name, None  # fallback: emit identifier as-is
         if value.startswith(_EXPR_PREFIX):
-            return value[len(_EXPR_PREFIX):], None
+            raw = value[len(_EXPR_PREFIX):]
+            return _normalize_relative_date_sql(raw), None
     return None, value
 
 
@@ -111,6 +150,37 @@ def _expand_expression(
         else:
             out.append(part)
     return "".join(out)
+
+
+def _coerce_date_bind(value: object) -> object:
+    """Convert ISO date strings to python date for Oracle DATE binds."""
+    if not isinstance(value, str):
+        return value
+    m = _ISO_DATE_RE.match(value.strip())
+    if not m:
+        return value
+    try:
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except Exception:
+        return value
+
+
+def _coerce_bind_for_column(value: object, meta: TableMetadata | None, column_name: str) -> object:
+    """Coerce bind values for DATE/TIMESTAMP columns.
+
+    Keeps non-date columns untouched.
+    """
+    if meta is None:
+        return value
+    col_meta = meta.get_column(column_name)
+    if col_meta is None:
+        return value
+    if col_meta.data_type.value not in {"DATE", "TIMESTAMP"}:
+        return value
+
+    if isinstance(value, list):
+        return [_coerce_date_bind(v) for v in value]
+    return _coerce_date_bind(value)
 
 
 # ------------------------------------------------------------------
@@ -230,6 +300,11 @@ class SQLCompiler:
         def _resolve_multi(col: str, table_name: str | None = None) -> str:
             if col == STAR_COLUMN:
                 return STAR_COLUMN
+            if '(' in col:
+                return _normalize_expression_sql(
+                    col,
+                    resolve_col=lambda c: _resolve_multi(c, table_name),
+                )
             if table_name:
                 tname = table_name.upper()
                 meta = all_tables.get(tname)
@@ -238,13 +313,34 @@ class SQLCompiler:
                     if canonical:
                         alias = aliases.get(tname, tname.lower())
                         return f"{alias}.{canonical}"
-            # Try all tables
+            # Try all tables and detect ambiguous ownership early.
+            primary_name = primary_table.name.upper()
+            matches: list[tuple[str, str]] = []
             for tname, meta in all_tables.items():
                 canonical = meta.resolve_column_name(col)
                 if canonical:
-                    alias = aliases.get(tname, tname.lower())
-                    return f"{alias}.{canonical}"
-            return col
+                    matches.append((tname, canonical))
+
+            if len(matches) == 1:
+                tname, canonical = matches[0]
+                alias = aliases.get(tname, tname.lower())
+                return f"{alias}.{canonical}"
+
+            if len(matches) > 1:
+                primary_match = next(((t, c) for (t, c) in matches if t == primary_name), None)
+                primary_prefix = primary_name.split("_")[0].lower()
+                if primary_match is not None and col.lower().startswith(f"{primary_prefix}_"):
+                    alias = aliases.get(primary_name, primary_name.lower())
+                    return f"{alias}.{primary_match[1]}"
+                owners = ", ".join(t for t, _ in matches)
+                raise CompilationError(
+                    f"Kolon referansi belirsiz: '{col}' birden fazla tabloda mevcut ({owners}). "
+                    "Table qualifier kullanin veya repair pass table ownership atasin."
+                )
+
+            raise CompilationError(
+                f"Kolon cozumlenemedi: '{col}' (multi-table plan)."
+            )
 
         # SELECT
         expressions: list[str] = []
@@ -311,8 +407,22 @@ class SQLCompiler:
         where_parts: list[str] = []
         for filt in plan.filters:
             col_ref = _resolve_multi(filt.column, filt.table)
+            bind_filt = filt
+            target_meta: TableMetadata | None = None
+            if filt.table:
+                target_meta = all_tables.get(filt.table.upper())
+            if target_meta is None:
+                matches = [m for m in all_tables.values() if m.resolve_column_name(filt.column) is not None]
+                if len(matches) == 1:
+                    target_meta = matches[0]
+            if target_meta is not None:
+                canonical = target_meta.resolve_column_name(filt.column)
+                if canonical is not None:
+                    coerced = _coerce_bind_for_column(filt.value, target_meta, canonical)
+                    if coerced is not filt.value:
+                        bind_filt = filt.model_copy(update={"value": coerced})
             clause = self._filter_clause_raw(
-                col_ref, filt, params, param_counter,
+                col_ref, bind_filt, params, param_counter,
                 resolve_col=lambda c: _resolve_multi(c),
             )
             where_parts.append(clause)
@@ -338,6 +448,10 @@ class SQLCompiler:
                     ob_parts.append(f"{matched_alias} {spec.direction.value}")
                 else:
                     col_ref = _resolve_multi(spec.column, spec.table)
+                    if plan.aggregations and plan.group_by:
+                        group_refs = {_resolve_multi(c) for c in plan.group_by}
+                        if col_ref not in group_refs:
+                            continue
                     ob_parts.append(f"{col_ref} {spec.direction.value}")
             order_by_clause = f"ORDER BY {', '.join(ob_parts)}"
 
@@ -388,7 +502,7 @@ class SQLCompiler:
         *,
         resolve_col: Callable[[str], str] | None = None,
     ) -> str:
-        """Build a filter clause given an already-resolved column reference.
+        """Render a filter clause from a pre-resolved column reference.
 
         *resolve_col* is used to expand ``__COLUMN_REF__<name>`` placeholder
         values into qualified column references.  When omitted the identifier
@@ -538,6 +652,9 @@ class SQLCompiler:
         }
 
         parts: list[str] = []
+        group_cols: set[str] = set()
+        if plan.aggregations and plan.group_by:
+            group_cols = {self._resolve(c, table) for c in plan.group_by}
         for spec in plan.order_by:
             matched_alias = agg_alias_map.get(casefold_tr(spec.column))
             if matched_alias is not None:
@@ -545,7 +662,11 @@ class SQLCompiler:
                 parts.append(f"{matched_alias} {spec.direction.value}")
             else:
                 col = self._resolve(spec.column, table)
+                if plan.aggregations and plan.group_by and col not in group_cols:
+                    continue
                 parts.append(f"{col} {spec.direction.value}")
+        if not parts:
+            return ""
         return f"ORDER BY {', '.join(parts)}"
 
     # ------------------------------------------------------------------
@@ -578,7 +699,15 @@ class SQLCompiler:
     @staticmethod
     def _resolve(column_name_or_alias: str, table: TableMetadata) -> str:
         """Resolve to canonical column name; raise on miss."""
-        canonical = table.resolve_column_name(column_name_or_alias)
+        if '(' in column_name_or_alias:
+            return _normalize_expression_sql(
+                column_name_or_alias,
+                resolve_col=lambda c: SQLCompiler._resolve(c, table),
+            )
+        raw = column_name_or_alias.strip()
+        if '.' in raw:
+            raw = raw.split('.', 1)[1].strip()
+        canonical = table.resolve_column_name(raw)
         if canonical is None:
             raise CompilationError(
                 f"Kolon çözümlenemedi: '{column_name_or_alias}' (tablo: {table.name})."

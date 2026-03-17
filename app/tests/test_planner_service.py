@@ -5,9 +5,11 @@ from __future__ import annotations
 import pytest
 
 from app.domain.query_plan import FilterOp, FilterSpec, QueryPlan
+from app.domain.semantic_models import PolicyRules, SemanticRegistry
 from app.providers.catalog.in_memory import InMemoryCatalogProvider
 from app.providers.llm.mock_llm import MockLLMProvider
 from app.services.catalog_service import CatalogService
+from app.services import planner_service as planner_module
 from app.services.planner_service import PlannerService
 
 
@@ -85,6 +87,109 @@ class TestClarification:
         assert plan.needs_clarification is True
         assert plan.clarification_message is not None
         assert len(plan.clarification_message) > 0
+
+    @pytest.mark.asyncio
+    async def test_sensitive_guard_uses_registry_patterns(
+        self,
+        planner: PlannerService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        custom_registry = SemanticRegistry(
+            policy_rules=PolicyRules(sensitive_intent_patterns=["kredi kart"]),
+        )
+        monkeypatch.setattr(planner_module, "_load_registry", lambda: custom_registry)
+
+        plan = await planner.plan("Kredi kart numaralarını listele")
+
+        assert plan.needs_clarification is True
+        assert plan.intent == "clarification_required"
+
+    def test_sensitive_guard_empty_patterns_is_safe(
+        self,
+        planner: PlannerService,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        empty_registry = SemanticRegistry(
+            policy_rules=PolicyRules(sensitive_intent_patterns=[]),
+        )
+        monkeypatch.setattr(planner_module, "_load_registry", lambda: empty_registry)
+
+        assert planner._is_sensitive_or_invalid_request("normal bir soru") is True  # noqa: SLF001
+        assert "Sensitive policy patterns unavailable" in caplog.text
+
+    def test_aggregation_intent_guard_triggers_for_non_aggregated_plan(
+        self,
+        planner: PlannerService,
+    ) -> None:
+        plan = QueryPlan(
+            intent="listing_like",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["SICIL_NO", "AD"],
+        )
+
+        guarded = planner._enforce_aggregation_intent_guard(  # noqa: SLF001
+            plan,
+            "departman bazında çalışan sayısı",
+        )
+
+        assert guarded.needs_clarification is True
+        assert guarded.intent == "clarification_required"
+        assert guarded.aggregations == []
+        assert guarded.select_columns == []
+
+    def test_aggregation_intent_guard_skips_filter_like_queries(
+        self,
+        planner: PlannerService,
+    ) -> None:
+        plan = QueryPlan(
+            intent="listing_like",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["SICIL_NO", "AD"],
+        )
+
+        guarded = planner._enforce_aggregation_intent_guard(  # noqa: SLF001
+            plan,
+            "Istanbul'daki çalışanları getir",
+        )
+
+        assert guarded is plan
+
+    def test_aggregation_intent_guard_skips_short_domain_queries(
+        self,
+        planner: PlannerService,
+    ) -> None:
+        plan = QueryPlan(
+            intent="listing_like",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["SICIL_NO"],
+        )
+
+        guarded = planner._enforce_aggregation_intent_guard(  # noqa: SLF001
+            plan,
+            "çalışanlar",
+        )
+
+        assert guarded is plan
+
+    def test_aggregation_intent_guard_does_not_touch_valid_aggregation(
+        self,
+        planner: PlannerService,
+    ) -> None:
+        from app.domain.query_plan import AggregateFn, AggregationSpec
+
+        plan = QueryPlan(
+            intent="agg",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            aggregations=[AggregationSpec(function=AggregateFn.COUNT, column="*")],
+        )
+
+        guarded = planner._enforce_aggregation_intent_guard(  # noqa: SLF001
+            plan,
+            "kaç çalışan var",
+        )
+
+        assert guarded is plan
 
 
 # ---------------------------------------------------------------------------

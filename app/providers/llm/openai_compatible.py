@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from typing import Any, TypeVar
 
 import httpx
@@ -52,28 +53,57 @@ def _safe_extract_plan_dict(content: str) -> dict[str, Any] | None:
 
     Returns ``None`` when no QueryPlan-shaped object can be found.
     """
-    # 1. Direct parse — fast path for well-formed output
-    try:
-        data = json.loads(content)
-        if isinstance(data, dict):
-            if "intent" in data:
-                return data
-            # Nested: {"plan": {"intent": ...}, "reasoning": ...}
-            for v in data.values():
-                if isinstance(v, dict) and "intent" in v:
-                    return v
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    # 2. Extract JSON objects from mixed content (think tags, markdown fences, etc.)
-    # Try all ``{...}`` blocks from largest to smallest.
-    for match in re.finditer(r'\{(?:[^{}]|\{[^{}]*\})*\}', content, re.DOTALL):
+    def _iter_json_candidates(text: str) -> Iterable[dict[str, Any]]:
+        # Fast path: full payload is JSON
         try:
-            candidate = json.loads(match.group())
-            if isinstance(candidate, dict) and "intent" in candidate:
-                return candidate
+            data = json.loads(text)
+            if isinstance(data, dict):
+                yield data
         except (json.JSONDecodeError, ValueError):
-            continue
+            pass
+
+        # Code fences: ```json ... ``` or generic ``` ... ```
+        for fence in re.finditer(r"```(?:json)?\s*(.*?)```", text, re.IGNORECASE | re.DOTALL):
+            block = fence.group(1).strip()
+            try:
+                data = json.loads(block)
+                if isinstance(data, dict):
+                    yield data
+            except (json.JSONDecodeError, ValueError):
+                continue
+
+        # Strip explicit reasoning blocks, then scan balanced JSON objects.
+        scrubbed = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL)
+        decoder = json.JSONDecoder()
+        for i, ch in enumerate(scrubbed):
+            if ch != "{":
+                continue
+            try:
+                obj, _end = decoder.raw_decode(scrubbed[i:])
+                if isinstance(obj, dict):
+                    yield obj
+            except (json.JSONDecodeError, ValueError):
+                continue
+
+    def _find_plan_dict(obj: Any) -> dict[str, Any] | None:
+        if isinstance(obj, dict):
+            if isinstance(obj.get("intent"), str) and obj.get("intent", "").strip():
+                return obj
+            for value in obj.values():
+                found = _find_plan_dict(value)
+                if found is not None:
+                    return found
+        if isinstance(obj, list):
+            for item in obj:
+                found = _find_plan_dict(item)
+                if found is not None:
+                    return found
+        return None
+
+    for candidate in _iter_json_candidates(content):
+        found = _find_plan_dict(candidate)
+        if found is not None:
+            return found
 
     return None
 
@@ -87,9 +117,9 @@ def _make_clarification_plan() -> Any:
     from app.domain.query_plan import QueryPlan
 
     return QueryPlan(
-        intent="Yanit yorumlanamadi",
+        intent="clarification_required",
         needs_clarification=True,
-        clarification_message="Lutfen sorunuzu daha acik bir sekilde belirtin.",
+        clarification_message="Soruyu biraz daha detaylandırabilir misiniz?",
     )
 
 

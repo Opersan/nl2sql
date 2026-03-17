@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import json
 import math
+import random
 import re
 import statistics
 import sys
@@ -27,6 +28,8 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+import httpx
 
 # Make project root importable when run as a script.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -90,6 +93,11 @@ class EvalResult:
     # Narrator leak classification
     narrator_sql_leak: bool = False       # SELECT...FROM pattern in raw response
     narrator_presentation_leak: bool = False  # reasoning/thinking header in raw response
+    repair_applied: bool = False
+    repair_actions: list[str] = field(default_factory=list)
+    repair_fields_count: int = 0
+    queue_wait_ms: int = 0
+    processing_ms: int = 0
 
 
 @dataclass
@@ -115,6 +123,44 @@ class EvalSummary:
     execution_error_subtypes: dict[str, int]  # oracle_syntax_error / invalid_date_value / ...
     structured_parse_errors: int              # LLM returned non-QueryPlan JSON
     top_failure_buckets: list[dict[str, Any]] # top-20 failure patterns
+    repair_applied_total: int
+    repaired_fields_total: int
+    questions_with_repair_rate: float
+    repair_action_counts: dict[str, int]
+    wrong_plan_bucket_counts: dict[str, int]
+    execution_error_bucket_counts: dict[str, int]
+    repaired_wrong_plan_count: int
+    repair_prevented_clarification_count: int
+    repair_prevented_validation_error_count: int
+    repair_prevented_execution_error_count: int
+    top_semantic_intents_by_failure: list[dict[str, Any]]
+    top_root_entities_by_failure: list[dict[str, Any]]
+    concurrency: int
+    max_retries: int
+    total_wall_time_s: float
+    avg_question_latency_s: float
+    p50_question_latency_s: float
+    p95_question_latency_s: float
+    llm_retry_count: int
+    llm_retry_success_count: int
+
+
+@dataclass
+class LLMRetryStats:
+    retry_count: int = 0
+    retry_success_count: int = 0
+
+
+@dataclass
+class BenchmarkResult:
+    concurrency: int
+    total_wall_time_s: float
+    success: int
+    clarification: int
+    validation_error: int
+    compile_error: int
+    execution_error: int
+    wrong_plan: int
 
 
 def _load_dataset(path: Path) -> list[EvalQuestion]:
@@ -299,6 +345,235 @@ def _extract_exec_error_subtype(detail: str | None) -> str | None:
     return "unknown_execution_error"
 
 
+def _is_retryable_llm_exception(exc: Exception) -> bool:
+    """Return True when *exc* is safe to retry for LLM HTTP calls."""
+    if isinstance(exc, (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout, httpx.RemoteProtocolError)):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        return code == 429 or 500 <= code < 600
+    return False
+
+
+async def _call_with_retry(
+    call: Any,
+    *,
+    max_retries: int,
+    retry_stats: LLMRetryStats,
+) -> Any:
+    """Execute async *call* with bounded exponential backoff retries."""
+    had_retry = False
+    attempt = 0
+    while True:
+        try:
+            out = await call()
+            if had_retry:
+                retry_stats.retry_success_count += 1
+            return out
+        except Exception as exc:
+            if attempt >= max_retries or not _is_retryable_llm_exception(exc):
+                raise
+            had_retry = True
+            attempt += 1
+            retry_stats.retry_count += 1
+            sleep_s = min(3.0, (0.35 * (2 ** (attempt - 1))) + random.uniform(0.0, 0.25))
+            await asyncio.sleep(sleep_s)
+
+
+def _patch_llm_with_retry(chat: Any, max_retries: int, retry_stats: LLMRetryStats) -> None:
+    """Patch LLM provider methods on planner/narrator with retry wrappers.
+
+    Retries are applied only to LLM network calls; Oracle and deterministic
+    pipeline stages are untouched.
+    """
+    if max_retries <= 0:
+        return
+
+    providers: list[Any] = []
+    planner = getattr(chat, "_planner", None)
+    narrator = getattr(chat, "_narrator", None)
+    if planner is not None:
+        p = getattr(planner, "_llm", None)
+        if p is not None:
+            providers.append(p)
+    if narrator is not None:
+        n = getattr(narrator, "_llm", None)
+        if n is not None:
+            providers.append(n)
+
+    seen: set[int] = set()
+    for provider in providers:
+        pid = id(provider)
+        if pid in seen:
+            continue
+        seen.add(pid)
+
+        if getattr(provider, "_eval_retry_wrapped", False):
+            continue
+
+        orig_generate_structured = provider.generate_structured
+        orig_generate_text = provider.generate_text
+
+        async def _wrapped_generate_structured(prompt: str, response_model: Any, _orig=orig_generate_structured) -> Any:
+            return await _call_with_retry(
+                lambda: _orig(prompt, response_model),
+                max_retries=max_retries,
+                retry_stats=retry_stats,
+            )
+
+        async def _wrapped_generate_text(prompt: str, _orig=orig_generate_text) -> str:
+            return await _call_with_retry(
+                lambda: _orig(prompt),
+                max_retries=max_retries,
+                retry_stats=retry_stats,
+            )
+
+        provider.generate_structured = _wrapped_generate_structured  # type: ignore[assignment]
+        provider.generate_text = _wrapped_generate_text  # type: ignore[assignment]
+        provider._eval_retry_wrapped = True
+
+
+async def _run_dataset_concurrent(
+    chat: Any,
+    dataset: list[EvalQuestion],
+    *,
+    session_prefix: str,
+    concurrency: int,
+    question_timeout_s: float,
+) -> list[EvalResult]:
+    """Run dataset with bounded concurrency and stable output ordering."""
+    total = len(dataset)
+    sem = asyncio.Semaphore(max(1, concurrency))
+    results: list[EvalResult | None] = [None] * total
+    done = 0
+    lock = asyncio.Lock()
+
+    async def _one(index: int, item: EvalQuestion) -> None:
+        nonlocal done
+        queued_at = time.perf_counter()
+        async with sem:
+            started_at = time.perf_counter()
+            queue_wait_ms = int((started_at - queued_at) * 1000)
+
+            try:
+                if question_timeout_s > 0:
+                    r = await asyncio.wait_for(
+                        _run_one(chat, item, session_prefix),
+                        timeout=question_timeout_s,
+                    )
+                else:
+                    r = await _run_one(chat, item, session_prefix)
+            except asyncio.TimeoutError:
+                r = EvalResult(
+                    id=item.id,
+                    domain=item.domain,
+                    category=item.category,
+                    question=item.text,
+                    expected_table=item.expected_table,
+                    expected_intent_type=item.expected_intent_type,
+                    status="execution_error",
+                    raw_status="execution_error",
+                    error_detail=f"question_timeout>{question_timeout_s}s",
+                    execution_error_subtype="timeout_error",
+                    execution_status="execution_error",
+                )
+            except Exception as exc:
+                r = EvalResult(
+                    id=item.id,
+                    domain=item.domain,
+                    category=item.category,
+                    question=item.text,
+                    expected_table=item.expected_table,
+                    expected_intent_type=item.expected_intent_type,
+                    status="execution_error",
+                    raw_status="execution_error",
+                    error_detail=str(exc),
+                    execution_error_subtype="unknown_execution_error",
+                    execution_status="execution_error",
+                )
+
+            finished_at = time.perf_counter()
+            r.queue_wait_ms = queue_wait_ms
+            r.processing_ms = int((finished_at - started_at) * 1000)
+            if r.latency_ms <= 0:
+                r.latency_ms = int((finished_at - queued_at) * 1000)
+
+            results[index] = r
+
+            async with lock:
+                done += 1
+                print(
+                    f"[{done:03d}/{total}] done {item.id} status={r.status} latency={r.latency_ms / 1000.0:.1f}s",
+                    flush=True,
+                )
+
+    tasks = [asyncio.create_task(_one(i, q)) for i, q in enumerate(dataset)]
+    await asyncio.gather(*tasks)
+
+    # Output order is guaranteed to match input order by index assignment.
+    return [r for r in results if r is not None]
+
+
+def _bucket_wrong_plan(result: EvalResult) -> list[str]:
+    """Classify a wrong_plan result into normalized root-cause buckets."""
+    if not result.wrong_plan:
+        return []
+
+    out: list[str] = []
+    reasons = set(result.wrong_plan_reasons or [])
+
+    if "wrong_table" in reasons:
+        exp = (result.expected_table or "").upper()
+        pred = (result.predicted_tables[0].upper() if result.predicted_tables else "")
+        if exp.startswith("PO_") and pred.startswith("XXBT_"):
+            out.append("wrong_domain_entity")
+        elif exp.startswith("XXBT_") and pred.startswith("PO_"):
+            out.append("wrong_domain_entity")
+        else:
+            out.append("wrong_root_table")
+
+    if "wrong_join" in reasons:
+        if result.join_path:
+            out.append("wrong_join_path")
+        else:
+            out.append("missing_join")
+
+    if "wrong_aggregation" in reasons:
+        out.append("missing_aggregation")
+
+    if "wrong_filter_column" in reasons:
+        out.append("wrong_filter_column")
+
+    if "semantically_incorrect_result" in reasons:
+        out.append("unnecessary_clarification_disguised_as_success")
+
+    return sorted(set(out))
+
+
+def _bucket_execution_error(result: EvalResult) -> str | None:
+    """Map execution_error to stable diagnostic buckets."""
+    if result.raw_status != "execution_error":
+        return None
+    subtype = result.execution_error_subtype or "unknown_execution_error"
+    detail = (result.error_detail or "").upper()
+
+    if subtype == "invalid_date_value" or "ORA-018" in detail:
+        return "oracle_date_type_error"
+    if subtype == "invalid_identifier" or "ORA-00904" in detail:
+        return "invalid_identifier"
+    if subtype == "ambiguous_column" or "ORA-00918" in detail:
+        return "ambiguous_column"
+    if "JOIN" in detail and "ORA" in detail:
+        return "missing_join_side_effect"
+    if subtype == "expression_rendering_issue" or "ORA-00979" in detail or "ORA-00937" in detail:
+        return "expression_rendering_issue"
+    if subtype == "mis_shaped_params" or "ORA-01008" in detail:
+        return "runtime_mis_shaped_params"
+    if subtype == "timeout_error" or "TIMEOUT" in detail:
+        return "timeout_heavy_join"
+    return "data_specific_edge_case_or_unknown"
+
+
 def _safety_audit(results: list[EvalResult], oracle_timeout: int) -> dict[str, Any]:
     sqls = [r.compiled_sql or "" for r in results if r.compiled_sql]
 
@@ -371,6 +646,15 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
     result.compiled_sql = chat_result.sql
     result.narrator_response = chat_result.answer
 
+    # --- Repair-engine audit (PlannerService.last_repair_result) ---
+    planner = getattr(chat, "_planner", None)
+    repair_result = getattr(planner, "last_repair_result", None) if planner is not None else None
+    if repair_result is not None:
+        result.repair_applied = bool(getattr(repair_result, "repair_applied", False))
+        result.repair_fields_count = int(getattr(repair_result, "repaired_fields_count", 0))
+        actions = getattr(repair_result, "actions", []) or []
+        result.repair_actions = [str(getattr(a, "repair_type", "unknown")) for a in actions]
+
     # --- Narrator leak classification (on final, post-strip response) ---
     result.narrator_sql_leak, result.narrator_presentation_leak = _classify_narrator_leaks(
         chat_result.answer
@@ -435,7 +719,15 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
     return result
 
 
-def _make_summary(results: list[EvalResult], oracle_timeout: int) -> EvalSummary:
+def _make_summary(
+    results: list[EvalResult],
+    oracle_timeout: int,
+    *,
+    concurrency: int,
+    max_retries: int,
+    total_wall_time_s: float,
+    llm_retry_stats: LLMRetryStats,
+) -> EvalSummary:
     total = len(results)
     counts = Counter(r.status for r in results)
 
@@ -448,8 +740,10 @@ def _make_summary(results: list[EvalResult], oracle_timeout: int) -> EvalSummary
         sorted_lat = sorted(latencies)
         idx = max(0, min(len(sorted_lat) - 1, math.ceil(0.95 * len(sorted_lat)) - 1))
         p95 = float(sorted_lat[idx])
+        p50 = float(statistics.median(sorted_lat))
     else:
         p95 = 0.0
+        p50 = 0.0
 
     timeout_count = sum(
         1
@@ -547,6 +841,58 @@ def _make_summary(results: list[EvalResult], oracle_timeout: int) -> EvalSummary
         for label, cnt in Counter(failure_labels).most_common(20)
     ]
 
+    # --- repair metrics ---
+    repair_applied_total = sum(1 for r in results if r.repair_applied)
+    repaired_fields_total = sum(int(r.repair_fields_count) for r in results)
+    repair_action_counts = Counter(
+        action for r in results for action in (r.repair_actions or [])
+    )
+
+    # --- wrong-plan and execution-error bucket counts ---
+    wrong_plan_bucket_counts = Counter(
+        bucket for r in results for bucket in _bucket_wrong_plan(r)
+    )
+    execution_error_bucket_counts = Counter(
+        b for b in (_bucket_execution_error(r) for r in results) if b is not None
+    )
+
+    # --- repair effectiveness proxies (deterministic, conservative) ---
+    repaired_wrong_plan_count = sum(
+        1 for r in results if r.repair_applied and r.status == "wrong_plan"
+    )
+    repair_prevented_clarification_count = sum(
+        1
+        for r in results
+        if "F_clarification_rescue" in (r.repair_actions or []) and r.raw_status != "clarification"
+    )
+    repair_prevented_validation_error_count = sum(
+        1
+        for r in results
+        if r.repair_applied
+        and any(a in {"A_domain_entity_reroute", "E_anchor_table", "F_column_ownership", "F_qualified_column"} for a in (r.repair_actions or []))
+        and r.raw_status != "validation_error"
+    )
+    repair_prevented_execution_error_count = sum(
+        1
+        for r in results
+        if r.repair_applied
+        and any(a in {"B_join_skeleton", "C_aggregation_skeleton", "D_group_by_fill", "E_filter_repair"} for a in (r.repair_actions or []))
+        and r.raw_status != "execution_error"
+    )
+
+    # --- top semantic intents/root entities by failure ---
+    failed = [r for r in results if r.status in {"wrong_plan", "validation_error", "compile_error", "execution_error", "clarification"}]
+    intent_fail = Counter((r.semantic_intent or "unknown") for r in failed)
+    root_fail = Counter(((r.predicted_tables[0] if r.predicted_tables else "None")) for r in failed)
+    top_semantic_intents_by_failure = [
+        {"semantic_intent": k, "count": v}
+        for k, v in intent_fail.most_common(10)
+    ]
+    top_root_entities_by_failure = [
+        {"root_entity": k, "count": v}
+        for k, v in root_fail.most_common(10)
+    ]
+
     return EvalSummary(
         total_questions=total,
         counts=dict(counts),
@@ -569,6 +915,26 @@ def _make_summary(results: list[EvalResult], oracle_timeout: int) -> EvalSummary
         execution_error_subtypes=dict(exec_subtypes),
         structured_parse_errors=structured_parse_count,
         top_failure_buckets=top_buckets,
+        repair_applied_total=repair_applied_total,
+        repaired_fields_total=repaired_fields_total,
+        questions_with_repair_rate=rate(repair_applied_total),
+        repair_action_counts=dict(repair_action_counts),
+        wrong_plan_bucket_counts=dict(wrong_plan_bucket_counts),
+        execution_error_bucket_counts=dict(execution_error_bucket_counts),
+        repaired_wrong_plan_count=repaired_wrong_plan_count,
+        repair_prevented_clarification_count=repair_prevented_clarification_count,
+        repair_prevented_validation_error_count=repair_prevented_validation_error_count,
+        repair_prevented_execution_error_count=repair_prevented_execution_error_count,
+        top_semantic_intents_by_failure=top_semantic_intents_by_failure,
+        top_root_entities_by_failure=top_root_entities_by_failure,
+        concurrency=concurrency,
+        max_retries=max_retries,
+        total_wall_time_s=total_wall_time_s,
+        avg_question_latency_s=avg_latency / 1000.0,
+        p50_question_latency_s=p50 / 1000.0,
+        p95_question_latency_s=p95 / 1000.0,
+        llm_retry_count=llm_retry_stats.retry_count,
+        llm_retry_success_count=llm_retry_stats.retry_success_count,
     )
 
 
@@ -626,6 +992,14 @@ def _build_report_markdown(
             "D. Oracle runtime davranisi",
             f"- avg_latency: {summary.avg_latency_ms:.1f} ms",
             f"- p95_latency: {summary.p95_latency_ms:.1f} ms",
+            f"- concurrency: {summary.concurrency}",
+            f"- max_retries: {summary.max_retries}",
+            f"- total_wall_time: {summary.total_wall_time_s:.1f} s",
+            f"- avg_question_latency: {summary.avg_question_latency_s:.2f} s",
+            f"- p50_question_latency: {summary.p50_question_latency_s:.2f} s",
+            f"- p95_question_latency: {summary.p95_question_latency_s:.2f} s",
+            f"- llm_retry_count: {summary.llm_retry_count}",
+            f"- llm_retry_success_count: {summary.llm_retry_success_count}",
             f"- timeout_count: {summary.timeout_count}",
             f"- row_count_distribution: {summary.row_count_distribution}",
             f"- heavy_join_queries: {len(summary.heavy_join_queries)}",
@@ -659,7 +1033,23 @@ def _build_report_markdown(
             f"- sql_leak_count: {summary.safety_checks.get('sql_leak_count', 0)}",
             f"- presentation_leak_count: {summary.safety_checks.get('presentation_leak_count', 0)}",
             "",
-            "I. Top-20 failure buckets",
+            "I. Wrong-plan root-cause bucketlari",
+        ]
+        + [
+            f"- {k}: {v}"
+            for k, v in sorted(summary.wrong_plan_bucket_counts.items(), key=lambda x: -x[1])
+        ]
+        + [
+            "",
+            "J. Execution-error root-cause bucketlari",
+        ]
+        + [
+            f"- {k}: {v}"
+            for k, v in sorted(summary.execution_error_bucket_counts.items(), key=lambda x: -x[1])
+        ]
+        + [
+            "",
+            "K. Top-20 failure buckets",
         ]
         + [
             f"- [{b['count']:3d}] {b['bucket']}"
@@ -667,13 +1057,87 @@ def _build_report_markdown(
         ]
         + [
             "",
-            "J. Production readiness karari",
+            "L. Repair engine metrikleri",
+            f"- questions_with_repair: {summary.repair_applied_total}/{summary.total_questions}",
+            f"- questions_with_repair_rate: {_format_pct(summary.questions_with_repair_rate)}",
+            f"- repaired_fields_total: {summary.repaired_fields_total}",
+            f"- repaired_wrong_plan_count: {summary.repaired_wrong_plan_count}",
+            f"- repair_prevented_clarification_count: {summary.repair_prevented_clarification_count}",
+            f"- repair_prevented_validation_error_count: {summary.repair_prevented_validation_error_count}",
+            f"- repair_prevented_execution_error_count: {summary.repair_prevented_execution_error_count}",
+        ]
+        + [
+            f"- repair_action/{k}: {v}"
+            for k, v in sorted(summary.repair_action_counts.items(), key=lambda x: -x[1])
+        ]
+        + [
+            "",
+            "M. Failure concentration",
+        ]
+        + [
+            f"- intent/{x['semantic_intent']}: {x['count']}"
+            for x in summary.top_semantic_intents_by_failure
+        ]
+        + [
+            f"- root/{x['root_entity']}: {x['count']}"
+            for x in summary.top_root_entities_by_failure
+        ]
+        + [
+            "",
+            "N. Production readiness karari",
             f"- karar: {summary.readiness_decision}",
             "",
-            "K. Sonuc metrikleri",
+            "O. Sonuc metrikleri",
             metric_table,
         ]
     )
+
+
+async def _run_benchmark_modes(
+    *,
+    dataset: list[EvalQuestion],
+    use_oracle: bool,
+    max_retries: int,
+    question_timeout_s: float,
+    benchmark_concurrency: list[int],
+) -> list[BenchmarkResult]:
+    """Run quick benchmark across multiple concurrency levels."""
+    from scripts.e2e_llm_flow import _build_orchestrator
+
+    out: list[BenchmarkResult] = []
+    for conc in benchmark_concurrency:
+        chat, oracle_exec = await _build_orchestrator(use_oracle=use_oracle)
+        retry_stats = LLMRetryStats()
+        _patch_llm_with_retry(chat, max_retries=max_retries, retry_stats=retry_stats)
+
+        t0 = time.perf_counter()
+        results = await _run_dataset_concurrent(
+            chat,
+            dataset,
+            session_prefix=f"bench_c{conc}_{int(time.time())}",
+            concurrency=conc,
+            question_timeout_s=question_timeout_s,
+        )
+        wall = time.perf_counter() - t0
+
+        if oracle_exec is not None:
+            await oracle_exec.close()
+
+        counts = Counter(r.status for r in results)
+        out.append(
+            BenchmarkResult(
+                concurrency=conc,
+                total_wall_time_s=wall,
+                success=counts.get("success", 0),
+                clarification=counts.get("clarification", 0),
+                validation_error=counts.get("validation_error", 0),
+                compile_error=counts.get("compile_error", 0),
+                execution_error=counts.get("execution_error", 0),
+                wrong_plan=counts.get("wrong_plan", 0),
+            )
+        )
+
+    return out
 
 
 async def main() -> None:
@@ -683,6 +1147,10 @@ async def main() -> None:
     parser.add_argument("--report-md", default="data/real_provider_eval_summary.md", help="Output summary markdown")
     parser.add_argument("--manual-review-json", default="data/real_provider_manual_review.json", help="Output manual review list")
     parser.add_argument("--no-oracle", action="store_true", help="Use mock executor instead of Oracle (for dry-run)")
+    parser.add_argument("--concurrency", type=int, default=1, help="Bounded concurrency for question execution (default: 1, keeps legacy behavior)")
+    parser.add_argument("--max-retries", type=int, default=2, help="Max retries for retryable LLM HTTP failures (429/5xx)")
+    parser.add_argument("--question-timeout", type=float, default=120.0, help="Per-question timeout in seconds")
+    parser.add_argument("--benchmark-concurrency", default="", help="Optional benchmark mode, e.g. '1,2,4,8'")
     args = parser.parse_args()
 
     dataset_path = Path(args.dataset)
@@ -697,20 +1165,57 @@ async def main() -> None:
     from app.core.config import settings
     from scripts.e2e_llm_flow import _build_orchestrator
 
+    bench_results: list[BenchmarkResult] = []
+    if args.benchmark_concurrency:
+        conc_values: list[int] = []
+        for raw in args.benchmark_concurrency.split(","):
+            raw = raw.strip()
+            if raw:
+                conc_values.append(max(1, int(raw)))
+        if conc_values:
+            print(f"Running benchmark modes: {conc_values}", flush=True)
+            bench_results = await _run_benchmark_modes(
+                dataset=dataset,
+                use_oracle=not args.no_oracle,
+                max_retries=max(0, args.max_retries),
+                question_timeout_s=float(args.question_timeout),
+                benchmark_concurrency=conc_values,
+            )
+            print("Benchmark results:", flush=True)
+            for b in bench_results:
+                print(
+                    f"  c={b.concurrency} wall={b.total_wall_time_s:.1f}s "
+                    f"success={b.success} wrong_plan={b.wrong_plan} "
+                    f"exec_err={b.execution_error}",
+                    flush=True,
+                )
+
     chat, oracle_exec = await _build_orchestrator(use_oracle=not args.no_oracle)
+    retry_stats = LLMRetryStats()
+    _patch_llm_with_retry(chat, max_retries=max(0, args.max_retries), retry_stats=retry_stats)
 
-    results: list[EvalResult] = []
     session_prefix = f"real_eval_{int(time.time())}"
-
-    for idx, item in enumerate(dataset, start=1):
-        print(f"[{idx:03d}/{len(dataset)}] {item.id} ...", flush=True)
-        r = await _run_one(chat, item, session_prefix)
-        results.append(r)
+    run_started = time.perf_counter()
+    results = await _run_dataset_concurrent(
+        chat,
+        dataset,
+        session_prefix=session_prefix,
+        concurrency=max(1, args.concurrency),
+        question_timeout_s=float(args.question_timeout),
+    )
+    total_wall_time_s = time.perf_counter() - run_started
 
     if oracle_exec is not None:
         await oracle_exec.close()
 
-    summary = _make_summary(results, oracle_timeout=settings.oracle_timeout)
+    summary = _make_summary(
+        results,
+        oracle_timeout=settings.oracle_timeout,
+        concurrency=max(1, args.concurrency),
+        max_retries=max(0, args.max_retries),
+        total_wall_time_s=total_wall_time_s,
+        llm_retry_stats=retry_stats,
+    )
 
     # Manual review list for wrong-plan detection and hard errors
     manual_review = [
@@ -737,6 +1242,9 @@ async def main() -> None:
             "narrator_response": r.narrator_response,
             "narrator_sql_leak": r.narrator_sql_leak,
             "narrator_presentation_leak": r.narrator_presentation_leak,
+            "repair_applied": r.repair_applied,
+            "repair_actions": r.repair_actions,
+            "repair_fields_count": r.repair_fields_count,
             # Clarification
             "clarification_class": r.clarification_class,
         }
@@ -747,6 +1255,7 @@ async def main() -> None:
     report_payload = {
         "dataset_path": str(dataset_path),
         "dataset_size": len(dataset),
+        "benchmark": [asdict(b) for b in bench_results],
         "summary": asdict(summary),
         "results": [asdict(r) for r in results],
     }

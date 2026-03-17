@@ -30,7 +30,6 @@ logger = get_logger(__name__)
 
 _REGISTRY_PATH = Path(__file__).resolve().parents[2] / "data" / "semantic_registry.json"
 
-
 @lru_cache(maxsize=1)
 def _load_registry() -> SemanticRegistry:
     """Load and cache the semantic registry from the default JSON metadata file."""
@@ -202,22 +201,17 @@ def apply_semantic_normalization(
         "semantic_intent": semantic_intent,
     }
 
-    # Apply canonical plan overrides (group_by / aggregations / filters / computed_measures).
-    # For genuine clarification plans, only apply defaults when the intent_default
-    # explicitly marks stable=True (semantic rescue). Non-stable defaults must not
-    # override a clarification that the planner intentionally produced.
+    # Apply registry intent defaults. For clarification plans, only apply stable
+    # defaults (semantic rescue); non-stable defaults must not override an
+    # intentional clarification produced by the planner.
     intent_def = entity.intent_defaults.get(semantic_intent)
-    if not plan.needs_clarification or (intent_def is not None and intent_def.stable):
+    if intent_def is not None and (not plan.needs_clarification or intent_def.stable):
         _apply_intent_defaults(entity, semantic_intent, updates, plan)
 
-    # When registry overrides impose aggregations, discard any stale per-row
-    # select_columns from the LLM plan — SELECT shape is fully determined by
-    # group_by + aggregations and mixing them causes aggregate_select_mismatch.
+    # When registry imposes aggregations, discard stale LLM select_columns:
+    # SELECT shape is fully determined by group_by + aggregations.
     if updates.get("aggregations") and plan.select_columns:
         updates["select_columns"] = []
-
-    # Never inject select_columns from defaults when the plan already carries
-    # aggregations — the aggregation SELECT shape is self-contained.
     if plan.aggregations and updates.get("select_columns"):
         updates.pop("select_columns")
 

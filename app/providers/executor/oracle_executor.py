@@ -63,9 +63,16 @@ def _classify_oracle_error(detail: str) -> str:
     raw ORA codes to end users.
     """
     d = detail.upper()
-    if any(code in d for code in ("ORA-00900", "ORA-00907", "ORA-00911", "ORA-01756", "ORA-00904")):
-        # ORA-00904 = invalid identifier (bad column name)
+    if "ORA-00918" in d:
+        return "ambiguous_column"
+    if "ORA-00904" in d:
+        return "invalid_identifier"
+    if any(code in d for code in ("ORA-00900", "ORA-00907", "ORA-00911", "ORA-01756")):
         return "oracle_syntax_error"
+    if any(code in d for code in ("ORA-00979", "ORA-00937", "ORA-30482")):
+        return "expression_rendering_issue"
+    if "ORA-01008" in d:
+        return "mis_shaped_params"
     if "ORA-00942" in d or "ORA-01031" in d:
         return "permission_error"
     if any(code in d for code in ("ORA-01858", "ORA-01861", "ORA-01830", "ORA-01839")):
@@ -167,10 +174,10 @@ class OracleExecutor(ExecutorProvider):
             user=self._user,
             password=self._password,
             min=1,
-            max=5,
+            max=25,
             increment=1,
         )
-        logger.info("Oracle connection pool initialised (min=1, max=5, dsn=***masked***).")
+        logger.info("Oracle connection pool initialised (min=1, max=25, dsn=***masked***).")
 
     async def execute(self, compiled_query: CompiledQuery) -> ExecutionResult:
         """Execute *compiled_query* against Oracle.

@@ -1,5 +1,42 @@
 {
   "version": "1.0",
+  "policy_rules": {
+    "sensitive_intent_patterns": [
+      "kredi kart",
+      "şifre",
+      "sifre",
+      "gizli veri",
+      "kişisel veri",
+      "kisisel veri",
+      "tc kimlik",
+      "parola",
+      "password",
+      "yetkisiz"
+    ]
+  },
+  "column_aliases": {
+    "global": {
+      "mail": "EMAIL",
+      "email": "EMAIL"
+    },
+    "table_scoped": {
+      "XXBT_PDKS_PER_DETAILS_V": {
+        "giris_tarihi": "ISE_GIRIS_TARIHI",
+        "ise_giris_tarihi": "ISE_GIRIS_TARIHI",
+        "hire_date": "ISE_GIRIS_TARIHI",
+        "cikis_tarihi": "CIKIS_TARIHI",
+        "termination_date": "CIKIS_TARIHI",
+        "birim": "BIRIM_ADI",
+        "departman": "BIRIM_ADI",
+        "location": "LOCATION_ADI",
+        "lokasyon": "LOCATION_ADI",
+        "unvan": "UNVAN",
+        "title": "UNVAN",
+        "dahili": "DAHILI",
+        "extension": "DAHILI"
+      }
+    }
+  },
   "intent_join_paths": {
     "po_line_quantity": "po.header_lines",
     "po_pending_delivery": "po.header_lines_shipments",
@@ -120,14 +157,18 @@
       ],
       "default_intent": "po_generic",
       "intent_rules": [
-        { "intent": "po_last_30_days",        "any_of": ["son 30", "son bir ay"] },
-        { "intent": "po_vendor_count",        "any_of": ["tedarikçi", "vendor", "satıcı"] },
-        { "intent": "po_pending_delivery",    "all_of": ["teslim"], "any_of": ["bekleyen", "açık"] },
+        { "intent": "po_last_30_days", "any_of": ["son 30", "son bir ay"] },
+        { "intent": "po_monthly_count", "any_of": ["aylık", "aylik", "ay baz", "monthly"] },
+        { "intent": "po_currency_count", "any_of": ["döviz", "doviz", "currency", "kur"] },
+        { "intent": "po_approval_distribution", "any_of": ["onay durumu", "approval", "authorization"] },
+        { "intent": "po_header_count", "any_of": ["header", "başlık", "baslik", "belge say"] },
+        { "intent": "po_vendor_count", "any_of": ["tedarikçi", "vendor", "satıcı"] },
+        { "intent": "po_pending_delivery", "all_of": ["teslim"], "any_of": ["bekleyen", "açık"] },
         { "intent": "po_distribution_amount", "any_of": ["dağıt", "dagit", "distribution"] },
-        { "intent": "po_item_line_count",     "any_of": ["ürün", "item", "malzeme"] },
-        { "intent": "po_line_quantity",       "any_of": ["kalem", "satır", "line"] },
-        { "intent": "po_unapproved",          "any_of": ["onaysız", "bekleyen"] },
-        { "intent": "po_open_orders",         "any_of": ["kapatılmam", "açık"] }
+        { "intent": "po_item_line_count", "any_of": ["ürün", "item", "malzeme"] },
+        { "intent": "po_line_quantity", "any_of": ["kalem", "satır", "line"] },
+        { "intent": "po_unapproved", "any_of": ["onaysız", "bekleyen"] },
+        { "intent": "po_open_orders", "any_of": ["kapatılmam", "açık"] }
       ],
       "intent_defaults": {
         "po_line_quantity": {
@@ -153,7 +194,7 @@
           "group_by": ["code_combination_id"],
           "aggregations": [
             { "function": "SUM", "column": "quantity_ordered", "table": "PO_DISTRIBUTIONS_ALL", "alias": "ordered_qty" },
-            { "function": "SUM", "column": "unit_price",       "table": "PO_LINES_ALL",          "alias": "price_sum"  }
+            { "function": "SUM", "column": "unit_price", "table": "PO_LINES_ALL", "alias": "price_sum" }
           ],
           "filters": [],
           "computed_measures": [
@@ -198,6 +239,42 @@
           "filters": [],
           "computed_measures": []
         },
+        "po_header_count": {
+          "stable": true,
+          "group_by": [],
+          "aggregations": [
+            { "function": "COUNT", "column": "po_header_id", "table": "PO_HEADERS_ALL", "alias": "header_count" }
+          ],
+          "filters": [],
+          "computed_measures": []
+        },
+        "po_currency_count": {
+          "stable": true,
+          "group_by": ["currency_code"],
+          "aggregations": [
+            { "function": "COUNT", "column": "po_header_id", "table": "PO_HEADERS_ALL", "alias": "po_count" }
+          ],
+          "filters": [],
+          "computed_measures": []
+        },
+        "po_approval_distribution": {
+          "stable": true,
+          "group_by": ["authorization_status"],
+          "aggregations": [
+            { "function": "COUNT", "column": "po_header_id", "table": "PO_HEADERS_ALL", "alias": "po_count" }
+          ],
+          "filters": [],
+          "computed_measures": []
+        },
+        "po_monthly_count": {
+          "stable": true,
+          "group_by": ["creation_date"],
+          "aggregations": [
+            { "function": "COUNT", "column": "po_header_id", "table": "PO_HEADERS_ALL", "alias": "po_count" }
+          ],
+          "filters": [],
+          "computed_measures": []
+        },
         "po_last_30_days": {
           "stable": true,
           "select_columns": ["po_header_id", "vendor_id", "creation_date", "authorization_status"],
@@ -209,66 +286,6 @@
           "computed_measures": []
         }
       }
-    },
-    {
-      "entity_id": "AP_PAYABLES",
-      "root_table": "AP_INVOICES_ALL",
-      "child_tables": [],
-      "join_paths": [],
-      "dimensions": {},
-      "measures": {},
-      "status_semantics": {},
-      "time_semantics": {},
-      "keywords": [
-        "ap",
-        "fatura",
-        "invoice"
-      ]
-    },
-    {
-      "entity_id": "INV_INVENTORY",
-      "root_table": "MTL_MATERIAL_TRANSACTIONS",
-      "child_tables": [],
-      "join_paths": [],
-      "dimensions": {},
-      "measures": {},
-      "status_semantics": {},
-      "time_semantics": {},
-      "keywords": [
-        "inv",
-        "inventory",
-        "stok"
-      ]
-    },
-    {
-      "entity_id": "WIP_MANUFACTURING",
-      "root_table": "WIP_DISCRETE_JOBS",
-      "child_tables": [],
-      "join_paths": [],
-      "dimensions": {},
-      "measures": {},
-      "status_semantics": {},
-      "time_semantics": {},
-      "keywords": [
-        "wip",
-        "üretim",
-        "production"
-      ]
-    },
-    {
-      "entity_id": "BOM_ENGINEERING",
-      "root_table": "BOM_STRUCTURES_B",
-      "child_tables": [],
-      "join_paths": [],
-      "dimensions": {},
-      "measures": {},
-      "status_semantics": {},
-      "time_semantics": {},
-      "keywords": [
-        "bom",
-        "reçete",
-        "bill of material"
-      ]
     },
     {
       "entity_id": "HR_EMPLOYEES",

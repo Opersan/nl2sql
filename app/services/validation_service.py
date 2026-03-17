@@ -12,7 +12,13 @@ from app.domain.catalog_models import TableMetadata
 from app.domain.execution_models import ValidationResult
 from app.domain.query_plan import STAR_COLUMN, QueryPlan
 from app.services.catalog_service import CatalogService
+from app.services.semantic_planning import _load_registry
 from app.utils.turkish import casefold_tr
+
+
+def _alias_fold(text: str) -> str:
+    """Fold text for ASCII-like alias keys while remaining Turkish-safe."""
+    return casefold_tr(text).replace("ı", "i")
 
 
 class ValidationService:
@@ -69,13 +75,38 @@ class ValidationService:
         return table.resolve_column_name(name_or_alias)
 
     @staticmethod
+    def _normalize_table_key(table_name: str | None) -> str:
+        return (table_name or "").strip().upper()
+
+    def _registry_alias_maps(self) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+        registry = _load_registry()
+
+        global_aliases = {
+            _alias_fold(alias): canonical
+            for alias, canonical in registry.column_aliases.global_aliases.items()
+        }
+        table_scoped = {
+            self._normalize_table_key(table_name): {
+                _alias_fold(alias): canonical
+                for alias, canonical in aliases.items()
+            }
+            for table_name, aliases in registry.column_aliases.table_scoped.items()
+        }
+        return global_aliases, table_scoped
+
+    @staticmethod
     def _looks_like_expression(col: str) -> bool:
         """Return True when *col* looks like a SQL expression rather than a plain column name.
 
         Expressions (e.g. ``TO_CHAR(date, 'YYYY-MM')``, ``NVL(field, 0)``) cannot
         be resolved against catalog metadata and should be skipped in validation.
         """
-        return '(' in col
+        token = col.strip()
+        if '(' in token or ')' in token:
+            return True
+        if any(op in token for op in ('+', '-', '*', '/', "||")):
+            return True
+        return bool(token and ' ' in token)
 
     @staticmethod
     def _strip_qualifier(col: str) -> tuple[str, str | None]:
@@ -89,6 +120,20 @@ class ValidationService:
             parts = col.split('.', 1)
             return parts[1].strip(), parts[0].strip().upper()
         return col, None
+
+    def _normalize_column_identifier(self, name: str, *, table_name: str | None) -> str:
+        """Normalize identifier via registry aliases with scoped-over-global precedence."""
+        raw = name.strip()
+        folded = _alias_fold(raw)
+        global_aliases, table_scoped_aliases = self._registry_alias_maps()
+
+        normalized_table = self._normalize_table_key(table_name)
+        scoped = table_scoped_aliases.get(normalized_table, {})
+        if folded in scoped:
+            return scoped[folded]
+        if folded in global_aliases:
+            return global_aliases[folded]
+        return raw
 
     @staticmethod
     def _resolve_col_multi(
@@ -228,7 +273,11 @@ class ValidationService:
                 continue  # SQL expression — skip catalog validation
             else:
                 bare, qualifier = self._strip_qualifier(col_name)
-                if self._resolve_col_multi(bare, table, all_tables, table_qualifier=qualifier) is None:
+                normalized = self._normalize_column_identifier(
+                    bare,
+                    table_name=qualifier or table.name,
+                )
+                if self._resolve_col_multi(normalized, table, all_tables, table_qualifier=qualifier) is None:
                     result.add_error(
                         "invalid_column",
                         f"Kolon bulunamadı: '{col_name}' (tablo: {table.name}).",
@@ -246,6 +295,10 @@ class ValidationService:
                 continue  # SQL expression column — skip validation
             bare, qualifier = self._strip_qualifier(filt.column)
             effective_table = filt.table or qualifier
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=effective_table or table.name,
+            )
             if self._resolve_col_multi(
                 bare, table, all_tables, table_qualifier=effective_table,
             ) is None:
@@ -264,8 +317,19 @@ class ValidationService:
         for agg in plan.aggregations:
             if agg.column == STAR_COLUMN:
                 continue  # COUNT(*) doesn't reference a real column
+            if self._looks_like_expression(agg.column):
+                continue
+            bare, qualifier = self._strip_qualifier(agg.column)
+            effective_table = agg.table or qualifier
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=effective_table or table.name,
+            )
             if self._resolve_col_multi(
-                agg.column, table, all_tables, table_qualifier=agg.table,
+                bare,
+                table,
+                all_tables,
+                table_qualifier=effective_table,
             ) is None:
                 result.add_error(
                     "invalid_column",
@@ -283,6 +347,10 @@ class ValidationService:
             if self._looks_like_expression(col_name):
                 continue  # SQL expression — skip catalog validation
             bare, qualifier = self._strip_qualifier(col_name)
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=qualifier or table.name,
+            )
             if self._resolve_col_multi(bare, table, all_tables, table_qualifier=qualifier) is None:
                 result.add_error(
                     "invalid_column",
@@ -303,6 +371,10 @@ class ValidationService:
                 continue  # SQL expression in ORDER BY — skip validation
             bare, qualifier = self._strip_qualifier(spec.column)
             effective_table = spec.table or qualifier
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=effective_table or table.name,
+            )
             # Accept both table columns and aggregate aliases for ORDER BY.
             is_table_col = self._resolve_col_multi(
                 bare, table, all_tables, table_qualifier=effective_table,
@@ -331,13 +403,33 @@ class ValidationService:
         all_referenced: set[str] = set()
 
         for col_name in plan.select_columns:
+            if self._looks_like_expression(col_name):
+                continue
+            bare, qualifier = self._strip_qualifier(col_name)
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=qualifier or table.name,
+            )
             resolved = self._resolve_col_multi(col_name, table, all_tables)
+            if resolved is None:
+                resolved = self._resolve_col_multi(bare, table, all_tables, table_qualifier=qualifier)
             if resolved:
                 all_referenced.add(resolved)
 
         for filt in plan.filters:
+            if self._looks_like_expression(filt.column):
+                continue
+            bare, qualifier = self._strip_qualifier(filt.column)
+            effective_table = filt.table or qualifier
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=effective_table or table.name,
+            )
             resolved = self._resolve_col_multi(
-                filt.column, table, all_tables, table_qualifier=filt.table,
+                bare,
+                table,
+                all_tables,
+                table_qualifier=effective_table,
             )
             if resolved:
                 all_referenced.add(resolved)
@@ -345,20 +437,49 @@ class ValidationService:
         for agg in plan.aggregations:
             if agg.column == STAR_COLUMN:
                 continue
+            if self._looks_like_expression(agg.column):
+                continue
+            bare, qualifier = self._strip_qualifier(agg.column)
+            effective_table = agg.table or qualifier
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=effective_table or table.name,
+            )
             resolved = self._resolve_col_multi(
-                agg.column, table, all_tables, table_qualifier=agg.table,
+                bare,
+                table,
+                all_tables,
+                table_qualifier=effective_table,
             )
             if resolved:
                 all_referenced.add(resolved)
 
         for col_name in plan.group_by:
-            resolved = self._resolve_col_multi(col_name, table, all_tables)
+            if self._looks_like_expression(col_name):
+                continue
+            bare, qualifier = self._strip_qualifier(col_name)
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=qualifier or table.name,
+            )
+            resolved = self._resolve_col_multi(bare, table, all_tables, table_qualifier=qualifier)
             if resolved:
                 all_referenced.add(resolved)
 
         for spec in plan.order_by:
+            if self._looks_like_expression(spec.column):
+                continue
+            bare, qualifier = self._strip_qualifier(spec.column)
+            effective_table = spec.table or qualifier
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=effective_table or table.name,
+            )
             resolved = self._resolve_col_multi(
-                spec.column, table, all_tables, table_qualifier=spec.table,
+                bare,
+                table,
+                all_tables,
+                table_qualifier=effective_table,
             )
             if resolved:
                 all_referenced.add(resolved)
@@ -388,7 +509,14 @@ class ValidationService:
         # Resolve group_by to canonical names for comparison.
         group_canonical: set[str] = set()
         for g in plan.group_by:
-            resolved = self._resolve_col_multi(g, table, all_tables)
+            if self._looks_like_expression(g):
+                continue
+            bare, qualifier = self._strip_qualifier(g)
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=qualifier or table.name,
+            )
+            resolved = self._resolve_col_multi(bare, table, all_tables, table_qualifier=qualifier)
             if resolved:
                 group_canonical.add(casefold_tr(resolved))
 
@@ -398,6 +526,10 @@ class ValidationService:
             if self._looks_like_expression(col):
                 continue  # SQL expression in SELECT — skip consistency check
             bare, qualifier = self._strip_qualifier(col)
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=qualifier or table.name,
+            )
             resolved = self._resolve_col_multi(bare, table, all_tables, table_qualifier=qualifier)
             canonical = casefold_tr(resolved) if resolved else casefold_tr(bare)
 

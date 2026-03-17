@@ -41,10 +41,12 @@ _SQL_LEAK_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
+
 # Matches reasoning/thinking/analysis section headers (markdown headings or bare labels).
 _REASONING_HEADER_RE = re.compile(
-    r'^(?:#+\s*)?(thinking|reasoning|analysis|thought process|'
-    r'd\u00fc\u015f\u00fcnce|analiz|muhakeme|i\u00e7 muhakeme|plan|step\s+\d)',
+    r'^(?:\d+[\.)]\s*)?(?:#+\s*)?(thinking|reasoning|analysis|draft|final\s*check|'
+    r'thought process|d\u00fc\u015f\u00fcnce|analiz|muhakeme|i\u00e7 muhakeme|plan|step\s+\d)',
     re.IGNORECASE,
 )
 
@@ -110,14 +112,17 @@ class NarratorService:
         if not text or not text.strip():
             return "Sorgu işlendi."
 
-        # --- Pass 1: remove inline SQL expressions ---
-        cleaned = _SQL_LEAK_RE.sub('[sorgu detayı gizlendi]', text)
+        # --- Pass 1: remove fenced code blocks entirely ---
+        cleaned = _CODE_BLOCK_RE.sub('', text)
 
-        # --- Pass 2: remove Oracle error codes from user-visible text ---
+        # --- Pass 2: remove inline SQL expressions ---
+        cleaned = _SQL_LEAK_RE.sub('', cleaned)
+
+        # --- Pass 3: remove Oracle error codes from user-visible text ---
         # (They may appear in execution-error summaries passed to narrator)
-        cleaned = _ORA_ERROR_RE.sub('[hata kodu]', cleaned)
+        cleaned = _ORA_ERROR_RE.sub('', cleaned)
 
-        # --- Pass 3: strip reasoning / thinking sections ---
+        # --- Pass 4: strip reasoning / thinking sections ---
         # Walk line-by-line; drop lines that are headers for reasoning sections
         # and all subsequent lines until we hit a blank line or a new section.
         lines = cleaned.split('\n')
@@ -133,6 +138,8 @@ class NarratorService:
                 # Exit on blank line or non-indented content that starts a new paragraph
                 if not stripped:
                     in_leaky_section = False  # blank line ends the section
+                continue
+            if re.search(r"\b(SELECT|UPDATE|DELETE|INSERT|FROM|WHERE)\b", stripped, re.IGNORECASE):
                 continue
             result_lines.append(line)
 

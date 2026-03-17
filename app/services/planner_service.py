@@ -40,6 +40,8 @@ intent translation while validation enforces access control.
 
 from __future__ import annotations
 
+from functools import lru_cache
+import re
 from typing import Any
 
 from app.core.config import settings
@@ -56,13 +58,23 @@ from app.services.plan_normalizer import (
     canonicalize_columns,
 )
 from app.services.query_plan_repair import QueryPlanRepairEngine, RepairResult
-from app.services.semantic_planning import apply_semantic_normalization
+from app.services.semantic_planning import apply_semantic_normalization, _load_registry
+from app.utils.turkish import casefold_tr
 
 logger = get_logger(__name__)
 
+@lru_cache(maxsize=16)
+def _compile_sensitive_intent_re(patterns: tuple[str, ...]) -> re.Pattern[str] | None:
+    normalized = [p.strip() for p in patterns if p and p.strip()]
+    if not normalized:
+        return None
+
+    escaped = [re.escape(p).replace(r"\ ", r"\s*") for p in normalized]
+    return re.compile("|".join(escaped), re.IGNORECASE)
+
 
 class PlannerService:
-    """Convert a user''s natural-language message into a ``QueryPlan``."""
+    """Convert a user's natural-language message into a ``QueryPlan``."""
 
     def __init__(
         self,
@@ -114,6 +126,16 @@ class PlannerService:
         Raises ``PlannerError`` when the LLM fails or returns unparseable
         output.
         """
+        # 0. Minimal sensitive-intent guard (no planner guesswork)
+        if self._is_sensitive_or_invalid_request(user_message):
+            logger.info("Planner sensitive/invalid guard triggered.")
+            return QueryPlan(
+                intent="clarification_required",
+                table=None,
+                needs_clarification=True,
+                clarification_message="Bu talep kapsamında güvenlik veya gizlilik riski var. Lütfen iş amaçlı ve yetkili bir sorgu belirtin.",
+            )
+
         # 1. Structured schema context
         context = await self._catalog.get_relevant_context(user_message)
 
@@ -137,7 +159,11 @@ class PlannerService:
         self._last_repair_result = repair_result
 
         # Semantic canonicalization (entity root + canonical join paths)
-        query_plan = self._semantic_normalize_plan(query_plan, user_message, context)
+
+        query_plan = apply_semantic_normalization(query_plan, user_message, context)
+        # Guard: if user clearly asks an aggregate question but plan has no
+        # aggregations, return clarification instead of a likely wrong listing.
+        query_plan = self._enforce_aggregation_intent_guard(query_plan, user_message)
 
         # Column canonicalization (alias -> canonical name)
         query_plan = self._canonicalize_plan(query_plan, context)
@@ -258,11 +284,71 @@ class PlannerService:
 
         return result
 
-    def _semantic_normalize_plan(
-        self,
-        plan: QueryPlan,
-        user_message: str,
-        context: CatalogSnapshot,
-    ) -> QueryPlan:
-        """Apply metadata-driven semantic normalization after LLM output."""
-        return apply_semantic_normalization(plan, user_message, context)
+    def _is_sensitive_or_invalid_request(self, user_message: str) -> bool:
+        registry = _load_registry()
+        patterns = tuple(registry.policy_rules.sensitive_intent_patterns)
+        matcher = _compile_sensitive_intent_re(patterns)
+        if matcher is None:
+            logger.warning("Sensitive policy patterns unavailable; applying fail-safe clarification guard.")
+            return True
+        return bool(matcher.search(user_message or ""))
+
+    def _enforce_aggregation_intent_guard(self, plan: QueryPlan, user_message: str) -> QueryPlan:
+        """Guard against a bare listing plan when the user clearly requested an aggregate.
+
+        Fires only when ALL conditions hold:
+        - plan carries no aggregations, filters, or group_by (bare listing fallback)
+        - message is not a short domain-noun query (≤2 tokens + known domain token)
+        - message contains no filter or date context cues
+        - message contains both broad aggregation syntax AND a specific measure keyword
+
+        The two-level keyword check (broad + specific) prevents false positives on
+        phrases like "vendor bazında PO listesi" which use grouping syntax without
+        an explicit measure word.
+        """
+        if plan.needs_clarification or plan.aggregations or plan.filters or plan.group_by:
+            return plan
+
+        folded = casefold_tr(user_message or "")
+        tokens = [t for t in re.split(r"\s+", folded.strip()) if t]
+
+        # Single-noun domain queries ("çalışanlar", "PO") are valid listing requests.
+        _DOMAIN = ("calisan", "çalışan", "personel", "siparis", "sipariş", "po")
+        if len(tokens) <= 2 and any(t in folded for t in _DOMAIN):
+            return plan
+
+        # Filter and date context cues indicate a lookup query, not an aggregate.
+        _FILTER_DATE = (
+            "daki", "deki", "ndaki", "indeki", "olan", "içeren", "iceren",
+            "açık", "acik", "aktif", "onay", "bekleyen",
+            "bugün", "bugun", "dün", "dun", "tarih", "gün", "gun", "hafta", "yıl", "yil",
+        )
+        if any(cue in folded for cue in _FILTER_DATE):
+            return plan
+
+        # Broad aggregation syntax (required first level).
+        _BROAD = (
+            "kaç", "kac", "sayı", "sayi", "adedi", "toplam", "ortalama",
+            "dağılım", "dagilim", "bazında", "bazinda", "count", "sum", "avg",
+        )
+        # Specific measure keyword (required second level — prevents "X bazında liste" false positives).
+        _MEASURE = (
+            "kaç", "kac", "sayısı", "sayisi", "adedi", "count",
+            "toplam", "sum", "ortalama", "average", "avg", "miktar", "quantity",
+        )
+        if not any(c in folded for c in _BROAD) or not any(m in folded for m in _MEASURE):
+            return plan
+
+        logger.info("Aggregation-intent guard triggered; switching to clarification.")
+        return plan.model_copy(
+            update={
+                "intent": "clarification_required",
+                "needs_clarification": True,
+                "clarification_message": "Bu sorgu bir toplama/hesaplama isteği gibi görünüyor. Hangi metrik ve hangi kırılımı istediğinizi netleştirir misiniz?",
+                "select_columns": [],
+                "filters": [],
+                "aggregations": [],
+                "group_by": [],
+                "order_by": [],
+            },
+        )

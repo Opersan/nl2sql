@@ -13,8 +13,10 @@ from app.domain.query_plan import (
     QueryPlan,
     SortDirection,
 )
+from app.domain.semantic_models import ColumnAliases, SemanticRegistry
 from app.providers.catalog.in_memory import InMemoryCatalogProvider
 from app.services.catalog_service import CatalogService
+from app.services import validation_service as validation_module
 from app.services.validation_service import ValidationService
 
 
@@ -579,6 +581,96 @@ class TestResolveColumnConsistency:
 
         col_errors = [e for e in result.errors if e.code == "invalid_column"]
         assert col_errors == []
+
+
+class TestRegistryDrivenAliases:
+    @pytest.mark.asyncio
+    async def test_global_alias_resolves_from_registry(
+        self,
+        validator: ValidationService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        reg = SemanticRegistry(
+            column_aliases=ColumnAliases(
+                global_aliases={"mail": "EMAIL"},
+                table_scoped={},
+            ),
+        )
+        monkeypatch.setattr(validation_module, "_load_registry", lambda: reg)
+
+        plan = QueryPlan(
+            intent="global alias",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["mail"],
+        )
+        result = await validator.validate(plan)
+        assert result.ok is True
+
+    @pytest.mark.asyncio
+    async def test_table_scoped_alias_resolves_from_registry(
+        self,
+        validator: ValidationService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        reg = SemanticRegistry(
+            column_aliases=ColumnAliases(
+                global_aliases={},
+                table_scoped={
+                    "XXBT_PDKS_PER_DETAILS_V": {"giris_tarihi": "ISE_GIRIS_TARIHI"},
+                },
+            ),
+        )
+        monkeypatch.setattr(validation_module, "_load_registry", lambda: reg)
+
+        plan = QueryPlan(
+            intent="scoped alias",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["giris_tarihi"],
+        )
+        result = await validator.validate(plan)
+        assert result.ok is True
+
+    @pytest.mark.asyncio
+    async def test_table_scoped_alias_overrides_global_alias(
+        self,
+        validator: ValidationService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        reg = SemanticRegistry(
+            column_aliases=ColumnAliases(
+                global_aliases={"iletisim": "EMAIL"},
+                table_scoped={
+                    "XXBT_PDKS_PER_DETAILS_V": {"iletisim": "DAHILI"},
+                },
+            ),
+        )
+        monkeypatch.setattr(validation_module, "_load_registry", lambda: reg)
+
+        normalized = validator._normalize_column_identifier(  # noqa: SLF001
+            "iletisim",
+            table_name="XXBT_PDKS_PER_DETAILS_V",
+        )
+        assert normalized == "DAHILI"
+
+    @pytest.mark.asyncio
+    async def test_original_column_preserved_when_alias_missing(
+        self,
+        validator: ValidationService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        reg = SemanticRegistry(
+            column_aliases=ColumnAliases(
+                global_aliases={},
+                table_scoped={},
+            ),
+        )
+        monkeypatch.setattr(validation_module, "_load_registry", lambda: reg)
+
+        normalized = validator._normalize_column_identifier(  # noqa: SLF001
+            "REG_NO",
+            table_name="XXBT_PDKS_PER_DETAILS_V",
+        )
+        assert normalized == "REG_NO"
 
 
 # ---------------------------------------------------------------------------
