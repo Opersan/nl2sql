@@ -145,6 +145,24 @@ class EvalResult:
     final_response_mapping_error: bool = False
     sql_shape_comparable: bool = False
     raw_leak_but_final_clean: bool = False
+    # --- derived pipeline / visibility classification ---
+    technical_pipeline_status: str = "fail"
+    user_visible_status: str = "fail"
+    planner_output_usable: bool = True
+    semantic_rescue_applied: bool = False
+    semantic_rescue_was_executable: bool | None = None
+    narration_user_safe: bool = False
+    narration_raw_unsafe_final_safe: bool = False
+    sql_shape_change_stage: str = "none"
+    sql_shape_change_reason: str = "no_change"
+    sql_shape_change_summary: str | None = None
+    requested_filter_signals: list[dict[str, Any]] = field(default_factory=list)
+    planner_filter_coverage: dict[str, Any] = field(default_factory=dict)
+    final_filter_coverage: dict[str, Any] = field(default_factory=dict)
+    false_success_risk: bool = False
+    success_blocked_by_filter_loss: bool = False
+    user_visible_quality: str = "fail"
+    model_behavior_quality: str = "fail"
     question_trace: dict[str, Any] | None = None
     queue_wait_ms: int = 0
     processing_ms: int = 0
@@ -219,6 +237,12 @@ class EvalSummary:
     final_response_mapping_error_count: int
     sanitizer_saved_response_count: int
     raw_leak_but_final_clean_count: int
+    # --- new aggregate metrics ---
+    no_failure_count: int
+    user_visible_pass_rate: float
+    pass_with_sanitization_rate: float
+    semantic_rescue_rate: float
+    executable_after_repair_rate: float
 
 
 @dataclass
@@ -369,6 +393,9 @@ def _default_compile_trace() -> dict[str, Any]:
         "bind_param_count": 0,
         "expression_count": 0,
         "compile_warning_list": [],
+        "executed_sql_fingerprint": None,
+        "bind_summary": {},
+        "why_not_executed": None,
         "stage_outcome": "skipped",
         "note": "compile skipped",
     }
@@ -392,6 +419,12 @@ def _default_execute_trace() -> dict[str, Any]:
         "rows_returned_before_limit": None,
         "rows_returned_after_limit": None,
         "execution_error_subtype": None,
+        "executed_sql_fingerprint": None,
+        "bind_summary": {},
+        "execution_guard_reason": None,
+        "execution_skipped_reason": None,
+        "pre_execution_risk_flags": [],
+        "why_not_executed": None,
         "ok": False,
         "stage_outcome": "skipped",
         "note": "execution skipped",
@@ -442,6 +475,14 @@ def _default_narration_trace() -> dict[str, Any]:
         "source_summary_text_for_narrator": None,
         "narration_context_mismatch": False,
         "narration_context_mismatch_fields": [],
+        "narration_shape": "listing",
+        "narration_business_value_score": 0,
+        "narration_genericness_flag": False,
+        "raw_narration_quality": "unknown",
+        "final_narration_quality": "unknown",
+        "narrator_used_fallback_template": False,
+        "prompt_contract_violated": False,
+        "sanitizer_reason_code": None,
     }
 
 
@@ -938,18 +979,19 @@ def _sanitize_narration_output(
     raw_checks = _classify_narration_policy_violations(raw_text)
 
     if raw_text is None:
-        fallback_text, fallback_mode = _fallback_narration_text(raw_status=raw_status, expected_context=expected_context)
+        fallback_text, _fallback_mode = _fallback_narration_text(raw_status=raw_status, expected_context=expected_context)
         sanitized_checks = _classify_narration_policy_violations(fallback_text)
         final_checks = _classify_narration_policy_violations(fallback_text)
         return {
             "sanitized_response": fallback_text,
             "final_response": fallback_text,
             "final_response_source": "fallback",
-            "sanitizer_mode": fallback_mode,
+            "sanitizer_mode": "safe_rewrite",
             "sanitizer_applied": True,
             "sanitizer_effective": True,
             "raw_vs_final_changed": True,
-            "sanitizer_actions": [fallback_mode],
+            "sanitizer_actions": ["safe_rewrite"],
+            "sanitizer_reason_code": "raw_missing",
             "raw_response_policy_violations": [],
             "sanitized_response_policy_violations": sanitized_checks["violations"],
             "final_response_policy_violations": final_checks["violations"],
@@ -961,18 +1003,41 @@ def _sanitize_narration_output(
     sanitized = NarratorService._strip_leakage(raw_text)  # noqa: SLF001
     sanitized = (sanitized or "").strip()
     if sanitized == "Sorgu işlendi." and raw_checks["violations"]:
-        fallback_text, fallback_mode = _fallback_narration_text(raw_status=raw_status, expected_context=expected_context)
+        final_candidate = (answer or "").strip()
+        final_candidate_checks = _classify_narration_policy_violations(final_candidate)
+        if final_candidate and not final_candidate_checks["violations"]:
+            sanitized_checks = _classify_narration_policy_violations(final_candidate)
+            return {
+                "sanitized_response": final_candidate,
+                "final_response": final_candidate,
+                "final_response_source": "sanitized",
+                "sanitizer_mode": "extract_final_answer",
+                "sanitizer_applied": True,
+                "sanitizer_effective": raw_text != final_candidate,
+                "raw_vs_final_changed": True,
+                "sanitizer_actions": ["extract_final_answer"],
+                "sanitizer_reason_code": "raw_unusable_final_safe",
+                "raw_response_policy_violations": raw_checks["violations"],
+                "sanitized_response_policy_violations": sanitized_checks["violations"],
+                "final_response_policy_violations": sanitized_checks["violations"],
+                "raw_checks": raw_checks,
+                "sanitized_checks": sanitized_checks,
+                "final_checks": sanitized_checks,
+            }
+
+        fallback_text, _fallback_mode = _fallback_narration_text(raw_status=raw_status, expected_context=expected_context)
         sanitized_checks = _classify_narration_policy_violations(fallback_text)
         final_checks = _classify_narration_policy_violations(fallback_text)
         return {
             "sanitized_response": fallback_text,
             "final_response": fallback_text,
             "final_response_source": "fallback",
-            "sanitizer_mode": fallback_mode,
+            "sanitizer_mode": "safe_rewrite",
             "sanitizer_applied": True,
             "sanitizer_effective": raw_text != fallback_text,
             "raw_vs_final_changed": True,
-            "sanitizer_actions": [fallback_mode],
+            "sanitizer_actions": ["safe_rewrite"],
+            "sanitizer_reason_code": "raw_unusable",
             "raw_response_policy_violations": raw_checks["violations"],
             "sanitized_response_policy_violations": sanitized_checks["violations"],
             "final_response_policy_violations": final_checks["violations"],
@@ -1000,6 +1065,7 @@ def _sanitize_narration_output(
             "sanitizer_effective": raw_text != sanitized,
             "raw_vs_final_changed": raw_text != final_response,
             "sanitizer_actions": (["strip_reasoning"] if source == "sanitized" else []),
+            "sanitizer_reason_code": ("policy_leak_removed" if source == "sanitized" else "no_sanitization_needed"),
             "raw_response_policy_violations": raw_checks["violations"],
             "sanitized_response_policy_violations": sanitized_checks["violations"],
             "final_response_policy_violations": final_checks["violations"],
@@ -1008,18 +1074,19 @@ def _sanitize_narration_output(
             "final_checks": final_checks,
         }
 
-    fallback_text, fallback_mode = _fallback_narration_text(raw_status=raw_status, expected_context=expected_context)
+    fallback_text, _fallback_mode = _fallback_narration_text(raw_status=raw_status, expected_context=expected_context)
     sanitized_checks = _classify_narration_policy_violations(fallback_text)
     final_checks = _classify_narration_policy_violations(fallback_text)
     return {
         "sanitized_response": fallback_text,
         "final_response": fallback_text,
         "final_response_source": "fallback",
-        "sanitizer_mode": fallback_mode,
+        "sanitizer_mode": "safe_rewrite",
         "sanitizer_applied": True,
         "sanitizer_effective": raw_text != fallback_text,
         "raw_vs_final_changed": True,
-        "sanitizer_actions": [fallback_mode],
+        "sanitizer_actions": ["safe_rewrite"],
+        "sanitizer_reason_code": "sanitized_output_still_unsafe",
         "raw_response_policy_violations": raw_checks["violations"],
         "sanitized_response_policy_violations": sanitized_checks["violations"],
         "final_response_policy_violations": final_checks["violations"],
@@ -1031,6 +1098,169 @@ def _sanitize_narration_output(
 
 def _stage_note(*, ok: bool, note: str, stage_outcome: str) -> dict[str, Any]:
     return {"ok": ok, "note": note, "stage_outcome": stage_outcome}
+
+
+# ---------------------------------------------------------------------------
+# Fields that constitute a genuine semantic rescue (table re-anchoring,
+# needs_clarification flip, filter/column override).  Observability-only
+# additions (root_entity / semantic_intent tags) are excluded.
+# ---------------------------------------------------------------------------
+_SEMANTIC_RESCUE_FIELDS: frozenset[str] = frozenset({
+    "table", "needs_clarification", "filters", "select_columns",
+    "group_by", "aggregations", "order_by", "joins",
+})
+
+# SQL shape keys used to detect structural plan mutations across stages.
+_SQL_SHAPE_FIELDS: frozenset[str] = frozenset({
+    "select_columns", "filters", "aggregations", "joins",
+    "order_by", "limit", "table", "group_by",
+})
+
+
+def _classify_technical_pipeline_status(
+    result: EvalResult,
+    stage_statuses: dict[str, dict[str, Any]],
+) -> str:
+    """Return 'pass' | 'degraded' | 'fail' based on critical stage outcomes."""
+    # Clean successful traces must never be marked degraded.
+    if (
+        result.root_cause_category == "no_failure"
+        and result.root_cause_stage == "none"
+        and result.planner_ok
+        and result.validation_ok
+        and result.compile_ok
+        and result.execute_ok
+        and result.narration_ok
+        and not result.sanitizer_effective
+        and not result.semantic_rescue_applied
+    ):
+        return "pass"
+
+    for stage in ("planner", "validation", "compile", "execute"):
+        if (stage_statuses.get(stage) or {}).get("stage_outcome") == "failed":
+            return "fail"
+    flags = stage_statuses.get("_flags") or {}
+    if (
+        result.sanitizer_effective
+        or result.repair_applied
+        or result.raw_leak_but_final_clean
+        or flags.get("semantic_changed")
+    ):
+        return "degraded"
+    return "pass"
+
+
+def _classify_user_visible_status(
+    result: EvalResult,
+    narration_trace: dict[str, Any],
+) -> str:
+    """Return 'pass' | 'pass_with_sanitization' | 'fail' from end-user perspective."""
+    final_violations = list(narration_trace.get("final_response_policy_violations") or [])
+    if result.final_response_mapping_error or result.narration_context_mismatch or final_violations:
+        return "fail"
+    raw_violations = list(narration_trace.get("raw_response_policy_violations") or [])
+    if raw_violations and not final_violations:
+        return "pass_with_sanitization"
+    return "pass"
+
+
+def _classify_planner_output_usable(
+    result: EvalResult,
+    stage_statuses: dict[str, dict[str, Any]],
+) -> bool:
+    """True when planner produced (or repair recovered) an executable plan."""
+    if not result.structured_parse_error:
+        return True
+    return (stage_statuses.get("compile") or {}).get("stage_outcome") == "passed"
+
+
+def _classify_semantic_rescue(
+    trace: dict[str, Any],
+    stage_statuses: dict[str, dict[str, Any]],
+) -> tuple[bool, bool | None]:
+    """(applied, was_executable): True when semantic stage made plan-altering changes."""
+    semantic_diff = (trace.get("semantic_normalization") or {}).get("diff") or {}
+    changed_fields = set(semantic_diff.get("changed_fields") or [])
+    # Semantic enrichment only (e.g., root_entity/semantic_intent) is not rescue.
+    rescue_fields = changed_fields.intersection(_SEMANTIC_RESCUE_FIELDS)
+    shape_fields = changed_fields.intersection(_SQL_SHAPE_FIELDS)
+    applied = bool(rescue_fields and shape_fields)
+    if not applied:
+        return False, None
+    executable = (stage_statuses.get("compile") or {}).get("stage_outcome") == "passed"
+    return True, executable
+
+
+def _infer_sql_shape_change_reason(stage: str, diff: dict[str, Any]) -> str:
+    """Deterministic short label for why SQL shape changed at a given stage."""
+    changed_fields = set(diff.get("changed_fields") or [])
+    removed = dict(diff.get("removed") or {})
+    added = dict(diff.get("added") or {})
+    if stage == "normalize":
+        if "select_columns" in removed or (
+            "select_columns" in changed_fields and not added.get("select_columns")
+        ):
+            return "clarification_cleanup"
+        if "select_columns" in added:
+            return "select_default_applied"
+        return "stable_intent_default_applied"
+    if stage == "repair":
+        if "joins" in changed_fields or "joins" in added:
+            return "join_path_injected"
+        if "aggregations" in changed_fields or "group_by" in changed_fields:
+            return "aggregation_repair"
+        return "qualified_column_repair"
+    if stage == "semantic":
+        if "filters" in changed_fields:
+            return "semantic_filter_override"
+        if "table" in changed_fields:
+            return "semantic_table_anchor"
+        if "joins" in changed_fields or "joins" in added:
+            return "join_path_injected"
+        return "stable_intent_default_applied"
+    if stage == "canonicalize":
+        return "alias_canonicalization"
+    return "no_change"
+
+
+def _build_sql_shape_change_summary(stage: str, diff: dict[str, Any]) -> str:
+    """Human-readable one-liner describing the most significant shape mutation."""
+    parts: list[str] = []
+    changed = dict(diff.get("changed") or {})
+    added = dict(diff.get("added") or {})
+    removed = dict(diff.get("removed") or {})
+    for key in ("filters", "select_columns", "table", "joins", "aggregations"):
+        if key in changed:
+            before = changed[key].get("before")
+            after = changed[key].get("after")
+            parts.append(f"{key} changed from {before!r} to {after!r}")
+        elif key in added:
+            parts.append(f"{key} added: {added[key]!r}")
+        elif key in removed:
+            parts.append(f"{key} removed: {removed[key]!r}")
+    return "; ".join(parts) if parts else f"{stage}: sql shape mutated"
+
+
+def _classify_sql_shape_change(
+    trace: dict[str, Any],
+) -> tuple[str, str, str | None]:
+    """Return (stage, reason, summary) for the first stage that mutated SQL shape."""
+    stages: list[tuple[str, dict[str, Any] | None]] = [
+        ("normalize", trace.get("normalize")),
+        ("repair", trace.get("repair")),
+        ("semantic", trace.get("semantic_normalization")),
+        ("canonicalize", trace.get("canonicalization")),
+    ]
+    for stage_name, stage_data in stages:
+        if not stage_data:
+            continue
+        diff = stage_data.get("diff") or {}
+        changed = set(diff.get("changed_fields") or [])
+        if changed.intersection(_SQL_SHAPE_FIELDS):
+            reason = _infer_sql_shape_change_reason(stage_name, diff)
+            summary = _build_sql_shape_change_summary(stage_name, diff)
+            return stage_name, reason, summary
+    return "none", "no_change", None
 
 
 def _classify_root_cause_category(result: EvalResult, trace: dict[str, Any]) -> tuple[str, str]:
@@ -1068,7 +1298,7 @@ def _classify_root_cause_category(result: EvalResult, trace: dict[str, Any]) -> 
     if repair.get("repair_applied") and result.status in {"wrong_plan", "clarification", "validation_error", "compile_error", "execution_error"}:
         return "repair_mutation", "repair:critical_mutation"
 
-    return "unknown", "unknown"
+    return "no_failure", "no_failure"
 
 
 def _determine_root_cause_stage(result: EvalResult, trace: dict[str, Any]) -> str:
@@ -1090,6 +1320,8 @@ def _compute_diff_flags(trace: dict[str, Any], narration: dict[str, Any] | None)
     semantic_keys = {"semantic_intent", "root_entity", "joins", "group_by", "aggregations", "filters"}
     sql_shape_keys = {"select_columns", "filters", "aggregations", "joins", "order_by", "limit", "table", "group_by"}
 
+    normalize_diff = (trace.get("normalize") or {}).get("diff") or {}
+    repair_diff = (trace.get("repair") or {}).get("diff") or {}
     semantic_diff = (trace.get("semantic_normalization") or {}).get("diff") or {}
     canonical_diff = (trace.get("canonicalization") or {}).get("diff") or {}
     compile_trace = trace.get("compile") or {}
@@ -1098,7 +1330,9 @@ def _compute_diff_flags(trace: dict[str, Any], narration: dict[str, Any] | None)
         and (compile_trace.get("sql") or compile_trace.get("compiled_sql"))
     )
 
-    changed_fields = set(canonical_diff.get("changed_fields") or [])
+    shape_changed_fields: set[str] = set()
+    for diff in (normalize_diff, repair_diff, semantic_diff, canonical_diff):
+        shape_changed_fields.update(diff.get("changed_fields") or [])
 
     raw_response = (narration or {}).get("raw_response")
     final_response = (narration or {}).get("final_response")
@@ -1107,7 +1341,7 @@ def _compute_diff_flags(trace: dict[str, Any], narration: dict[str, Any] | None)
     return {
         "changed_semantics": bool(set(semantic_diff.get("changed_fields") or []).intersection(semantic_keys)),
         "sql_shape_comparable": sql_shape_comparable,
-        "changed_sql_shape": bool(sql_shape_comparable and changed_fields.intersection(sql_shape_keys)),
+        "changed_sql_shape": bool(sql_shape_comparable and shape_changed_fields.intersection(sql_shape_keys)),
         "changed_user_visible_output": changed_user_visible_output,
     }
 
@@ -1269,7 +1503,8 @@ def _render_short_verdict_index(traces: list[dict[str, Any]]) -> list[str]:
         quality_label = "quality_pass" if final.get("quality_status") == "pass" else "quality_fail"
         rows.append(
             f"- Q{idx:02d} | {final.get('business_status')} | {quality_label} | "
-            f"{final.get('first_failing_stage')} | {final.get('root_cause_category')}"
+            f"{final.get('first_failing_stage')} | {final.get('root_cause_category')} | "
+            f"{final.get('technical_pipeline_status', 'unknown')} | {final.get('user_visible_status', 'unknown')}"
         )
     return rows
 
@@ -1436,6 +1671,11 @@ def _build_single_output_markdown(
         f"- final_response_mapping_error_count: {summary.final_response_mapping_error_count}",
         f"- sanitizer_saved_response_count: {summary.sanitizer_saved_response_count}",
         f"- raw_leak_but_final_clean_count: {summary.raw_leak_but_final_clean_count}",
+        f"- no_failure_count: {summary.no_failure_count}",
+        f"- user_visible_pass_rate: {_format_pct(summary.user_visible_pass_rate)}",
+        f"- pass_with_sanitization_rate: {_format_pct(summary.pass_with_sanitization_rate)}",
+        f"- semantic_rescue_rate: {_format_pct(summary.semantic_rescue_rate)}",
+        f"- executable_after_repair_rate: {_format_pct(summary.executable_after_repair_rate)}",
         f"- avg_latency_ms: {summary.avg_latency_ms:.1f}",
         f"- p95_latency_ms: {summary.p95_latency_ms:.1f}",
         "",
@@ -1505,6 +1745,16 @@ def _build_single_output_markdown(
                 f"- sanitizer_effective: {final.get('sanitizer_effective')}",
                 f"- narrator_summary_source_stage: {final.get('narrator_summary_source_stage')}",
                 f"- narrator_final_source_stage: {final.get('narrator_final_source_stage')}",
+                f"- technical_pipeline_status: {final.get('technical_pipeline_status')}",
+                f"- user_visible_status: {final.get('user_visible_status')}",
+                f"- planner_output_usable: {final.get('planner_output_usable')}",
+                f"- semantic_rescue_applied: {final.get('semantic_rescue_applied')}",
+                f"- semantic_rescue_was_executable: {final.get('semantic_rescue_was_executable')}",
+                f"- narration_user_safe: {final.get('narration_user_safe')}",
+                f"- narration_raw_unsafe_final_safe: {final.get('narration_raw_unsafe_final_safe')}",
+                f"- sql_shape_change_stage: {final.get('sql_shape_change_stage')}",
+                f"- sql_shape_change_reason: {final.get('sql_shape_change_reason')}",
+                f"- sql_shape_change_summary: {final.get('sql_shape_change_summary')}",
                 "",
                 "### Retrieval",
                 f"- schema_tables: {(trace.get('retrieval') or {}).get('schema_tables')}",
@@ -1820,7 +2070,16 @@ def _extract_exec_error_subtype(detail: str | None) -> str | None:
     m = _EXEC_ERR_CLASS_PAT.search(detail)
     if m:
         return m.group(1)
-    if "timeout" in detail.lower():
+    lowered = detail.lower()
+    if "precheck_date_literal_invalid" in lowered:
+        return "oracle_date_type_error"
+    if "precheck_invalid_filter_value" in lowered:
+        return "invalid_filter_value"
+    if "ambiguous_business_status" in lowered:
+        return "ambiguous_business_status"
+    if "high_risk_but_executable" in lowered:
+        return "high_risk_but_executable"
+    if "timeout" in lowered:
         return "timeout_error"
     return "unknown_execution_error"
 
@@ -2193,7 +2452,6 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
     planner = getattr(chat, "_planner", None)
     orchestrator = getattr(chat, "_orchestrator", None)
     narrator = getattr(chat, "_narrator", None)
-    trace_locks = _ensure_trace_locks(chat)
 
     trace: dict[str, Any] = {
         "trace_id": trace_id,
@@ -2218,6 +2476,7 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         "repair": None,
         "semantic_normalization": None,
         "canonicalization": None,
+        "intent_guard": None,
         "validation": _default_validation_trace(),
         "compile": _default_compile_trace(),
         "execute": _default_execute_trace(),
@@ -2247,7 +2506,7 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
                 result.safety_status = "pass"
                 result.first_failing_stage = "none" if result.status in {"success", "empty_result", "clarification"} else "execute"
                 result.final_failing_stage = result.first_failing_stage
-                result.root_cause_category = "unknown" if result.status in {"success", "empty_result", "clarification"} else "execution_failure"
+                result.root_cause_category = "no_failure" if result.status in {"success", "empty_result", "clarification"} else "execution_failure"
                 result.root_cause_detail = result.root_cause_category
                 result.execute_ok = result.status in {"success", "empty_result", "clarification"}
                 result.execution_status = result.raw_status
@@ -2280,11 +2539,10 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
                 return result
             raise RuntimeError("Chat orchestrator missing planner/orchestrator/narrator components")
 
-        async with trace_locks["planner"]:
-            planner_started = time.perf_counter()
-            plan = await planner.plan(item.text)
-            planner_latency_ms = int((time.perf_counter() - planner_started) * 1000)
-            planner_trace = _immutable_snapshot(getattr(planner, "last_trace", None) or {})
+        planner_started = time.perf_counter()
+        plan = await planner.plan(item.text)
+        planner_latency_ms = int((time.perf_counter() - planner_started) * 1000)
+        planner_trace = _immutable_snapshot(getattr(planner, "last_trace", None) or {})
 
         planner_question = planner_trace.get("user_message") or item.text
         result.planner_question = planner_question
@@ -2331,6 +2589,7 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         ]
         trace["llm_calls"][0]["trace_id"] = trace_id
         trace["parsed_query_plan"] = _immutable_snapshot(planner_trace.get("parsed_plan"))
+        trace["intent_guard"] = _immutable_snapshot(planner_trace.get("intent_guard") or {})
 
         normalize_stage = _immutable_snapshot(planner_trace.get("normalize") or {})
         trace["normalize"] = {
@@ -2367,18 +2626,22 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         ]
         result.repair_fields_count = len((trace.get("repair") or {}).get("repair_actions") or [])
         result.structured_parse_error = bool((trace.get("llm_raw_output") or {}).get("parse_error"))
+        intent_guard_state = trace.get("intent_guard") or {}
+        result.requested_filter_signals = list(intent_guard_state.get("requested_filter_signals") or [])
+        result.planner_filter_coverage = dict(intent_guard_state.get("planner_filter_coverage") or {})
+        result.final_filter_coverage = dict(intent_guard_state.get("final_filter_coverage") or {})
+        result.false_success_risk = bool(intent_guard_state.get("false_success_risk"))
+        result.success_blocked_by_filter_loss = bool(intent_guard_state.get("success_blocked_by_filter_loss"))
 
         if plan.needs_clarification:
-            async with trace_locks["narrator"]:
-                narration_started = time.perf_counter()
-                answer = await narrator.narrate_clarification(plan)
-                narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
-                narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
+            narration_started = time.perf_counter()
+            answer = await narrator.narrate_clarification(plan)
+            narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
+            narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
             result.raw_status = "clarification"
         else:
-            async with trace_locks["orchestrator"]:
-                orchestration_result = await orchestrator.run_plan(plan)
-                orchestrator_trace = _immutable_snapshot(getattr(orchestrator, "last_trace", None) or {})
+            orchestration_result = await orchestrator.run_plan(plan)
+            orchestrator_trace = _immutable_snapshot(getattr(orchestrator, "last_trace", None) or {})
             validation_state = _default_validation_trace()
             validation_state.update(_immutable_snapshot(orchestrator_trace.get("validation") or {}))
             validation_state["available"] = True
@@ -2394,27 +2657,24 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
             result.execute_question = item.text
 
             if orchestration_result.failed_phase == ErrorPhase.VALIDATION:
-                async with trace_locks["narrator"]:
-                    narration_started = time.perf_counter()
-                    answer = await narrator.narrate_validation_error(item.text, orchestration_result.validation)
-                    narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
-                    narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
+                narration_started = time.perf_counter()
+                answer = await narrator.narrate_validation_error(item.text, orchestration_result.validation)
+                narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
+                narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
                 result.raw_status = "validation_error"
                 result.error_detail = "; ".join(err.message for err in orchestration_result.validation.errors)
             elif orchestration_result.failed_phase == ErrorPhase.COMPILATION:
-                async with trace_locks["narrator"]:
-                    narration_started = time.perf_counter()
-                    answer = await narrator.narrate_execution_error(item.text, orchestration_result)
-                    narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
-                    narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
+                narration_started = time.perf_counter()
+                answer = await narrator.narrate_execution_error(item.text, orchestration_result)
+                narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
+                narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
                 result.raw_status = "compile_error"
                 result.error_detail = orchestration_result.compilation_error
             elif orchestration_result.failed_phase == ErrorPhase.EXECUTION:
-                async with trace_locks["narrator"]:
-                    narration_started = time.perf_counter()
-                    answer = await narrator.narrate_execution_error(item.text, orchestration_result)
-                    narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
-                    narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
+                narration_started = time.perf_counter()
+                answer = await narrator.narrate_execution_error(item.text, orchestration_result)
+                narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
+                narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
                 result.raw_status = "execution_error"
                 result.error_detail = (
                     orchestration_result.execution_result.error_message
@@ -2423,11 +2683,10 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
                 )
                 result.execution_error_subtype = _extract_exec_error_subtype(result.error_detail)
             else:
-                async with trace_locks["narrator"]:
-                    narration_started = time.perf_counter()
-                    answer = await narrator.narrate_success(item.text, orchestration_result)
-                    narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
-                    narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
+                narration_started = time.perf_counter()
+                answer = await narrator.narrate_success(item.text, orchestration_result)
+                narration_latency_ms = int((time.perf_counter() - narration_started) * 1000)
+                narrator_trace = _immutable_snapshot(getattr(narrator, "last_trace", None) or {})
                 if orchestration_result.execution_result and orchestration_result.execution_result.row_count == 0:
                     result.raw_status = "empty_result"
                     result.row_count = 0
@@ -2493,6 +2752,8 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         result.narrator_sql_leak = result.final_narrator_sql_leak
         result.narrator_presentation_leak = result.final_narrator_presentation_leak
         narration_ok = bool(final_response and not final_response_policy_violations and not result.final_response_mapping_error)
+        result.user_visible_quality = "pass" if narration_ok else "fail"
+        result.model_behavior_quality = "pass" if not raw_response_policy_violations else "fail"
         result.raw_leak_but_final_clean = bool(raw_response_policy_violations and not final_response_policy_violations)
         violation_types = list(raw_response_policy_violations)
 
@@ -2519,6 +2780,7 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
             "sanitizer_effective": sanitizer_effective,
             "sanitizer_mode": sanitizer_mode,
             "sanitizer_actions": sanitizer_actions,
+            "sanitizer_reason_code": narration_integrity.get("sanitizer_reason_code"),
             "narrator_policy_violation_types": violation_types,
             "raw_response_policy_violations": raw_response_policy_violations,
             "sanitized_response_policy_violations": sanitized_response_policy_violations,
@@ -2546,6 +2808,13 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
             "stage_outcome": "passed" if narration_ok else "failed",
             "narration_context_mismatch": narration_context_mismatch,
             "narration_context_mismatch_fields": narration_context_mismatch_fields,
+            "narration_shape": narrator_trace.get("narration_shape", "listing"),
+            "narration_business_value_score": narrator_trace.get("narration_business_value_score", 0),
+            "narration_genericness_flag": narrator_trace.get("narration_genericness_flag", False),
+            "raw_narration_quality": narrator_trace.get("raw_narration_quality", "unknown"),
+            "final_narration_quality": narrator_trace.get("final_narration_quality", "unknown"),
+            "narrator_used_fallback_template": narrator_trace.get("narrator_used_fallback_template", False),
+            "prompt_contract_violated": narrator_trace.get("prompt_contract_violated", False),
             "trace_id": trace_id,
         }
         narrator_model = (
@@ -2763,6 +3032,20 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         "changed_user_visible_output": diff_flags["changed_user_visible_output"],
     }
 
+    # --- derived classification fields (new) ---
+    result.technical_pipeline_status = _classify_technical_pipeline_status(result, stage_statuses)
+    result.user_visible_status = _classify_user_visible_status(result, trace.get("narration") or {})
+    result.planner_output_usable = _classify_planner_output_usable(result, stage_statuses)
+    _sr_applied, _sr_executable = _classify_semantic_rescue(trace, stage_statuses)
+    result.semantic_rescue_applied = _sr_applied
+    result.semantic_rescue_was_executable = _sr_executable
+    result.narration_user_safe = not bool((trace.get("narration") or {}).get("final_response_policy_violations"))
+    result.narration_raw_unsafe_final_safe = result.raw_leak_but_final_clean
+    _sql_chg_stage, _sql_chg_reason, _sql_chg_summary = _classify_sql_shape_change(trace)
+    result.sql_shape_change_stage = _sql_chg_stage
+    result.sql_shape_change_reason = _sql_chg_reason
+    result.sql_shape_change_summary = _sql_chg_summary
+
     result.root_cause_layer = result.root_cause_stage
     if result.root_cause_stage == "planner":
         result.primary_failure_reason = (trace.get("llm_raw_output") or {}).get("parse_error")
@@ -2829,6 +3112,31 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         "compiled_sql_source_plan_stage": "canonicalize",
         "narrator_summary_source_stage": (trace.get("narration") or {}).get("narrator_summary_source_stage"),
         "narrator_final_source_stage": "sanitize" if result.final_response_source == "sanitized" else result.final_response_source,
+        "technical_pipeline_status": result.technical_pipeline_status,
+        "user_visible_status": result.user_visible_status,
+        "planner_output_usable": result.planner_output_usable,
+        "semantic_rescue_applied": result.semantic_rescue_applied,
+        "semantic_rescue_was_executable": result.semantic_rescue_was_executable,
+        "narration_user_safe": result.narration_user_safe,
+        "narration_raw_unsafe_final_safe": result.narration_raw_unsafe_final_safe,
+        "sql_shape_change_stage": result.sql_shape_change_stage,
+        "sql_shape_change_reason": result.sql_shape_change_reason,
+        "sql_shape_change_summary": result.sql_shape_change_summary,
+        "requested_filter_signals": result.requested_filter_signals,
+        "planner_filter_coverage": result.planner_filter_coverage,
+        "final_filter_coverage": result.final_filter_coverage,
+        "false_success_risk": result.false_success_risk,
+        "success_blocked_by_filter_loss": result.success_blocked_by_filter_loss,
+        "user_visible_quality": result.user_visible_quality,
+        "model_behavior_quality": result.model_behavior_quality,
+        "sanitizer_reason_code": (trace.get("narration") or {}).get("sanitizer_reason_code"),
+        "narration_shape": (trace.get("narration") or {}).get("narration_shape"),
+        "narration_business_value_score": (trace.get("narration") or {}).get("narration_business_value_score"),
+        "narration_genericness_flag": (trace.get("narration") or {}).get("narration_genericness_flag"),
+        "raw_narration_quality": (trace.get("narration") or {}).get("raw_narration_quality"),
+        "final_narration_quality": (trace.get("narration") or {}).get("final_narration_quality"),
+        "narrator_used_fallback_template": (trace.get("narration") or {}).get("narrator_used_fallback_template"),
+        "prompt_contract_violated": (trace.get("narration") or {}).get("prompt_contract_violated"),
     }
     result.question_trace = trace
     return result
@@ -3019,6 +3327,15 @@ def _make_summary(
     semantic_override_count = sum(1 for r in results if r.root_cause_category == "semantic_override")
     sql_shape_changed_count = sum(1 for r in results if (r.trace_flags or {}).get("changed_sql_shape"))
 
+    # --- new aggregate metrics ---
+    no_failure_count = sum(1 for r in results if r.root_cause_category == "no_failure")
+    user_visible_pass = sum(1 for r in results if r.user_visible_status in {"pass", "pass_with_sanitization"})
+    pass_with_sanitization = sum(1 for r in results if r.user_visible_status == "pass_with_sanitization")
+    semantic_rescue_count = sum(1 for r in results if r.semantic_rescue_applied)
+    repaired = [r for r in results if r.repair_applied]
+    executable_after_repair = sum(1 for r in repaired if r.compile_ok)
+    executable_after_repair_rate = (executable_after_repair / len(repaired)) if repaired else 0.0
+
     return EvalSummary(
         total_questions=total,
         counts=dict(counts),
@@ -3087,6 +3404,11 @@ def _make_summary(
         final_response_mapping_error_count=trace_summary["final_response_mapping_error_count"],
         sanitizer_saved_response_count=trace_summary["sanitizer_saved_response_count"],
         raw_leak_but_final_clean_count=trace_summary["raw_leak_but_final_clean_count"],
+        no_failure_count=no_failure_count,
+        user_visible_pass_rate=rate(user_visible_pass),
+        pass_with_sanitization_rate=rate(pass_with_sanitization),
+        semantic_rescue_rate=rate(semantic_rescue_count),
+        executable_after_repair_rate=executable_after_repair_rate,
     )
 
 
@@ -3192,6 +3514,11 @@ def _build_report_markdown(
             f"- oracle_error_leak_rate(raw): {_format_pct(summary.raw_oracle_error_leak_rate)}",
             f"- sanitizer_saved_response_count: {summary.sanitizer_saved_response_count}",
             f"- raw_leak_but_final_clean_count: {summary.raw_leak_but_final_clean_count}",
+            f"- no_failure_count: {summary.no_failure_count}",
+            f"- user_visible_pass_rate: {_format_pct(summary.user_visible_pass_rate)}",
+            f"- pass_with_sanitization_rate: {_format_pct(summary.pass_with_sanitization_rate)}",
+            f"- semantic_rescue_rate: {_format_pct(summary.semantic_rescue_rate)}",
+            f"- executable_after_repair_rate: {_format_pct(summary.executable_after_repair_rate)}",
             "",
             "I. Wrong-plan root-cause bucketlari",
         ]

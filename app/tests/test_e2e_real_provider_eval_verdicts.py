@@ -16,6 +16,13 @@ from scripts.e2e_real_provider_eval import (
     _render_short_verdict_index,
     compute_trace_summary,
 )
+from scripts.e2e_real_provider_eval import (
+    _classify_technical_pipeline_status,
+    _classify_user_visible_status,
+    _classify_planner_output_usable,
+    _classify_semantic_rescue,
+    _classify_sql_shape_change,
+)
 
 
 def _base_result() -> EvalResult:
@@ -118,8 +125,8 @@ def test_short_verdict_index_rendering() -> None:
     ]
 
     lines = _render_short_verdict_index(traces)
-    assert lines[0] == "- Q01 | success | quality_fail | narration | narrator_leak"
-    assert lines[1] == "- Q02 | validation_error | quality_fail | validation | validation_failure"
+    assert lines[0] == "- Q01 | success | quality_fail | narration | narrator_leak | unknown | unknown"
+    assert lines[1] == "- Q02 | validation_error | quality_fail | validation | validation_failure | unknown | unknown"
 
 
 def test_summary_includes_new_verdict_metrics() -> None:
@@ -484,3 +491,232 @@ def test_final_header_consistent_with_verdict_card() -> None:
 
     assert "root_cause_stage=planner" in markdown
     assert "- root_cause_stage: planner" in markdown
+
+
+# ---------------------------------------------------------------------------
+# New regression tests for Sprint-4 trace/report integrity improvements
+# ---------------------------------------------------------------------------
+
+def _clean_result() -> EvalResult:
+    """A result that represents a fully successful trace with no failures."""
+    r = _base_result()
+    r.status = "success"
+    r.compile_ok = True
+    r.execute_ok = True
+    r.narration_ok = True
+    r.planner_ok = True
+    r.structured_parse_error = False
+    r.repair_applied = False
+    r.sanitizer_effective = False
+    r.final_response_mapping_error = False
+    r.narration_context_mismatch = False
+    r.raw_leak_but_final_clean = False
+    return r
+
+
+def test_full_success_has_no_failure_category() -> None:
+    """A clean successful trace must produce root_cause_category='no_failure', not 'unknown'."""
+    result = _clean_result()
+    result.root_cause_category = "no_failure"
+    result.root_cause_stage = "none"
+    result.validation_ok = True
+    result.compile_ok = True
+    result.execute_ok = True
+    result.narration_ok = True
+    result.sanitizer_effective = False
+    result.semantic_rescue_applied = False
+    trace: dict = {
+        "narration": {},
+        "validation": {"ok": True},
+        "compile": {"ok": True},
+        "execute": {"ok": True},
+        "repair": {},
+        "semantic_normalization": {},
+        "canonicalization": {},
+        "planner": {"structured_ok": True},
+    }
+    category, _ = _classify_root_cause_category(result, trace)
+    assert category == "no_failure", f"Expected 'no_failure', got {category!r}"
+
+    # technical_pipeline_status must also be 'pass' for a clean trace
+    stage_statuses: dict = {
+        "planner": {"stage_outcome": "passed", "ok": True},
+        "validation": {"stage_outcome": "passed", "ok": True},
+        "compile": {"stage_outcome": "passed", "ok": True},
+        "execute": {"stage_outcome": "passed", "ok": True},
+    }
+    tech_status = _classify_technical_pipeline_status(result, stage_statuses)
+    assert tech_status == "pass", f"Expected 'pass', got {tech_status!r}"
+
+    # user_visible_status must be 'pass' with no violations
+    narration_trace: dict = {}
+    uv_status = _classify_user_visible_status(result, narration_trace)
+    assert uv_status == "pass", f"Expected 'pass', got {uv_status!r}"
+
+
+def test_raw_leak_sanitized_user_visible_pass_with_sanitization() -> None:
+    """When raw response had policy violations but sanitizer cleaned them, user_visible_status='pass_with_sanitization'."""
+    result = _clean_result()
+    result.raw_leak_but_final_clean = True
+    result.sanitizer_effective = True
+
+    narration_trace = {
+        "raw_response_policy_violations": ["sql_exposure"],
+        "final_response_policy_violations": [],
+    }
+    uv_status = _classify_user_visible_status(result, narration_trace)
+    assert uv_status == "pass_with_sanitization", f"Expected 'pass_with_sanitization', got {uv_status!r}"
+
+    stage_statuses = {
+        "planner": {"stage_outcome": "passed", "ok": True},
+        "validation": {"stage_outcome": "passed", "ok": True},
+        "compile": {"stage_outcome": "passed", "ok": True},
+        "execute": {"stage_outcome": "passed", "ok": True},
+        "_flags": {"semantic_changed": False},
+    }
+    result.root_cause_category = "no_failure"
+    result.root_cause_stage = "none"
+    result.planner_ok = True
+    result.validation_ok = True
+    result.compile_ok = True
+    result.execute_ok = True
+    result.narration_ok = True
+    tech_status = _classify_technical_pipeline_status(result, stage_statuses)
+    assert tech_status == "degraded", f"Expected 'degraded', got {tech_status!r}"
+
+    # narration_raw_unsafe_final_safe must be True (mapped from raw_leak_but_final_clean)
+    assert result.raw_leak_but_final_clean is True
+
+
+def test_planner_parse_fail_not_executable() -> None:
+    """When planner produces a parse error and repair does not recover, planner_output_usable=False and technical_pipeline_status='fail'."""
+    result = _base_result()
+    result.structured_parse_error = True
+    result.compile_ok = False
+    result.planner_ok = False
+
+    stage_statuses = {
+        "planner": {"stage_outcome": "failed", "ok": False, "note": "parse error"},
+        "compile": {"stage_outcome": "skipped", "ok": False, "note": "skipped due to upstream fail"},
+    }
+
+    usable = _classify_planner_output_usable(result, stage_statuses)
+    assert usable is False, f"Expected False, got {usable!r}"
+
+    tech_status = _classify_technical_pipeline_status(result, stage_statuses)
+    assert tech_status == "fail", f"Expected 'fail', got {tech_status!r}"
+
+
+def test_semantic_sql_shape_change_attributed() -> None:
+    """When semantic_normalization diff changes a shape field, sql_shape_change_stage='semantic' with a reason."""
+    trace = {
+        "normalize": {},
+        "repair": {},
+        "semantic_normalization": {
+            "diff": {
+                "changed_fields": ["filters"],
+                "changed": {
+                    "filters": {"before": [], "after": [{"column": "STATUS", "op": "=", "value": "A"}]}
+                },
+                "added": {},
+                "removed": {},
+            }
+        },
+        "canonicalization": {},
+    }
+    stage, reason, summary = _classify_sql_shape_change(trace)
+    assert stage == "semantic", f"Expected 'semantic', got {stage!r}"
+    assert reason == "semantic_filter_override", f"Expected 'semantic_filter_override', got {reason!r}"
+    assert summary is not None and "filters" in summary
+
+
+def test_semantic_filter_override_sets_changed_sql_shape_true() -> None:
+    """Semantic filter override must set changed_sql_shape=True when SQL is executable/comparable."""
+    trace = {
+        "normalize": {"diff": {"changed_fields": []}},
+        "repair": {"diff": {"changed_fields": []}},
+        "semantic_normalization": {
+            "diff": {
+                "changed_fields": ["filters"],
+                "changed": {
+                    "filters": {
+                        "before": [{"column": "authorization_status", "op": "=", "value": "APPROVAL_PENDING"}],
+                        "after": [{"column": "authorization_status", "op": "!=", "value": "APPROVED"}],
+                    }
+                },
+            }
+        },
+        "canonicalization": {"diff": {"changed_fields": []}},
+        "compile": {"stage_outcome": "passed", "sql": "select 1 from dual"},
+    }
+    diff_flags = _compute_diff_flags(trace, narration=None)
+    assert diff_flags["sql_shape_comparable"] is True
+    assert diff_flags["changed_sql_shape"] is True
+
+
+def test_no_sql_shape_change_uses_none_enum() -> None:
+    """No SQL-shape diff must return controlled enum values (none/no_change)."""
+    trace = {
+        "normalize": {"diff": {"changed_fields": ["semantic_intent"]}},
+        "repair": {"diff": {"changed_fields": []}},
+        "semantic_normalization": {"diff": {"changed_fields": ["root_entity"]}},
+        "canonicalization": {"diff": {"changed_fields": []}},
+    }
+    stage, reason, summary = _classify_sql_shape_change(trace)
+    assert stage == "none", f"Expected 'none', got {stage!r}"
+    assert reason == "no_change", f"Expected 'no_change', got {reason!r}"
+    assert summary is None
+
+
+def test_semantic_enrichment_only_is_not_rescue() -> None:
+    """Semantic enrichment-only updates must not be classified as semantic rescue."""
+    trace = {
+        "semantic_normalization": {
+            "diff": {
+                "changed_fields": ["root_entity", "semantic_intent"],
+                "changed": {
+                    "root_entity": {"before": None, "after": "employee"},
+                    "semantic_intent": {"before": "list", "after": "list"},
+                },
+            }
+        }
+    }
+    stage_statuses = {
+        "compile": {"stage_outcome": "passed", "ok": True},
+    }
+    applied, was_executable = _classify_semantic_rescue(trace, stage_statuses)
+    assert applied is False
+    assert was_executable is None
+
+    trace_for_diff = {
+        "normalize": {"diff": {"changed_fields": []}},
+        "repair": {"diff": {"changed_fields": []}},
+        "semantic_normalization": trace["semantic_normalization"],
+        "canonicalization": {"diff": {"changed_fields": []}},
+        "compile": {"stage_outcome": "passed", "sql": "select 1 from dual"},
+    }
+    diff_flags = _compute_diff_flags(trace_for_diff, narration=None)
+    assert diff_flags["changed_sql_shape"] is False
+
+
+def test_no_unknown_in_successful_traces() -> None:
+    """root_cause_category must never be 'unknown' for traces that succeeded."""
+    successful_statuses = ["success", "empty_result"]
+    for status in successful_statuses:
+        result = _clean_result()
+        result.status = status
+        result.raw_status = status
+        trace: dict = {
+            "narration": {},
+            "validation": {"ok": True},
+            "compile": {"ok": True},
+            "execute": {"ok": True},
+            "repair": {},
+            "semantic_normalization": {},
+            "canonicalization": {},
+            "planner": {"structured_ok": True},
+        }
+        category, _ = _classify_root_cause_category(result, trace)
+        assert category != "unknown", (
+            f"root_cause_category='unknown' should never appear for status={status!r}, got {category!r}"
+        )

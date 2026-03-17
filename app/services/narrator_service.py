@@ -16,6 +16,7 @@ Even when the LLM ignores prompt constraints, ``_strip_leakage`` removes:
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -94,10 +95,22 @@ class NarratorService:
     def __init__(self, llm: LLMProvider) -> None:
         self._llm = llm
         self._last_trace: dict[str, Any] | None = None
+        self._last_trace_by_task: dict[int, dict[str, Any] | None] = {}
+
+    def _set_last_trace(self, trace: dict[str, Any] | None) -> None:
+        self._last_trace = trace
+        task = asyncio.current_task()
+        if task is not None:
+            self._last_trace_by_task[id(task)] = trace
+            if len(self._last_trace_by_task) > 2048:
+                self._last_trace_by_task.clear()
 
     @property
     def last_trace(self) -> dict[str, Any] | None:
         """Return narrator debug metadata from the most recent call."""
+        task = asyncio.current_task()
+        if task is not None and id(task) in self._last_trace_by_task:
+            return self._last_trace_by_task[id(task)]
         return self._last_trace
 
     # -- Public API --------------------------------------------------------
@@ -132,22 +145,43 @@ class NarratorService:
 
     async def _generate(self, user_message: str, summary: str) -> str:
         prompt = build_narrator_prompt(user_message, summary)
-        self._last_trace = {
+        self._set_last_trace({
             "user_message": user_message,
             "summary": summary,
             "prompt_length": len(prompt),
             "full_prompt_text": prompt,
             "raw_response": None,
             "final_response": None,
+            "narration_shape": self._infer_shape_from_summary(summary),
+            "narration_business_value_score": 0,
+            "narration_genericness_flag": False,
+            "raw_narration_quality": "unknown",
+            "final_narration_quality": "unknown",
+            "narrator_used_fallback_template": False,
+            "prompt_contract_violated": False,
             "error": None,
-        }
+        })
         try:
             raw = await self._llm.generate_text(prompt)
             cleaned = self._strip_leakage(raw)
+            contract_violation = bool(_THINK_BLOCK_RE.search(raw or "") or _REASONING_HEADER_RE.search(raw or ""))
+            generic = self._is_generic_low_value(cleaned)
+            if generic:
+                cleaned = self._fallback_template(
+                    shape=str(self._last_trace.get("narration_shape") or "listing"),
+                    summary=summary,
+                )
+            quality_score = self._business_value_score(cleaned, summary)
             self._last_trace.update(
                 {
                     "raw_response": raw,
                     "final_response": cleaned,
+                    "narration_business_value_score": quality_score,
+                    "narration_genericness_flag": generic,
+                    "raw_narration_quality": "poor" if contract_violation else "acceptable",
+                    "final_narration_quality": "high" if quality_score >= 70 else ("medium" if quality_score >= 40 else "low"),
+                    "narrator_used_fallback_template": generic,
+                    "prompt_contract_violated": contract_violation,
                 }
             )
             return cleaned
@@ -220,22 +254,110 @@ class NarratorService:
     # -- Summary builders (no raw SQL, no restricted values) ----------------
 
     @staticmethod
+    def _infer_shape_from_summary(summary: str) -> str:
+        lowered = (summary or "").lower()
+        if "açıklama gerekli" in lowered:
+            return "clarification"
+        if "çalıştırma hatası" in lowered or "doğrulama hatası" in lowered:
+            return "error"
+        if "satır_sayısı=0" in lowered or "satır sayısı: 0" in lowered:
+            return "empty_result"
+        if "shape=scalar_metric" in lowered:
+            return "scalar_metric"
+        if "shape=grouped_aggregate" in lowered:
+            return "grouped_aggregate"
+        return "listing"
+
+    @staticmethod
+    def _fallback_template(*, shape: str, summary: str) -> str:
+        if shape == "empty_result":
+            return "Kriterlere uygun kayıt bulunamadı."
+        if shape in {"grouped_aggregate", "scalar_metric"}:
+            return "Sorgu sonucu metrik bazında üretildi. Özet değerleri üstteki kriterlere göre hazır."
+        if shape == "clarification":
+            m = re.search(r"Mesaj:\s*(.+)$", summary)
+            if m:
+                return m.group(1).strip()
+            return "İstenen sonucu üretebilmem için tarih aralığı veya metrik boyutunu netleştirmeniz gerekiyor."
+        return "Sorgu tamamlandı. Uygun kayıtlar listelendi ve özetlendi."
+
+    @staticmethod
+    def _is_generic_low_value(text: str) -> bool:
+        lowered = (text or "").strip().lower()
+        if not lowered:
+            return True
+        if re.search(r"\b\d+\b", lowered) and "kayıt" in lowered:
+            return False
+        generic_patterns = (
+            "sorgu işlendi",
+            "işlem tamamlandı",
+            "sonuç hazırlandı",
+            "kayıtlar listelendi",
+        )
+        if any(p in lowered for p in generic_patterns):
+            return True
+        return len(lowered.split()) <= 4
+
+    @staticmethod
+    def _business_value_score(text: str, summary: str) -> int:
+        score = 20
+        lowered = (text or "").lower()
+        if re.search(r"\b\d+\b", text or ""):
+            score += 20
+        if any(k in lowered for k in ("kayıt", "metrik", "kırılım", "filtre", "sıralama")):
+            score += 20
+        if "shape=" in (summary or ""):
+            score += 20
+        if not NarratorService._is_generic_low_value(text):
+            score += 20
+        return max(0, min(100, score))
+
+    @staticmethod
     def _build_success_summary(result: OrchestrationResult) -> str:
-        parts: list[str] = ["Sorgu başarılı."]
+        if not result.execution_result:
+            return "status=success\nshape=listing\nsatır_sayısı=0"
 
-        if result.compiled_query:
-            parts.append(f"Tablo: {result.compiled_query.table}.")
+        er = result.execution_result
+        shape = "listing"
+        if er.status == ExecutionStatus.EMPTY or er.row_count == 0:
+            shape = "empty_result"
+        elif result.compiled_query and result.compiled_query.debug_plan:
+            plan = result.compiled_query.debug_plan
+            if plan.aggregations and plan.group_by:
+                shape = "grouped_aggregate"
+            elif plan.aggregations:
+                shape = "scalar_metric"
 
-        if result.execution_result:
-            er = result.execution_result
-            if er.status == ExecutionStatus.EMPTY or er.row_count == 0:
-                parts.append("Satır sayısı: 0. Sonuç bulunamadı.")
-            else:
-                parts.append(f"Satır sayısı: {er.row_count}.")
-            if er.columns:
-                parts.append(f"Kolonlar: {', '.join(er.columns)}.")
+        selected_columns = list(result.compiled_query.selected_columns if result.compiled_query else [])
+        human_fields = [
+            c for c in selected_columns
+            if not c.lower().endswith("id") and "_id" not in c.lower()
+        ][:6]
+        if not human_fields:
+            human_fields = selected_columns[:4]
 
-        return " ".join(parts)
+        plan = result.compiled_query.debug_plan if result.compiled_query else None
+        filters = []
+        sort = []
+        row_limit_hit = False
+        if plan is not None:
+            filters = [f"{f.column} {f.op.value}" for f in plan.filters[:4]]
+            sort = [f"{o.column} {o.direction.value}" for o in plan.order_by[:3]]
+            row_limit_hit = bool(er.row_count >= plan.limit)
+
+        payload = [
+            "Sorgu başarılı.",
+            f"Satır sayısı: {er.row_count}.",
+            "status=success",
+            f"shape={shape}",
+            f"satır_sayısı={er.row_count}",
+            f"seçili_alanlar={','.join(selected_columns[:8])}",
+            f"iş_alanları={','.join(human_fields)}",
+            f"uygulanan_filtreler={'; '.join(filters) if filters else 'yok'}",
+            f"uygulanan_sıralama={'; '.join(sort) if sort else 'yok'}",
+            f"row_limit_hit={'evet' if row_limit_hit else 'hayır'}",
+        ]
+        return "\n".join(payload)
 
     @staticmethod
     def _build_validation_error_summary(validation: ValidationResult) -> str:

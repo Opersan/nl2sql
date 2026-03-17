@@ -931,45 +931,49 @@ class MockLLMProvider(LLMProvider):
 
     async def generate_text(self, prompt: str) -> str:
         folded = casefold_tr(prompt)
+        summary_folded = folded.split("sonuç özeti:")[-1] if "sonuç özeti:" in folded else folded
+        summary_folded = summary_folded.split("yanıtını ver:")[0]
 
         # Empty result
-        if "satır sayısı: 0" in folded:
+        if "satır sayısı: 0" in summary_folded or "satır_sayısı=0" in summary_folded:
             self.last_text_response_text = "Aradığınız kriterlere uygun kayıt bulunamadı."
             return self.last_text_response_text
 
         # Success with row count – check BEFORE error patterns because
         # the narrator system template contains words like "Kısıtlı" in
         # its instructions which would otherwise false-match.
-        match = re.search(r"satır sayısı:\s*(\d+)", folded)
+        match = re.search(r"satır sayısı:\s*(\d+)", summary_folded)
+        if not match:
+            match = re.search(r"satır_sayısı=(\d+)", summary_folded)
         if match:
             self.last_text_response_text = f"{match.group(1)} kayıt bulundu."
             return self.last_text_response_text
 
         # Clarification needed — checked before restriction errors to avoid
         # column descriptions (containing "kısıtlı") triggering wrong branch.
-        if "açıklama gerekli" in folded or "clarification" in folded or "lütfen belirtin" in folded:
+        if "açıklama gerekli" in summary_folded or "clarification" in summary_folded or "lütfen belirtin" in summary_folded:
             self.last_text_response_text = "Hangi alanları görmek istediğinizi belirtir misiniz?"
             return self.last_text_response_text
 
         # Restricted-column validation error
-        if "kısıtlı" in folded or "erişime kapalı" in folded:
+        if "kısıtlı" in summary_folded or "erişime kapalı" in summary_folded:
             self.last_text_response_text = (
                 "İstenen alan erişime kapalı olduğu için sorgu çalıştırılamadı."
             )
             return self.last_text_response_text
 
         # General validation error
-        if "doğrulama hatası" in folded:
+        if "doğrulama hatası" in summary_folded:
             self.last_text_response_text = "Sorgunuzda bir doğrulama hatası oluştu."
             return self.last_text_response_text
 
         # Clarification needed (fallback)
-        if "açıklama" in folded and "gerekl" in folded:
+        if "açıklama" in summary_folded and "gerekl" in summary_folded:
             self.last_text_response_text = "Hangi alanları görmek istediğinizi belirtir misiniz?"
             return self.last_text_response_text
 
         # Execution error
-        if "çalıştırma hatası" in folded:
+        if "çalıştırma hatası" in summary_folded:
             self.last_text_response_text = "Sorgu çalıştırılırken bir hata oluştu."
             return self.last_text_response_text
 

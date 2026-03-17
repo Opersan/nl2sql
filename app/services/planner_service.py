@@ -40,6 +40,7 @@ intent translation while validation enforces access control.
 
 from __future__ import annotations
 
+import asyncio
 from functools import lru_cache
 import re
 from typing import Any
@@ -56,6 +57,10 @@ from app.providers.llm.prompts import (
 )
 from app.services.catalog_service import CatalogService
 from app.services.document_retrieval_service import DocumentRetrievalService
+from app.services.intent_guard import (
+    build_filter_loss_guard_decision,
+    derive_confidence_band,
+)
 from app.services.plan_normalizer import (
     NormalizationStats,
     canonicalize_columns,
@@ -93,6 +98,15 @@ class PlannerService:
         self._repair_engine = QueryPlanRepairEngine()
         self._last_repair_result: RepairResult | None = None
         self._last_trace: dict[str, Any] | None = None
+        self._last_trace_by_task: dict[int, dict[str, Any] | None] = {}
+
+    def _set_last_trace(self, trace: dict[str, Any] | None) -> None:
+        self._last_trace = trace
+        task = asyncio.current_task()
+        if task is not None:
+            self._last_trace_by_task[id(task)] = trace
+            if len(self._last_trace_by_task) > 2048:
+                self._last_trace_by_task.clear()
 
     @property
     def last_canonicalization_stats(self) -> NormalizationStats | None:
@@ -116,6 +130,9 @@ class PlannerService:
     @property
     def last_trace(self) -> dict[str, Any] | None:
         """Return planner debug metadata from the most recent ``plan()`` call."""
+        task = asyncio.current_task()
+        if task is not None and id(task) in self._last_trace_by_task:
+            return self._last_trace_by_task[id(task)]
         return self._last_trace
 
     async def plan(self, user_message: str) -> QueryPlan:
@@ -135,7 +152,7 @@ class PlannerService:
         Raises ``PlannerError`` when the LLM fails or returns unparseable
         output.
         """
-        self._last_trace = {
+        self._set_last_trace({
             "user_message": user_message,
             "policy_guard": {"triggered": False, "reason": None},
             "retrieval": None,
@@ -147,7 +164,7 @@ class PlannerService:
             "semantic": None,
             "canonicalize": None,
             "final_plan": None,
-        }
+        })
 
         # 0. Minimal sensitive-intent guard (no planner guesswork)
         if self._is_sensitive_or_invalid_request(user_message):
@@ -203,6 +220,7 @@ class PlannerService:
             "parse_error": getattr(self._llm, "last_structured_parse_error", None),
         }
         self._last_trace["parsed_plan"] = self._snapshot_plan(query_plan)
+        planner_plan_snapshot = query_plan
 
         # Post-plan normalization (limit clamping, clarification cleanup)
         normalize_before = query_plan
@@ -259,6 +277,63 @@ class PlannerService:
             "after": self._snapshot_plan(query_plan),
             "stats": self._last_canonicalization_stats.as_dict() if self._last_canonicalization_stats else {},
         }
+
+        # Deterministic filter-intent preservation guard (false-success prevention)
+        guard = build_filter_loss_guard_decision(
+            user_message=user_message,
+            planner_plan=planner_plan_snapshot,
+            final_plan=query_plan,
+        )
+        if guard["success_blocked_by_filter_loss"]:
+            missing_dims = list(dict.fromkeys(guard["clarification_missing_dimensions"]))
+            dim_label = ", ".join(missing_dims) if missing_dims else "filtre boyutu"
+            query_plan = query_plan.model_copy(
+                update={
+                    "intent": "clarification_required",
+                    "needs_clarification": True,
+                    "clarification_message": (
+                        f"Sorguda {dim_label} net ama plan bu filtreyi güvenilir şekilde koruyamadı. "
+                        "Lütfen ilgili filtreyi açıkça belirtin."
+                    ),
+                    "select_columns": [],
+                    "aggregations": [],
+                    "group_by": [],
+                    "order_by": [],
+                }
+            )
+
+        plan_band, plan_conf = derive_confidence_band(
+            needs_clarification=planner_plan_snapshot.needs_clarification,
+            requested_signals=guard["requested_filter_signals"],
+            coverage=guard["planner_filter_coverage"],
+        )
+        sem_band, sem_conf = derive_confidence_band(
+            needs_clarification=query_plan.needs_clarification,
+            requested_signals=guard["requested_filter_signals"],
+            coverage=guard["final_filter_coverage"],
+        )
+
+        self._last_trace["intent_guard"] = {
+            "requested_filter_signals": guard["requested_filter_signals"],
+            "planner_filter_coverage": guard["planner_filter_coverage"],
+            "final_filter_coverage": guard["final_filter_coverage"],
+            "false_success_risk": guard["false_success_risk"],
+            "success_blocked_by_filter_loss": guard["success_blocked_by_filter_loss"],
+            "clarification_reason_code": (
+                guard["clarification_reason_code"]
+                or ("planner_clarification" if query_plan.needs_clarification else None)
+            ),
+            "clarification_missing_dimensions": guard["clarification_missing_dimensions"],
+            "clarification_was_avoidable": bool(
+                planner_plan_snapshot.needs_clarification
+                and not query_plan.needs_clarification
+            ),
+            "plan_confidence": plan_conf,
+            "semantic_confidence": sem_conf,
+            "confidence_band": sem_band,
+            "plan_confidence_band": plan_band,
+        }
+
         self._last_trace["final_plan"] = self._snapshot_plan(query_plan)
 
         logger.info(

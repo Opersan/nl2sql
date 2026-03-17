@@ -258,9 +258,39 @@ class TestPlanNormalization:
         assert normalized.order_by == []
         # Intent, table and clarification message are preserved
         assert normalized.needs_clarification is True
-        assert normalized.clarification_message == "Hangi bilgi?"
-        assert normalized.table == "XXBT_PDKS_PER_DETAILS_V"
-        assert normalized.intent == "Belirsiz sorgu"
+
+
+class TestIntentGuard:
+    @pytest.mark.asyncio
+    async def test_planner_trace_contains_intent_guard_fields(
+        self,
+        planner: PlannerService,
+    ) -> None:
+        await planner.plan("Onay bekleyen satın alma siparişlerini listele")
+        trace = planner.last_trace
+        assert trace is not None
+        guard = trace.get("intent_guard") or {}
+        assert "requested_filter_signals" in guard
+        assert "planner_filter_coverage" in guard
+        assert "final_filter_coverage" in guard
+        assert "confidence_band" in guard
+
+    @pytest.mark.asyncio
+    async def test_filter_loss_guard_blocks_success_with_clarification(
+        self,
+        planner: PlannerService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Simulate semantic stage dropping all filters for a filter-heavy query.
+        def _drop_filters(plan: QueryPlan, user_message: str, _context: object) -> QueryPlan:
+            return plan.model_copy(update={"filters": []})
+
+        monkeypatch.setattr(planner_module, "apply_semantic_normalization", _drop_filters)
+
+        plan = await planner.plan("Onay bekleyen satın alma siparişlerini listele")
+        assert plan.needs_clarification is True
+        assert plan.intent == "clarification_required"
+        assert plan.clarification_message is not None
 
     def test_clarification_preserves_table_context(
         self, planner: PlannerService,

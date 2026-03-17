@@ -80,6 +80,22 @@ class TestSuccessNarration:
         assert trace["prompt_length"] > 0
         assert trace["raw_response"] is not None
         assert trace["final_response"] == text
+        assert "narration_shape" in trace
+        assert "narration_business_value_score" in trace
+        assert "final_narration_quality" in trace
+
+    @pytest.mark.asyncio
+    async def test_generic_output_uses_shape_fallback_template(self, narrator: NarratorService) -> None:
+        async def _generic(_prompt: str) -> str:
+            return "Sorgu işlendi."
+
+        narrator._llm.generate_text = _generic  # type: ignore[assignment]  # noqa: SLF001
+        result = _success_result(row_count=4)
+        text = await narrator.narrate_success("Aktif çalışanları listele", result)
+        trace = narrator.last_trace or {}
+
+        assert "Sorgu işlendi" not in text
+        assert trace.get("narrator_used_fallback_template") is True
 
 
 # ---------------------------------------------------------------------------
