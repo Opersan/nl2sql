@@ -1,267 +1,341 @@
 # NL2SQL Assistant
 
-**Sprint 3.0 – Metadata Ingestion, Schema Retrieval & Oracle Adapter Skeleton**
+Doğal dil sorgularını Oracle uyumlu SQL'e dönüştüren, FastAPI ile servis edilen ve LLM destekli planlama katmanı içeren bir NL2SQL asistanı.
 
-Doğal dil sorgularını Oracle uyumlu SQL'e dönüştüren asistan sistemi.
-Sprint 1 deterministik çekirdek + Sprint 2 LLM planner/narrator + Sprint 2.1 hardening + Sprint 3 metadata pipeline & Oracle adapter.
+Bu repo bugün deterministik validation/compiler/executor çekirdeğini, LLM planner ve narrator akışını, metadata ve document retrieval katmanlarını, semantic registry tabanlı plan normalizasyonunu ve kapsamlı evaluation script'lerini birlikte içerir.
 
----
+## Öne Çıkan Özellikler
 
-## Proje Amacı
+- Deterministik pipeline: validation -> SQL compilation -> execution
+- LLM planner ve narrator desteği
+- FastAPI endpoint'leri: `/health`, `/chat`, `/v1/chat/completions`
+- Mock ve OpenAI-compatible LLM provider desteği
+- Metadata ingestion ve schema retrieval desteği
+- Document retrieval desteği (JSONL corpus + in-memory keyword retriever)
+- Semantic registry tabanlı intent normalizasyonu ve join-path yönlendirme
+- Query plan repair / expansion katmanı
+- Execution risk ve intent guard kontrolleri
+- Oracle executor adapter'ı + SQLGuard ile read-only enforcement
+- Geniş test seti ve eval script'leri
 
-Doğal dil sorgularını Oracle uyumlu SQL'e dönüştüren bir asistan sistemi inşa etmek.
+## Mevcut Durum
 
-- **Sprint 1**: Deterministik çekirdek (validation, SQL compilation, mock execution)
-- **Sprint 2**: LLM planner, narrator, FastAPI endpoints, session management
-- **Sprint 2.1**: Hardening / contract cleanup
-- **Sprint 3**: Metadata ingestion pipeline, schema retrieval, Oracle executor skeleton (bu sürüm)
-
-## Sprint Durumu
-
-| Bileşen | Sprint | Durum |
+| Alan | Durum | Not |
 |---|---|---|
-| Domain modelleri (QueryPlan, Catalog, Execution) | 1 | ✅ |
-| Catalog service + in-memory provider | 1 | ✅ |
-| Validation service | 1 | ✅ |
-| SQL compiler (Oracle ROWNUM, bind params) | 1 | ✅ |
-| Mock executor (in-memory dataset) | 1 | ✅ |
-| Orchestrator (validation → compile → execute) | 1 | ✅ |
-| Türkçe case-insensitive yardımcılar | 1 | ✅ |
-| LLM planner (mock + OpenAI uyumlu) | 2 | ✅ |
-| Narrator servisi (sonuç → Türkçe yanıt) | 2 | ✅ |
-| FastAPI endpoints (/chat, /health, /v1/chat/completions) | 2 | ✅ |
-| Session management (in-memory) | 2 | ✅ |
-| Post-plan normalization & safety checks | 2.1 | ✅ |
-| Retrieval-ready catalog context interface | 2.1 | ✅ |
-| Response contract hardening (ChatStatus Literal) | 2.1 | ✅ |
-| Oracle ROWNUM regression tests | 2.1 | ✅ |
-| Clarification plan contract cleanup | 2.1 | ✅ |
-| Negative path & edge case tests | 2.1 | ✅ |
-| Oracle metadata-RAG retrieval | 3 | ✅ (iskelet) |
-| vLLM / gerçek LLM entegrasyonu | 3 | ✅ (interface hazır) |
-| Oracle DB executor (gerçek bağlantı) | 3 | ✅ (iskelet + SQLGuard) |
-| Metadata ingestion pipeline (JSON/CSV) | 3 | ✅ |
-| Schema retrieval (keyword-based) | 3 | ✅ |
-| Çoklu tablo & JOIN desteği | 3 | 🔲 |
+| Deterministik domain modelleri ve validation | ✅ | `QueryPlan`, catalog, execution modelleri aktif |
+| Oracle uyumlu SQL compiler | ✅ | `ROWNUM` tabanlı pagination, named bind params |
+| Mock executor | ✅ | Geliştirme ve test için aktif |
+| FastAPI uygulaması | ✅ | `/health`, `/chat`, `/v1/chat/completions` |
+| Session management | ✅ | In-memory |
+| LLM planner / narrator | ✅ | Mock + OpenAI-compatible provider |
+| Metadata ingestion | ✅ | JSON ve CSV yükleme |
+| Schema retrieval | ✅ | In-memory keyword/alias scoring |
+| Document retrieval | ✅ | JSONL loader + in-memory retrieval |
+| Semantic normalization | ✅ | Registry tabanlı intent, root entity ve join path düzeltmeleri |
+| Query plan repair | ✅ | Özellikle çoklu tablo planlarını toparlamak için |
+| JOIN compilation | ✅ | Compiler ve testler çoklu tablo akışlarını kapsıyor |
+| Oracle executor adapter | ✅ | Driver, credential ve pool init gerektirir |
+| Streaming API | ❌ | Non-streaming only |
 
-## Klasör Yapısı
+## Proje Yapısı
 
-```
+Ana klasörler ve önemli modüller:
+
+```text
 nl2sql/
-├── pyproject.toml
-├── README.md
-└── app/
-    ├── core/
-    │   ├── config.py          # Pydantic settings + APP_VERSION
-    │   ├── exceptions.py      # Özel exception sınıfları (+ MetadataLoadError, RetrievalError)
-    │   ├── logging.py         # Logger setup
-    │   └── types.py           # ChatStatus, MessageRole, Row, ParamMap
-    ├── domain/
-    │   ├── catalog_models.py  # Table / Column metadata
-    │   ├── execution_models.py # CompiledQuery, ExecutionResult, ValidationResult
-    │   ├── query_plan.py      # QueryPlan, FilterSpec, AggregationSpec, …
-    │   └── models.py          # Session, ChatResult + re-exports
-    ├── services/
-    │   ├── catalog_service.py # Catalog lookup + retrieval integration (Sprint 3)
-    │   ├── metadata_ingestion_service.py # MetadataBundle → CatalogSnapshot transform
-    │   ├── schema_retrieval_service.py   # High-level retrieval API
-    │   ├── planner_service.py # NL → QueryPlan (+ post-plan normalization)
-    │   ├── narrator_service.py# OrchestrationResult → Türkçe yanıt
-    │   ├── validation_service.py # Deterministik plan validasyonu
-    │   ├── sql_compiler.py    # Oracle SQL üretici (ROWNUM only)
-    │   ├── session_service.py # In-memory session + clarification tracking
-    │   └── orchestrator.py    # Pipeline zincirleri (Orchestrator + ChatOrchestrator)
-    ├── providers/
-    │   ├── catalog/
-    │   │   ├── base.py        # Abstract CatalogProvider
-    │   │   └── in_memory.py   # Demo employee tablosu
-    │   ├── executor/
-    │   │   ├── base.py        # Abstract ExecutorProvider
-    │   │   ├── mock_executor.py # In-memory mock
-    │   │   ├── oracle_executor.py # Oracle DB skeleton (SQLGuard entegre)
-    │   │   └── sql_guard.py   # Read-only SQL enforcement
-    │   ├── llm/
-    │   │   ├── base.py        # Abstract LLMProvider
-    │   │   ├── mock_llm.py    # Deterministic canned responses
-    │   │   ├── openai_compatible.py # vLLM / OpenAI API client
-    │   │   └── prompts.py     # Planner & narrator prompt templates
-    │   ├── metadata/
-    │   │   ├── base.py        # Abstract MetadataLoader
-    │   │   ├── models.py      # RawTableDef, RawColumnDef, MetadataBundle
-    │   │   └── file_loader.py # JSON & CSV file-based loaders
-    │   └── retrieval/
-    │       ├── base.py        # Abstract SchemaRetriever
-    │       └── in_memory_retriever.py # Keyword/alias scoring retriever
-    ├── api/
-    │   ├── main.py            # FastAPI app factory
-    │   ├── deps.py            # Dependency injection (retrieval + executor wiring)
-    │   ├── routes_chat.py     # /chat, /v1/chat/completions
-    │   ├── routes_health.py   # /health
-    │   └── schemas.py         # Request/response models (Pydantic v2)
-    ├── utils/
-    │   ├── turkish.py         # Türkçe casefold, normalize
-    │   └── text_normalization.py # Whitespace, identifier cleanup
-    └── tests/
-        ├── test_planner_models.py     # QueryPlan, FilterSpec, AggregationSpec
-        ├── test_planner_service.py    # Planner + normalization + clarification
-        ├── test_validation_service.py # Validation rules & contracts
-        ├── test_sql_compiler.py       # SQL codegen + ROWNUM regression
-        ├── test_mock_executor.py      # Mock executor contract fidelity
-        ├── test_orchestrator_smoke.py # Sprint 1 pipeline E2E
-        ├── test_orchestrator_llm_flow.py # Sprint 2 LLM flow E2E
-        ├── test_narrator_service.py   # Narrator + no-fabrication contract
-        ├── test_session_service.py    # Session + clarification tracking
-        ├── test_api_smoke.py          # API + response contract + ROWNUM
-        ├── test_metadata_ingestion.py # JSON/CSV loader + ingestion pipeline
-        ├── test_schema_retrieval.py   # InMemoryRetriever + retrieval service
-        ├── test_oracle_executor.py    # SQLGuard + Oracle skeleton
-        └── test_config_sprint3.py     # Sprint 3 config defaults
+├── app/
+│   ├── api/
+│   │   ├── main.py                 # FastAPI app factory + startup wiring
+│   │   ├── deps.py                 # Provider/orchestrator dependency wiring
+│   │   ├── routes_chat.py          # /chat ve /v1/chat/completions
+│   │   ├── routes_health.py        # /health
+│   │   └── schemas.py              # API request/response modelleri
+│   ├── core/
+│   │   ├── config.py               # Environment tabanlı ayarlar
+│   │   ├── exceptions.py           # Domain ve execution exception'ları
+│   │   ├── logging.py              # Logger setup
+│   │   └── types.py                # Ortak tipler ve status alanları
+│   ├── domain/
+│   │   ├── catalog_models.py       # Table/column/catalog modelleri
+│   │   ├── execution_models.py     # Validation/execution/compile sonuç modelleri
+│   │   ├── models.py               # Session/chat modelleri
+│   │   ├── query_plan.py           # Planner çıktısı ve query AST
+│   │   └── semantic_models.py      # Semantic registry modelleri
+│   ├── providers/
+│   │   ├── catalog/                # Catalog provider'lar
+│   │   ├── documents/              # JSONL document corpus loader/modelleri
+│   │   ├── executor/               # Mock ve Oracle executor + SQLGuard
+│   │   ├── llm/                    # Mock ve OpenAI-compatible LLM provider
+│   │   ├── metadata/               # JSON/CSV metadata loader'lar
+│   │   └── retrieval/              # Schema ve document retriever'lar
+│   ├── services/
+│   │   ├── catalog_service.py
+│   │   ├── document_retrieval_service.py
+│   │   ├── execution_risk.py
+│   │   ├── intent_guard.py
+│   │   ├── metadata_ingestion_service.py
+│   │   ├── narrator_service.py
+│   │   ├── orchestrator.py
+│   │   ├── planner_service.py
+│   │   ├── plan_normalizer.py
+│   │   ├── query_plan_repair.py
+│   │   ├── registry_validator.py
+│   │   ├── schema_retrieval_service.py
+│   │   ├── semantic_planning.py
+│   │   ├── session_service.py
+│   │   ├── sql_compiler.py
+│   │   └── validation_service.py
+│   ├── tests/                      # Pytest testleri
+│   └── utils/                      # Türkçe normalize/casefold yardımcıları
+├── data/                           # Eval datasetleri, semantic registry, örnek metadata
+├── docs/                           # Runbook ve teknik dökümanlar
+├── results/                        # Eval çıktıları
+├── scripts/                        # Smoke/eval/doğrulama scriptleri
+└── pyproject.toml
 ```
+
+## Mimari Akış
+
+```text
+User message
+  -> PlannerService
+  -> semantic normalization / repair
+  -> ValidationService
+  -> SQLCompiler
+  -> ExecutorProvider
+  -> NarratorService
+  -> API response
+```
+
+Detaylar:
+
+- Planner doğrudan SQL üretmez; `QueryPlan` üretir.
+- Validation katmanı tablo, kolon, aggregate, restricted alan ve çoklu tablo tutarlılığını kontrol eder.
+- SQL compiler Oracle uyumlu SQL üretir ve `FETCH FIRST` yerine `ROWNUM` kullanır.
+- Execution katmanında `SQLGuard` ile read-only kontrol yapılır.
+- Semantic registry, planner çıktısını intent ve canonical join path bilgisiyle normalize eder.
+- Document ve schema retrieval planner prompt'una ek bağlam sağlar.
 
 ## Kurulum
 
+Gereksinimler:
+
+- Python 3.11+
+- İsteğe bağlı Oracle entegrasyonu için `oracledb`
+
+### Geliştirme kurulumu
+
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+```
+
+macOS / Linux:
+
 ```bash
-cd nl2sql
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-## Test Çalıştırma
+Oracle adapter'ını da kurmak isterseniz:
 
 ```bash
-# Tüm testler
-pytest -v
-
-# Tek modül
-pytest app/tests/test_orchestrator_smoke.py -v
-
-# Sadece compiler + ROWNUM regression
-pytest app/tests/test_sql_compiler.py -v
-
-# LLM flow testleri
-pytest app/tests/test_orchestrator_llm_flow.py -v
-
-# API smoke testleri
-pytest app/tests/test_api_smoke.py -v
+pip install -e ".[dev,oracle]"
 ```
 
-## Çalışma Akışı
+Not: `pytest` her ortamda PATH üzerinde olmayabilir. Bu durumda `.venv\Scripts\python -m pytest` kullanın.
 
-```
-Kullanıcı mesajı
-    │
-    ▼
-PlannerService.plan(message)
-    ├── CatalogService.get_relevant_context(message)  ← Sprint 3: RAG
-    ├── build_planner_prompt(message, context)
-    ├── LLMProvider.generate_structured(prompt, QueryPlan)
-    └── _normalize_plan(plan)  ← limit clamp + clarification cleanup
-    │
-    ▼
-QueryPlan
-    │  clarification? → NarratorService → ChatResult(status="clarification")
-    ▼
-Orchestrator.run_plan(plan)
-    │
-    ├── ValidationService.validate(plan)
-    │   ✓ tablo/kolon var mı, restricted kolon, aggregate consistency
-    │
-    ├── SQLCompiler.compile(plan, table)
-    │   ✓ Oracle ROWNUM syntax, bind params (:p1, :p2, …)
-    │
-    └── ExecutorProvider.execute(compiled_query)
-        ✓ Sprint 1-2: MockExecutor, Sprint 3: OracleExecutor
-    │
-    ▼
-NarratorService.narrate_*(message, result)
-    └── LLMProvider.generate_text(prompt)
-    │
-    ▼
-ChatResult(status, answer, plan, sql, rows_preview)
+## Uygulamayı Çalıştırma
+
+```bash
+uvicorn app.api.main:app --reload
 ```
 
-## Mimari Sözleşmeler
+Varsayılan endpoint'ler:
 
-### Oracle Legacy Uyumluluk
-- SQL compiler **yalnızca** `ROWNUM` subquery wrapping kullanır
-- `FETCH FIRST` / `OFFSET` syntax **kesinlikle** kullanılmaz
-- Limit değeri her zaman bind parameter olarak iletilir (`:pN`)
+- `GET /health`
+- `POST /chat`
+- `POST /v1/chat/completions`
 
-### Planner Kuralları
-- Planner **asla** SQL üretmez
-- Planner restricted field'ları **engellemez** (validation'ın görevi)
-- Clarification plan'lar query artifact'lardan temizlenir (normalization)
-- Limit, `settings.max_row_limit` ile clamp edilir
+### Örnek `/chat` isteği
 
-### Narrator Kuralları
-- Narrator veri **uydurmaz**
-- Raw SQL, trace veya restricted değerler **gösterilmez**
-- Boş sonuçlar açıkça belirtilir
+```json
+{
+  "session_id": "demo-session",
+  "message": "Son 30 gündeki satınalma siparişlerini listele"
+}
+```
 
-### Validation Contract
-- `resolved_table`: başarılı validation'da set edilir, başarısızda `None`
-- `failed_phase`: hangi aşamada hata oluştu (`ErrorPhase` enum)
-- Restricted column kontrolü tüm referans noktalarını kapsar (SELECT, WHERE, GROUP BY, ORDER BY, aggregate)
+### Örnek `/v1/chat/completions` isteği
 
-### API Response Statuses
-- `success`: Sorgu başarılı, `rows_preview` ve `sql` mevcut
-- `clarification`: Belirsiz sorgu, `plan.needs_clarification=True`
-- `validation_error`: Plan doğrulaması başarısız, `error_code` mevcut
-- `execution_error`: Compilation/execution hatası
+```json
+{
+  "model": "nl2sql",
+  "messages": [
+    {"role": "user", "content": "Aktif çalışanları listele"}
+  ]
+}
+```
 
-## Sprint 3 Hazırlık Interface'leri
+## Konfigürasyon
 
-| Interface | Dosya | Sprint 3 Durumu |
+Uygulama ayarları `app/core/config.py` içindeki `Settings` sınıfından ve `.env` / environment variable'larından yüklenir.
+
+Sık kullanılan ayarlar:
+
+| Değişken | Açıklama | Varsayılan |
 |---|---|---|
-| `CatalogService.get_relevant_context()` | catalog_service.py | ✅ Retrieval entegrasyonu (opsiyonel) |
-| `MetadataLoader` (ABC) | metadata/base.py | ✅ JSON + CSV loaders |
-| `SchemaRetriever` (ABC) | retrieval/base.py | ✅ InMemoryRetriever (keyword) |
-| `SchemaRetrievalService` | schema_retrieval_service.py | ✅ High-level retrieval API |
-| `MetadataIngestionService` | metadata_ingestion_service.py | ✅ RawTable → CatalogSnapshot |
-| `OracleExecutor` | executor/oracle_executor.py | ✅ Skeleton + SQLGuard |
-| `SQLGuard` | executor/sql_guard.py | ✅ Read-only enforcement |
-| `CatalogProvider` (ABC) | catalog/base.py | InMemory → OracleCatalogProvider (Sprint 3+) |
-| `ExecutorProvider` (ABC) | executor/base.py | Mock ↔ Oracle (config toggle) |
-| `LLMProvider` (ABC) | llm/base.py | Mock → vLLM/OpenAI (config toggle) |
+| `LLM_PROVIDER` | `mock` veya `openai_compatible` | `mock` |
+| `OPENAI_BASE_URL` | OpenAI-compatible endpoint | `http://10.50.110.11:8100/v1` |
+| `OPENAI_API_KEY` | API anahtarı | `EMPTY` |
+| `OPENAI_MODEL` | Model adı | config içindeki varsayılan |
+| `DEFAULT_ROW_LIMIT` | Varsayılan satır limiti | `100` |
+| `MAX_ROW_LIMIT` | Üst satır limiti | `1000` |
+| `ENABLE_SQL_IN_API_RESPONSE` | API response içinde SQL dön | `true` |
+| `MAX_ROWS_PREVIEW` | Response row preview limiti | `20` |
+| `ENABLE_METADATA_RETRIEVAL` | Metadata retrieval aç/kapat | `false` |
+| `RETRIEVAL_TOP_K` | Schema retrieval üst limiti | `5` |
+| `ENABLE_DOCUMENT_RETRIEVAL` | Document retrieval aç/kapat | `false` |
+| `DOCUMENT_CORPUS_PATH` | JSONL document corpus yolu | boş |
+| `DOCUMENT_LOADER_STRICT` | JSONL loader strict modu | `true` |
+| `RETRIEVAL_TOP_K_EXAMPLES` | Example retrieval limiti | `2` |
+| `PLANNER_PROMPT_MAX_CHARS` | Planner prompt bütçesi | `12000` |
+| `METADATA_SOURCE_PATH` | JSON/CSV metadata kaynağı | boş |
+| `METADATA_SOURCE_TYPE` | `json`, `csv`, `none` | `none` |
+| `ENABLE_ORACLE_EXECUTOR` | Oracle executor seçimi | `false` |
+| `ORACLE_DSN` | Oracle bağlantı bilgisi | boş |
+| `ORACLE_USER` | Oracle kullanıcı adı | boş |
+| `ORACLE_PASSWORD` | Oracle şifresi | boş |
+| `ORACLE_TIMEOUT` | Oracle sorgu timeout | `30` |
 
-## Sprint 3 Akış Diyagramı
+### Gerçek LLM provider örneği
 
-```
-JSON / CSV dosya
-    │
-    ▼
-MetadataLoader.load(path) → MetadataBundle
-    │
-    ▼
-MetadataIngestionService.ingest()
-    ├── transform(bundle)
-    └── _map_column_type()  ← Oracle precision stripping
-    │
-    ▼
-CatalogSnapshot  → InMemoryCatalogProvider (veya DB)
-    │
-    ▼
-InMemoryRetriever.retrieve(query, top_k)
-    ├── casefold_tr + token scoring
-    └── tablo adı (+10), alias (+8), desc (+5), kolon (+3/+2/+1)
-    │
-    ▼
-SchemaRetrievalService.retrieve_context()
-    │
-    ▼
-CatalogService.get_relevant_context()  ← planner buradan alır
-    │
-    ▼
-PlannerService.plan() → QueryPlan
-    │
-    ▼
-SQLCompiler → SQLGuard → OracleExecutor (veya MockExecutor)
+Windows PowerShell:
+
+```powershell
+$env:LLM_PROVIDER='openai_compatible'
+$env:OPENAI_BASE_URL='http://10.50.110.11:8100/v1'
+$env:OPENAI_MODEL='Qwen/Qwen3.5-122B-A10B-FP8'
 ```
 
-## Metadata Input Format Örnekleri
+## Metadata ve Retrieval
 
-### JSON Format
+Repo iki ayrı retrieval hattı içerir.
+
+### Schema retrieval
+
+- Metadata JSON veya CSV'den yüklenir
+- `CatalogSnapshot` oluşturulur
+- In-memory retriever ile tablo/kolon/alias bazlı scoring yapılır
+- Planner'a daraltılmış schema context verilir
+
+### Document retrieval
+
+- JSONL corpus içinden schema dokümanları ve example'lar yüklenir
+- In-memory keyword retriever ile sorguya göre dokümanlar seçilir
+- Planner prompt'una yardımcı bağlam eklenir
+
+Semantic katman ayrıca `data/semantic_registry.json` üzerinden:
+
+- root entity belirleme
+- intent sınıflandırma
+- canonical join path seçimi
+- aggregation, group_by ve select defaults uygulama
+
+işlevlerini üstlenir.
+
+## Oracle Çalıştırma Notları
+
+Repoda gerçek Oracle bağlantısı için `OracleExecutor` adapter'ı vardır; ancak bunu üretim kullanımında devreye almak için driver, credential ve pool initialization gerekir.
+
+Önemli noktalar:
+
+- `oracledb` paketi opsiyonel dependency'dir
+- `OracleExecutor.init_pool()` çağrılmadan sorgu çalıştırılamaz
+- Script'ler bu akışı explicit olarak yönetir
+- API startup akışı içinde otomatik pool initialization şu anda yok
+- SQL execution öncesinde `SQLGuard` ile sadece `SELECT` sorgularına izin verilir
+
+Oracle doğrulama için hazır script:
+
+```powershell
+.\.venv\Scripts\python scripts\oracle_uat_verify.py
+```
+
+## Testler
+
+Tüm testler `app/tests/` altında yer alır. Repo; API smoke, planner, compiler, retrieval, semantic planning, repair, narrator leakage, eval runner ve Oracle adapter senaryolarını kapsayan geniş bir test setine sahiptir.
+
+Sık kullanılan komutlar:
+
+```bash
+pytest -v
+pytest app/tests/test_api_smoke.py -v
+pytest app/tests/test_sql_compiler.py -v
+pytest app/tests/test_semantic_planning.py -v
+pytest app/tests/test_query_plan_repair.py -v
+pytest app/tests/test_document_retrieval_service.py -v
+```
+
+Eğer `pytest` komutu bulunamazsa:
+
+```powershell
+.\.venv\Scripts\python -m pytest -v
+```
+
+## Script'ler
+
+Repo içinde birden fazla smoke ve evaluation script'i bulunur:
+
+| Script | Amaç |
+|---|---|
+| `scripts/e2e_llm_flow.py` | LLM flow E2E çalıştırma |
+| `scripts/e2e_real_provider_eval.py` | Gerçek provider ile çok sorulu reliability eval |
+| `scripts/evaluate_hybrid_retrieval.py` | Hybrid retrieval değerlendirmesi |
+| `scripts/oracle_smoke_plan.py` | Oracle plan smoke kontrolleri |
+| `scripts/oracle_uat_verify.py` | UAT erişim ve veri doğrulaması |
+| `scripts/po_e2e_smoke.py` | PO domain smoke akışı |
+| `scripts/po_eval_runner.py` | PO odaklı eval çalıştırıcısı |
+| `scripts/build_eval_dataset.py` | Eval dataset üretimi |
+| `scripts/build_eval_dataset_200.py` | Genişletilmiş eval dataset üretimi |
+
+### Gerçek provider eval örneği
+
+```powershell
+$env:LLM_PROVIDER='openai_compatible'
+$env:OPENAI_BASE_URL='http://10.50.110.11:8100/v1'
+$env:OPENAI_MODEL='Qwen/Qwen3.5-122B-A10B-FP8'
+.\.venv\Scripts\python scripts\e2e_real_provider_eval.py --dataset data/eval_dataset_100.json --max-questions 24 --run-name round1_trace_50q_real --single-output-md data/eval_trace_round1_1q_real.md --concurrency 24
+```
+
+Script'in öne çıkan parametreleri:
+
+- `--dataset`
+- `--run-name`
+- `--max-questions`
+- `--batch-index`
+- `--single-output-md`
+- `--emit-extra-files`
+- `--concurrency`
+- `--max-retries`
+- `--question-timeout`
+- `--benchmark-concurrency`
+- `--no-oracle`
+
+Tipik çıktı artefaktları:
+
+- `eval_summary_<run>.json`
+- `question_trace_<run>.jsonl`
+- `question_trace_<run>.md`
+- `manual_review_<run>.json`
+
+## Metadata Formatı
+
+### JSON
 
 ```json
 {
@@ -280,49 +354,33 @@ SQLCompiler → SQLGuard → OracleExecutor (veya MockExecutor)
           "restricted": false,
           "description": "Sicil numarası",
           "aliases": ["sicil_no", "sicil"]
-        },
-        {
-          "name": "salary",
-          "data_type": "NUMBER(10,2)",
-          "nullable": true,
-          "restricted": true,
-          "description": "Maaş bilgisi",
-          "aliases": ["maas", "ucret"]
         }
       ]
     }
   ],
-  "relationships": [
-    {
-      "from_table": "XXBT_PDKS_PER_DETAILS_V",
-      "from_column": "dept_id",
-      "to_table": "department",
-      "to_column": "dept_id",
-      "relationship_type": "many_to_one"
-    }
-  ],
-  "source": "hr_export_v1",
-  "version": "1.0"
+  "relationships": []
 }
 ```
 
-### CSV Format (dizin yapısı)
+### CSV dizin formatı
 
-```
+```text
 metadata_dir/
 ├── _tables.csv
 ├── employee.csv
 └── department.csv
 ```
 
-**_tables.csv:**
+`_tables.csv` örneği:
+
 ```csv
 name,schema_name,description,aliases,primary_key
 employee,HR,Ana personel tablosu,employees|personnel|calisan,reg_no
 department,HR,Departman tablosu,dept|bolum,dept_id
 ```
 
-**employee.csv:**
+Tablo dosyası örneği:
+
 ```csv
 column_name,data_type,nullable,restricted,description,aliases
 reg_no,INTEGER,false,false,Sicil numarası,sicil_no|sicil
@@ -331,48 +389,22 @@ salary,NUMBER(10;2),true,true,Maaş bilgisi,maas|ucret
 dept_id,INTEGER,false,false,Departman FK,departman_id
 ```
 
-> **Not:** `aliases` ve `primary_key` alanları pipe (`|`) ile ayrılır.
-> `nullable` ve `restricted` değerleri: `true/false`, `1/0`, `yes/no`, `evet` kabul edilir.
+Notlar:
 
-## Sprint 3 Config Ayarları
+- `aliases` ve `primary_key` alanları `|` ile ayrılır
+- `nullable` ve `restricted` için `true/false`, `1/0`, `yes/no`, `evet/hayir` benzeri değerler kabul edilir
 
-```bash
-# Metadata ingestion
-METADATA_SOURCE_PATH=/path/to/metadata.json   # veya dizin (CSV için)
-METADATA_SOURCE_TYPE=json                       # json | csv | none
+## Bilinen Sınırlamalar
 
-# Schema retrieval
-ENABLE_METADATA_RETRIEVAL=true                 # false: Sprint 1-2 full-dump fallback
-RETRIEVAL_TOP_K=5                              # Retrieval'dan dönen max tablo sayısı
+- API sadece non-streaming çalışır; SSE/WebSocket streaming yoktur
+- Session state in-memory tutulur; restart sonrası korunmaz
+- Schema ve document retrieval şu anda in-memory ve ağırlıklı olarak keyword tabanlıdır
+- Oracle executor adapter mevcut olsa da API içinde otomatik pool init wiring henüz yapılmamıştır
+- Gerçek Oracle senaryolarında environment, Oracle client ve driver kurulumu gerekir
+- Sonuç kalitesi metadata, semantic registry ve document corpus kalitesine bağlıdır
+- OpenAI-compatible endpoint minimaldir; tam OpenAI feature parity hedeflenmemiştir
 
-# Oracle executor
-ENABLE_ORACLE_EXECUTOR=true                    # false: MockExecutor kullanılır
-ORACLE_DSN=host:port/service_name
-ORACLE_USER=readonly_user
-ORACLE_PASSWORD=secret
-ORACLE_TIMEOUT=30                              # Sorgu timeout (saniye)
-```
+## İlgili Dökümanlar
 
-## Bilinen Limitasyonlar
-
-- Gerçek DB bağlantısı yok (OracleExecutor iskelet — `oracledb` bağlantısı henüz yok)
-- Tek tablo desteği (employee); çoklu tablo metadata yüklenebilir ama JOIN üretilmez
-- JOIN / subquery desteği yok (Sprint 3+ planlı)
-- Streaming response desteği yok
-- Session state in-memory (restart'ta kaybolur)
-- Mock LIKE: sadeleştirilmiş substring match (anchored pattern yok)
-- Schema retrieval Phase 1: keyword matching (BM25/vector retrieval Sprint 3+)
-- Metadata ilişkileri (relationships) yüklenebilir ama henüz JOIN planlama'da kullanılmıyor
-- SQLGuard "DELETED" kolon adına izin verir ama bazı edge-case kolon isimlerinde false positive olabilir
-
-## Gerçek Entegrasyon İçin Gereken Girdiler
-
-| Girdi | Açıklama |
-|---|---|
-| Oracle DSN / connection string | `host:port/service_name` formatında |
-| Read-only Oracle kullanıcı | Sadece SELECT yetkisi olan kullanıcı |
-| Oracle şifre | `.env` dosyasında `ORACLE_PASSWORD` |
-| Metadata JSON/CSV dosyaları | Yukarıdaki formatta tablo/kolon tanımları |
-| vLLM endpoint URL | OpenAI-uyumlu API (ör. `http://vllm-host:8000/v1`) |
-| vLLM model name | `openai_model` config'inde |
-| `oracledb` Python paketi | `pip install oracledb` — pyproject.toml'a eklenecek |
+- `docs/hybrid_retrieval_test_plan.md`
+- `docs/real_provider_eval_runbook.md`
