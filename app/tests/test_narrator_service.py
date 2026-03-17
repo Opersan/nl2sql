@@ -67,6 +67,20 @@ class TestSuccessNarration:
 
         assert "bulunamadı" in text.lower()
 
+    @pytest.mark.asyncio
+    async def test_last_trace_records_raw_and_final_response(
+        self, narrator: NarratorService,
+    ) -> None:
+        result = _success_result(row_count=2)
+
+        text = await narrator.narrate_success("Aktif çalışanları listele", result)
+        trace = narrator.last_trace
+
+        assert trace is not None
+        assert trace["prompt_length"] > 0
+        assert trace["raw_response"] is not None
+        assert trace["final_response"] == text
+
 
 # ---------------------------------------------------------------------------
 # Validation-error narration

@@ -911,6 +911,11 @@ class MockLLMProvider(LLMProvider):
     Turkish narration.
     """
 
+    def __init__(self) -> None:
+        self.last_structured_response_text: str | None = None
+        self.last_structured_parse_error: str | None = None
+        self.last_text_response_text: str | None = None
+
     # -- Structured output (planner) -----------------------------------------
 
     async def generate_structured(
@@ -918,6 +923,8 @@ class MockLLMProvider(LLMProvider):
     ) -> T:
         user_msg = self._extract_user_message(prompt)
         plan = _build_plan_from_rules(user_msg)
+        self.last_structured_response_text = plan.model_dump_json(indent=2)
+        self.last_structured_parse_error = None
         return plan  # type: ignore[return-value]
 
     # -- Free-form text (narrator) -------------------------------------------
@@ -927,39 +934,47 @@ class MockLLMProvider(LLMProvider):
 
         # Empty result
         if "satır sayısı: 0" in folded:
-            return "Aradığınız kriterlere uygun kayıt bulunamadı."
+            self.last_text_response_text = "Aradığınız kriterlere uygun kayıt bulunamadı."
+            return self.last_text_response_text
 
         # Success with row count – check BEFORE error patterns because
         # the narrator system template contains words like "Kısıtlı" in
         # its instructions which would otherwise false-match.
         match = re.search(r"satır sayısı:\s*(\d+)", folded)
         if match:
-            return f"{match.group(1)} kayıt bulundu."
+            self.last_text_response_text = f"{match.group(1)} kayıt bulundu."
+            return self.last_text_response_text
 
         # Clarification needed — checked before restriction errors to avoid
         # column descriptions (containing "kısıtlı") triggering wrong branch.
         if "açıklama gerekli" in folded or "clarification" in folded or "lütfen belirtin" in folded:
-            return "Hangi alanları görmek istediğinizi belirtir misiniz?"
+            self.last_text_response_text = "Hangi alanları görmek istediğinizi belirtir misiniz?"
+            return self.last_text_response_text
 
         # Restricted-column validation error
         if "kısıtlı" in folded or "erişime kapalı" in folded:
-            return (
+            self.last_text_response_text = (
                 "İstenen alan erişime kapalı olduğu için sorgu çalıştırılamadı."
             )
+            return self.last_text_response_text
 
         # General validation error
         if "doğrulama hatası" in folded:
-            return "Sorgunuzda bir doğrulama hatası oluştu."
+            self.last_text_response_text = "Sorgunuzda bir doğrulama hatası oluştu."
+            return self.last_text_response_text
 
         # Clarification needed (fallback)
         if "açıklama" in folded and "gerekl" in folded:
-            return "Hangi alanları görmek istediğinizi belirtir misiniz?"
+            self.last_text_response_text = "Hangi alanları görmek istediğinizi belirtir misiniz?"
+            return self.last_text_response_text
 
         # Execution error
         if "çalıştırma hatası" in folded:
-            return "Sorgu çalıştırılırken bir hata oluştu."
+            self.last_text_response_text = "Sorgu çalıştırılırken bir hata oluştu."
+            return self.last_text_response_text
 
-        return "Sorgu başarıyla çalıştırıldı."
+        self.last_text_response_text = "Sorgu başarıyla çalıştırıldı."
+        return self.last_text_response_text
 
     # -- Internal helpers ----------------------------------------------------
 

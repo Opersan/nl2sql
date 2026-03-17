@@ -211,6 +211,23 @@ class TestAliasHandling:
         assert plan.table is not None
         assert len(plan.select_columns) > 0 or len(plan.aggregations) > 0
 
+    @pytest.mark.asyncio
+    async def test_last_trace_contains_stage_snapshots(self, planner: PlannerService) -> None:
+        await planner.plan("Aktif çalışanları listele")
+
+        trace = planner.last_trace
+
+        assert trace is not None
+        assert trace["retrieval"] is not None
+        assert trace["prompt"] is not None
+        assert trace["llm"]["raw_response_text"] is not None
+        assert trace["parsed_plan"] is not None
+        assert trace["normalize"]["before"] is not None
+        assert trace["repair"]["after"] is not None
+        assert trace["semantic"]["after"] is not None
+        assert trace["canonicalize"]["after"] is not None
+        assert trace["final_plan"] is not None
+
 
 # ---------------------------------------------------------------------------
 # Plan normalization

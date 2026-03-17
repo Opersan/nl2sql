@@ -138,6 +138,9 @@ class OpenAICompatibleProvider(LLMProvider):
         self._api_key = api_key
         self._model = model
         self._timeout = timeout
+        self.last_structured_response_text: str | None = None
+        self.last_structured_parse_error: str | None = None
+        self.last_text_response_text: str | None = None
 
     # -- LLMProvider interface -----------------------------------------------
 
@@ -158,6 +161,8 @@ class OpenAICompatibleProvider(LLMProvider):
             ),
             response_format={"type": "json_object"},
         )
+        self.last_structured_response_text = content
+        self.last_structured_parse_error = None
 
         # Pre-parse normalization for QueryPlan
         from app.domain.query_plan import QueryPlan
@@ -171,6 +176,7 @@ class OpenAICompatibleProvider(LLMProvider):
             # --- Firewall: extract QueryPlan-shaped dict from any LLM output ---
             extracted = _safe_extract_plan_dict(content)
             if extracted is None:
+                self.last_structured_parse_error = "no_queryplan_intent_found_in_response"
                 logger.warning(
                     "LLM returned non-QueryPlan JSON (no 'intent' key found). "
                     "Preview: %r. Falling back to clarification plan.",
@@ -188,6 +194,7 @@ class OpenAICompatibleProvider(LLMProvider):
             try:
                 return response_model.model_validate(normalised)  # type: ignore[return-value]
             except Exception as validate_exc:
+                self.last_structured_parse_error = str(validate_exc)
                 logger.warning(
                     "QueryPlan model_validate failed after normalization: %s. "
                     "Preview: %r. Falling back to clarification plan.",
@@ -199,7 +206,9 @@ class OpenAICompatibleProvider(LLMProvider):
         return response_model.model_validate_json(content)
 
     async def generate_text(self, prompt: str) -> str:
-        return await self._chat_completion(prompt)
+        content = await self._chat_completion(prompt)
+        self.last_text_response_text = content
+        return content
 
     # -- Internal ------------------------------------------------------------
 

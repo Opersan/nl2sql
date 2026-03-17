@@ -50,7 +50,10 @@ from app.core.logging import get_logger
 from app.domain.catalog_models import CatalogSnapshot
 from app.domain.query_plan import QueryPlan
 from app.providers.llm.base import LLMProvider
-from app.providers.llm.prompts import build_hybrid_planner_prompt, build_planner_prompt
+from app.providers.llm.prompts import (
+    build_hybrid_planner_prompt_debug,
+    build_planner_prompt,
+)
 from app.services.catalog_service import CatalogService
 from app.services.document_retrieval_service import DocumentRetrievalService
 from app.services.plan_normalizer import (
@@ -89,6 +92,7 @@ class PlannerService:
         self._last_canonicalization_stats: NormalizationStats | None = None
         self._repair_engine = QueryPlanRepairEngine()
         self._last_repair_result: RepairResult | None = None
+        self._last_trace: dict[str, Any] | None = None
 
     @property
     def last_canonicalization_stats(self) -> NormalizationStats | None:
@@ -109,6 +113,11 @@ class PlannerService:
         """
         return self._last_repair_result
 
+    @property
+    def last_trace(self) -> dict[str, Any] | None:
+        """Return planner debug metadata from the most recent ``plan()`` call."""
+        return self._last_trace
+
     async def plan(self, user_message: str) -> QueryPlan:
         """Produce a ``QueryPlan`` from *user_message*.
 
@@ -126,47 +135,131 @@ class PlannerService:
         Raises ``PlannerError`` when the LLM fails or returns unparseable
         output.
         """
+        self._last_trace = {
+            "user_message": user_message,
+            "policy_guard": {"triggered": False, "reason": None},
+            "retrieval": None,
+            "prompt": None,
+            "llm": {"raw_response_text": None, "parse_error": None},
+            "parsed_plan": None,
+            "normalize": None,
+            "repair": None,
+            "semantic": None,
+            "canonicalize": None,
+            "final_plan": None,
+        }
+
         # 0. Minimal sensitive-intent guard (no planner guesswork)
         if self._is_sensitive_or_invalid_request(user_message):
             logger.info("Planner sensitive/invalid guard triggered.")
-            return QueryPlan(
+            plan = QueryPlan(
                 intent="clarification_required",
                 table=None,
                 needs_clarification=True,
                 clarification_message="Bu talep kapsamında güvenlik veya gizlilik riski var. Lütfen iş amaçlı ve yetkili bir sorgu belirtin.",
             )
+            self._last_trace["policy_guard"] = {
+                "triggered": True,
+                "reason": "sensitive_or_invalid_request",
+            }
+            self._last_trace["final_plan"] = self._snapshot_plan(plan)
+            return plan
 
         # 1. Structured schema context
         context = await self._catalog.get_relevant_context(user_message)
 
         # 2. Document / example context (hybrid layer)
-        prompt = await self._build_prompt(user_message, context)
+        prompt, prompt_trace = await self._build_prompt_with_trace(user_message, context)
+        self._last_trace["retrieval"] = {
+            "schema_tables": [table.name for table in context.tables],
+            "schema_table_count": len(context.tables),
+            "relationship_count": len(context.relationships),
+            "retrieval_assessment": prompt_trace.get("retrieval_assessment", "unknown"),
+            "schema_docs": prompt_trace.get("schema_docs", []),
+            "examples": prompt_trace.get("examples", []),
+        }
+        self._last_trace["prompt"] = {
+            key: value
+            for key, value in prompt_trace.items()
+            if key not in {"schema_docs", "examples", "retrieval_assessment"}
+        }
+        self._last_trace["prompt"]["full_prompt_text"] = prompt
 
         try:
             query_plan = await self._llm.generate_structured(prompt, QueryPlan)
         except Exception as exc:
+            self._last_trace["llm"] = {
+                "raw_response_text": getattr(self._llm, "last_structured_response_text", None),
+                "parse_error": str(exc),
+            }
             logger.error("Planner LLM call failed: %s", exc)
             raise PlannerError(
                 f"Plan olusturulamadi: {exc}",
                 detail=str(exc),
             ) from exc
 
+        self._last_trace["llm"] = {
+            "raw_response_text": getattr(self._llm, "last_structured_response_text", None),
+            "parse_error": getattr(self._llm, "last_structured_parse_error", None),
+        }
+        self._last_trace["parsed_plan"] = self._snapshot_plan(query_plan)
+
         # Post-plan normalization (limit clamping, clarification cleanup)
+        normalize_before = query_plan
         query_plan = self._normalize_plan(query_plan)
+        self._last_trace["normalize"] = {
+            "before": self._snapshot_plan(normalize_before),
+            "after": self._snapshot_plan(query_plan),
+            "limit_clamped": normalize_before.limit != query_plan.limit,
+            "clarification_cleanup_applied": (
+                normalize_before.needs_clarification
+                and self._snapshot_plan(normalize_before) != self._snapshot_plan(query_plan)
+            ),
+        }
 
         # Structural repair (qualified-column strip, anchor redirect, etc.)
+        repair_before = query_plan
         query_plan, repair_result = self._repair_engine.repair(query_plan, user_message)
         self._last_repair_result = repair_result
+        self._last_trace["repair"] = {
+            "before": self._snapshot_plan(repair_before),
+            "after": self._snapshot_plan(query_plan),
+            "repair_applied": repair_result.repair_applied,
+            "repair_actions": [
+                {
+                    "repair_type": action.repair_type,
+                    "description": action.description,
+                    "field_path": action.field_path,
+                    "original_value": action.original_value,
+                    "repaired_value": action.repaired_value,
+                }
+                for action in repair_result.actions
+            ],
+        }
 
         # Semantic canonicalization (entity root + canonical join paths)
-
+        semantic_before = query_plan
         query_plan = apply_semantic_normalization(query_plan, user_message, context)
         # Guard: if user clearly asks an aggregate question but plan has no
         # aggregations, return clarification instead of a likely wrong listing.
         query_plan = self._enforce_aggregation_intent_guard(query_plan, user_message)
+        self._last_trace["semantic"] = {
+            "before": self._snapshot_plan(semantic_before),
+            "after": self._snapshot_plan(query_plan),
+            "semantic_intent": query_plan.semantic_intent,
+            "root_entity": query_plan.root_entity,
+            "join_path_id": query_plan.join_path_id,
+        }
 
         # Column canonicalization (alias -> canonical name)
+        canonicalize_before = query_plan
         query_plan = self._canonicalize_plan(query_plan, context)
+        self._last_trace["canonicalize"] = {
+            "before": self._snapshot_plan(canonicalize_before),
+            "after": self._snapshot_plan(query_plan),
+            "stats": self._last_canonicalization_stats.as_dict() if self._last_canonicalization_stats else {},
+        }
+        self._last_trace["final_plan"] = self._snapshot_plan(query_plan)
 
         logger.info(
             "Plan produced -- intent=%s, table=%s, clarification=%s",
@@ -185,17 +278,49 @@ class PlannerService:
         user_message: str,
         context: CatalogSnapshot,
     ) -> str:
+        prompt, _trace = await self._build_prompt_with_trace(user_message, context)
+        return prompt
+
+    async def _build_prompt_with_trace(
+        self,
+        user_message: str,
+        context: CatalogSnapshot,
+    ) -> tuple[str, dict[str, Any]]:
         """Build the planner prompt, enriching with docs/examples when available."""
         if self._doc_retrieval is not None:
             doc_result = await self._doc_retrieval.retrieve_context(user_message)
-            return build_hybrid_planner_prompt(
+            prompt, debug = build_hybrid_planner_prompt_debug(
                 user_message,
                 context,
                 schema_docs=doc_result.schema_docs or None,
                 examples=doc_result.examples or None,
                 max_prompt_chars=settings.planner_prompt_max_chars,
             )
-        return build_planner_prompt(user_message, context)
+            retrieval_assessment = "sufficient"
+            if not context.tables:
+                retrieval_assessment = "insufficient"
+            elif not (doc_result.schema_docs or doc_result.examples):
+                retrieval_assessment = "partial"
+            debug["retrieval_assessment"] = retrieval_assessment
+            return prompt, debug
+
+        prompt = build_planner_prompt(user_message, context)
+        return prompt, {
+            "prompt_length": len(prompt),
+            "prompt_budget": settings.planner_prompt_max_chars,
+            "prompt_truncated": False,
+            "reduction_steps": [],
+            "schema_tables_in_prompt": [table.name for table in context.tables],
+            "schema_doc_count": 0,
+            "example_count": 0,
+            "schema_docs": [],
+            "examples": [],
+            "retrieval_assessment": "schema_only" if context.tables else "insufficient",
+        }
+
+    @staticmethod
+    def _snapshot_plan(plan: QueryPlan) -> dict[str, Any]:
+        return plan.model_dump(mode="json")
 
     # ------------------------------------------------------------------
     # Post-plan normalization

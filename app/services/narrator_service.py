@@ -17,6 +17,7 @@ Even when the LLM ignores prompt constraints, ``_strip_leakage`` removes:
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from app.core.exceptions import NarratorError
 from app.core.logging import get_logger
@@ -43,6 +44,8 @@ _SQL_LEAK_RE = re.compile(
 
 _CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+
 # Matches reasoning/thinking/analysis section headers (markdown headings or bare labels).
 _REASONING_HEADER_RE = re.compile(
     r'^(?:\d+[\.)]\s*)?(?:#+\s*)?(thinking|reasoning|analysis|draft|final\s*check|'
@@ -53,12 +56,49 @@ _REASONING_HEADER_RE = re.compile(
 # Oracle error line patterns that should NOT surface to the user.
 _ORA_ERROR_RE = re.compile(r'ORA-\d{5}', re.IGNORECASE)
 
+_REASONING_LINE_RE = re.compile(
+    r'^(?:\d+[\.)]\s*)?(?:#+\s*)?('
+    r'thinking|reasoning|analysis|draft|final\s*polish|final\s*check|'
+    r'analyze(?:\s+the\s+request)?|evaluate(?:\s+the\s+result)?|'
+    r'draft(?:ing)?(?:\s+the\s+response)?|refine(?:ment)?|'
+    r'check\s+constraints|final\s+review|selected\s+response|alternative|'
+    r'final\s+choice|final\s+plan|final\s+decision|final\s+selection|'
+    r'plan|step\s+\d+|constraint\s*\d+|rule\s*\d+|kural\s*\d+|'
+    r'd\u00fc\u015f\u00fcnce|analiz|muhakeme|i\u00e7\s+muhakeme)\b',
+    re.IGNORECASE,
+)
+
+_PROMPT_ECHO_LINE_RE = re.compile(
+    r'\b(kullan\u0131c\u0131\s+sorusu|sonu\u00e7\s+\u00f6zeti|yan\u0131t\u0131n\u0131\s+ver|'
+    r'user\s+question|result\s+summary|constraints?:|rules?:)\b',
+    re.IGNORECASE,
+)
+
+_POLICY_ECHO_LINE_RE = re.compile(
+    r'\b(only\s+answer\s+based\s+on|do\s+not\s+show\s+oracle|do\s+not\s+write|'
+    r'never\s+produce\s+sql|return\s+only\s+a\s+sentence|'
+    r'yaln\u0131zca\s+verilen\s+\u00f6zete\s+g\u00f6re|asla\s+sql|'
+    r'd\u00fc\u015f\u00fcnce\s+s\u00fcreci|oracle\s+hata\s+kodlar\u0131|'
+    r'tek\s+k\u0131sa\s+paragraf|i\u015f\s+dilinde\s+t\u00fcrk\u00e7e)\b',
+    re.IGNORECASE,
+)
+
+_NUMBERED_OUTLINE_RE = re.compile(r'^\s*\d+[\.)]\s+')
+
+_SQL_KEYWORD_RE = re.compile(r'\b(SELECT|FROM|WHERE|JOIN|GROUP\s+BY|ORDER\s+BY|INSERT|UPDATE|DELETE)\b', re.IGNORECASE)
+
 
 class NarratorService:
     """Produce user-facing Turkish narrations for pipeline results."""
 
     def __init__(self, llm: LLMProvider) -> None:
         self._llm = llm
+        self._last_trace: dict[str, Any] | None = None
+
+    @property
+    def last_trace(self) -> dict[str, Any] | None:
+        """Return narrator debug metadata from the most recent call."""
+        return self._last_trace
 
     # -- Public API --------------------------------------------------------
 
@@ -92,11 +132,27 @@ class NarratorService:
 
     async def _generate(self, user_message: str, summary: str) -> str:
         prompt = build_narrator_prompt(user_message, summary)
+        self._last_trace = {
+            "user_message": user_message,
+            "summary": summary,
+            "prompt_length": len(prompt),
+            "full_prompt_text": prompt,
+            "raw_response": None,
+            "final_response": None,
+            "error": None,
+        }
         try:
             raw = await self._llm.generate_text(prompt)
             cleaned = self._strip_leakage(raw)
+            self._last_trace.update(
+                {
+                    "raw_response": raw,
+                    "final_response": cleaned,
+                }
+            )
             return cleaned
         except Exception as exc:
+            self._last_trace.update({"error": str(exc)})
             logger.error("Narrator LLM call failed: %s", exc)
             raise NarratorError(
                 f"Yanıt oluşturulamadı: {exc}", detail=str(exc),
@@ -112,38 +168,50 @@ class NarratorService:
         if not text or not text.strip():
             return "Sorgu işlendi."
 
-        # --- Pass 1: remove fenced code blocks entirely ---
-        cleaned = _CODE_BLOCK_RE.sub('', text)
+        cleaned = text
+        cleaned = _THINK_BLOCK_RE.sub("", cleaned)
+        cleaned = _CODE_BLOCK_RE.sub("", cleaned)
+        cleaned = _ORA_ERROR_RE.sub("", cleaned)
 
-        # --- Pass 2: remove inline SQL expressions ---
-        cleaned = _SQL_LEAK_RE.sub('', cleaned)
-
-        # --- Pass 3: remove Oracle error codes from user-visible text ---
-        # (They may appear in execution-error summaries passed to narrator)
-        cleaned = _ORA_ERROR_RE.sub('', cleaned)
-
-        # --- Pass 4: strip reasoning / thinking sections ---
-        # Walk line-by-line; drop lines that are headers for reasoning sections
-        # and all subsequent lines until we hit a blank line or a new section.
-        lines = cleaned.split('\n')
         result_lines: list[str] = []
-        in_leaky_section = False
-        for line in lines:
+        for line in cleaned.splitlines():
             stripped = line.strip()
+            if not stripped:
+                result_lines.append("")
+                continue
+            lowered = stripped.lower()
+            if lowered in {"<think>", "</think>", "</analysis>", "</final>", "</plan>"}:
+                continue
             if _REASONING_HEADER_RE.match(stripped):
-                in_leaky_section = True
-                logger.debug("Narrator leak: reasoning header detected: %r", stripped[:80])
                 continue
-            if in_leaky_section:
-                # Exit on blank line or non-indented content that starts a new paragraph
-                if not stripped:
-                    in_leaky_section = False  # blank line ends the section
+            if _REASONING_LINE_RE.match(stripped):
                 continue
-            if re.search(r"\b(SELECT|UPDATE|DELETE|INSERT|FROM|WHERE)\b", stripped, re.IGNORECASE):
+            if _PROMPT_ECHO_LINE_RE.search(stripped):
                 continue
-            result_lines.append(line)
+            if _POLICY_ECHO_LINE_RE.search(stripped):
+                continue
+            if _NUMBERED_OUTLINE_RE.match(stripped) and ("**" in stripped or ":" in stripped):
+                continue
+            if _SQL_KEYWORD_RE.search(stripped):
+                continue
+            if stripped.startswith(("*", "-")) and any(
+                key in lowered
+                for key in ["rule", "constraint", "draft", "final", "analyze", "thinking", "reasoning", "kural"]
+            ):
+                continue
+            result_lines.append(stripped)
 
-        final = '\n'.join(result_lines).strip()
+        compact = "\n".join(result_lines)
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", compact) if p.strip()]
+        final = ""
+        for para in reversed(paragraphs):
+            if _PROMPT_ECHO_LINE_RE.search(para) or _POLICY_ECHO_LINE_RE.search(para):
+                continue
+            if _REASONING_LINE_RE.match(para):
+                continue
+            final = para
+            break
+
         if not final:
             logger.warning("Narrator response was entirely leakage; returning safe default.")
             return "Sorgu işlendi."

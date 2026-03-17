@@ -25,6 +25,9 @@ discriminator.
 
 from __future__ import annotations
 
+import time
+from typing import Any
+
 from app.core.config import settings
 from app.core.exceptions import CompilationError, PlannerError
 from app.core.logging import get_logger
@@ -65,6 +68,12 @@ class Orchestrator:
         self._validator = validation_service
         self._compiler = compiler
         self._executor = executor
+        self._last_trace: dict[str, Any] | None = None
+
+    @property
+    def last_trace(self) -> dict[str, Any] | None:
+        """Return deterministic pipeline trace data from the most recent run."""
+        return self._last_trace
 
     async def run_plan(self, plan: QueryPlan) -> OrchestrationResult:
         """Execute the full deterministic pipeline for *plan*.
@@ -78,8 +87,25 @@ class Orchestrator:
         4. Execute via the configured executor.
         5. Return the aggregated result with the appropriate ``failed_phase``.
         """
+        self._last_trace = {
+            "input_plan": plan.model_dump(mode="json"),
+            "validation": None,
+            "compile": None,
+            "execute": None,
+        }
+
         # 1 – Validate
+        validation_started = time.perf_counter()
         validation = await self._validator.validate(plan)
+        validation_ms = int((time.perf_counter() - validation_started) * 1000)
+        self._last_trace["validation"] = {
+            "ok": validation.ok,
+            "errors": [issue.model_dump(mode="json") for issue in validation.errors],
+            "warnings": [issue.model_dump(mode="json") for issue in validation.warnings],
+            "resolved_table": validation.resolved_table.name if validation.resolved_table else None,
+            "resolved_tables": sorted(validation.resolved_tables.keys()),
+            "latency_ms": validation_ms,
+        }
 
         if not validation.ok:
             logger.info("Plan validation failed: %s", validation.errors)
@@ -96,6 +122,7 @@ class Orchestrator:
         )
 
         # 3 – Compile
+        compile_started = time.perf_counter()
         try:
             compiled = self._compiler.compile(
                 plan,
@@ -103,6 +130,11 @@ class Orchestrator:
                 extra_tables=validation.resolved_tables or None,
             )
         except CompilationError as exc:
+            self._last_trace["compile"] = {
+                "ok": False,
+                "error": str(exc),
+                "latency_ms": int((time.perf_counter() - compile_started) * 1000),
+            }
             logger.error("Compilation error: %s", exc)
             return OrchestrationResult(
                 validation=validation,
@@ -110,10 +142,20 @@ class Orchestrator:
                 compilation_error=str(exc),
             )
 
+        self._last_trace["compile"] = {
+            "ok": True,
+            "sql": compiled.sql,
+            "params": compiled.params,
+            "table": compiled.table,
+            "selected_columns": list(compiled.selected_columns),
+            "latency_ms": int((time.perf_counter() - compile_started) * 1000),
+        }
+
         logger.info("Compiled SQL:\n%s", compiled.sql)
         logger.info("Params: %s", compiled.params)
 
         # 4 – Execute
+        execute_started = time.perf_counter()
         try:
             execution = await self._executor.execute(compiled)
         except Exception as exc:
@@ -122,6 +164,14 @@ class Orchestrator:
                 status=ExecutionStatus.ERROR,
                 error_message=str(exc),
             )
+        self._last_trace["execute"] = {
+            "status": execution.status.value,
+            "row_count": execution.row_count,
+            "columns": list(execution.columns),
+            "error_message": execution.error_message,
+            "execution_time_ms": execution.execution_time_ms,
+            "latency_ms": int((time.perf_counter() - execute_started) * 1000),
+        }
 
         # 5 – Determine execution-phase failure and return.
         failed = (
