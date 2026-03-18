@@ -274,6 +274,8 @@ class TestIntentGuard:
         assert "planner_filter_coverage" in guard
         assert "final_filter_coverage" in guard
         assert "confidence_band" in guard
+        assert "plan_confidence" in guard
+        assert "semantic_confidence" in guard
 
     @pytest.mark.asyncio
     async def test_filter_loss_guard_blocks_success_with_clarification(
@@ -288,9 +290,33 @@ class TestIntentGuard:
         monkeypatch.setattr(planner_module, "apply_semantic_normalization", _drop_filters)
 
         plan = await planner.plan("Onay bekleyen satın alma siparişlerini listele")
+        trace = planner.last_trace or {}
+        guard = trace.get("intent_guard") or {}
+
         assert plan.needs_clarification is True
         assert plan.intent == "clarification_required"
         assert plan.clarification_message is not None
+        assert guard.get("clarification_reason_code") == "filter_intent_missing"
+        assert guard.get("clarification_missing_dimensions") == ["status"]
+        assert guard.get("clarification_was_avoidable") is False
+        assert guard.get("confidence_band") == "low"
+        assert guard.get("semantic_confidence") == "rule_low"
+
+    @pytest.mark.asyncio
+    async def test_weak_wording_does_not_trigger_filter_loss_guard(
+        self,
+        planner: PlannerService,
+    ) -> None:
+        plan = await planner.plan("Çalışan sayısı nedir")
+        trace = planner.last_trace or {}
+        guard = trace.get("intent_guard") or {}
+
+        assert plan.needs_clarification is False
+        assert guard.get("requested_filter_signals") == []
+        assert guard.get("false_success_risk") is False
+        assert guard.get("success_blocked_by_filter_loss") is False
+        assert guard.get("confidence_band") == "high"
+        assert guard.get("semantic_confidence") == "rule_high"
 
     def test_clarification_preserves_table_context(
         self, planner: PlannerService,

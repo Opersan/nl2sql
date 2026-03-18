@@ -137,7 +137,7 @@ def test_wrong_plan_bucketing(r, expected) -> None:
         (_res(raw_status="execution_error", execution_error_subtype="ambiguous_column"), "ambiguous_column"),
         (_res(raw_status="execution_error", execution_error_subtype="expression_rendering_issue"), "expression_rendering_issue"),
         (_res(raw_status="execution_error", execution_error_subtype="mis_shaped_params"), "runtime_mis_shaped_params"),
-        (_res(raw_status="execution_error", execution_error_subtype="timeout_error"), "timeout_heavy_join"),
+        (_res(raw_status="execution_error", execution_error_subtype="timeout"), "timeout_heavy_join"),
         (_res(raw_status="execution_error", execution_error_subtype="unknown_execution_error"), "data_specific_edge_case_or_unknown"),
     ],
 )

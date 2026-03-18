@@ -59,10 +59,45 @@ logger = get_logger(__name__)
 def _classify_oracle_error(detail: str) -> str:
     """Map an Oracle error message to a short diagnostic category.
 
-    Used to surface actionable sub-types in eval reports without exposing
-    raw ORA codes to end users.
+    Deterministic mapping: ORA codes → short subtype labels used in eval
+    reports.  Only stable code prefixes and obvious timeout signals are used;
+    no fragile text parsing beyond the ORA-NNNNN prefix.
+
+    Subtype contract
+    ----------------
+    oracle_date_type_error  – ORA-0180x and common date-conversion codes
+    invalid_number          – ORA-01722
+    invalid_identifier      – ORA-00904
+    ambiguous_column        – ORA-00918
+    not_null_violation      – ORA-01400
+    numeric_value_error     – ORA-06502
+    oracle_syntax_error     – ORA-0090x, ORA-01756
+    expression_rendering_issue – ORA-00979, ORA-00937, ORA-30482
+    mis_shaped_params       – ORA-01008
+    permission_error        – ORA-00942, ORA-01031
+    invalid_date_value      – ORA-01858, ORA-01861, ORA-01830, ORA-01839
+    no_data_found           – ORA-01403
+    connection_error        – ORA-12541, ORA-12154, ORA-12170, DPY-
+    timeout                 – any timeout signal in the message
+    unknown_execution_error – fallback
     """
     d = detail.upper()
+    # --- Priority Sprint C additions ---
+    # ORA-018xx: date/timestamp type range errors
+    if any(code in d for code in (
+        "ORA-01800", "ORA-01801", "ORA-01802", "ORA-01803", "ORA-01804",
+        "ORA-01805", "ORA-01806", "ORA-01807", "ORA-01808", "ORA-01809",
+        "ORA-01810", "ORA-01811", "ORA-01812", "ORA-01813", "ORA-01814",
+        "ORA-01815", "ORA-01816", "ORA-01817", "ORA-01818", "ORA-01819",
+    )):
+        return "oracle_date_type_error"
+    if "ORA-01722" in d:
+        return "invalid_number"
+    if "ORA-01400" in d:
+        return "not_null_violation"
+    if "ORA-06502" in d:
+        return "numeric_value_error"
+    # --- Pre-existing codes ---
     if "ORA-00918" in d:
         return "ambiguous_column"
     if "ORA-00904" in d:
@@ -83,8 +118,30 @@ def _classify_oracle_error(detail: str) -> str:
     if any(code in d for code in ("ORA-12541", "ORA-12154", "ORA-12170", "DPY-")):
         return "connection_error"
     if "timeout" in detail.lower():
-        return "timeout_error"
+        return "timeout"
     return "unknown_execution_error"
+
+
+def _normalize_oracle_message(detail: str) -> str:
+    """Produce a short, comparable normalised error message for trace/debug.
+
+    * Keeps the ORA-XXXXX code prefix when present.
+    * Strips raw bind values, passwords, and long path tokens.
+    * Caps length to 120 characters.
+    """
+    import re as _re
+    if not detail:
+        return "unknown_error"
+    # Extract the primary ORA code + first clause only
+    m = _re.search(r"(ORA-\d{5})[^\n]*", detail, _re.IGNORECASE)
+    if m:
+        raw = m.group(0)
+        # Strip anything after a colon-separated file/line reference
+        raw = _re.sub(r"\s*\(\s*[^)]*\.\w+:\d+[^)]*\)", "", raw)
+        return raw[:120].strip()
+    # Timeout / connection-level messages: keep first sentence
+    first = detail.split(".")[0].split("\n")[0]
+    return first[:120].strip()
 
 
 class OracleExecutor(ExecutorProvider):
@@ -267,6 +324,7 @@ class OracleExecutor(ExecutorProvider):
         except oracledb.DatabaseError as exc:
             detail = str(exc)
             error_class = _classify_oracle_error(detail)
+            msg_normalized = _normalize_oracle_message(detail)
             logger.error(
                 "Oracle DatabaseError on table=%s class=%s: %s",
                 compiled_query.table,
@@ -276,6 +334,8 @@ class OracleExecutor(ExecutorProvider):
             raise ExecutionError(
                 f"Database error during query execution [{error_class}].",
                 detail=detail,
+                execution_error_subtype=error_class,
+                execution_error_message_normalized=msg_normalized,
             ) from exc
 
     # ------------------------------------------------------------------

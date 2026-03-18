@@ -140,7 +140,7 @@ class EvalResult:
     alignment_errors: list[str] = field(default_factory=list)
     narration_context_mismatch: bool = False
     narration_context_mismatch_fields: list[str] = field(default_factory=list)
-    final_response_source: str = "fallback"
+    final_response_source: str = "fallback_template"
     sanitizer_effective: bool = False
     final_response_mapping_error: bool = False
     sql_shape_comparable: bool = False
@@ -161,6 +161,18 @@ class EvalResult:
     final_filter_coverage: dict[str, Any] = field(default_factory=dict)
     false_success_risk: bool = False
     success_blocked_by_filter_loss: bool = False
+    clarification_reason_code: str | None = None
+    clarification_missing_dimensions: list[str] = field(default_factory=list)
+    clarification_was_avoidable: bool = False
+    plan_confidence: str | None = None
+    semantic_confidence: str | None = None
+    confidence_band: str | None = None
+    pre_execution_risk_flags: list[str] = field(default_factory=list)
+    execution_guard_reason: str | None = None
+    execution_skipped_reason: str | None = None
+    why_not_executed: str | None = None
+    executed_sql_fingerprint: str | None = None
+    bind_summary: dict[str, Any] = field(default_factory=dict)
     user_visible_quality: str = "fail"
     model_behavior_quality: str = "fail"
     question_trace: dict[str, Any] | None = None
@@ -243,6 +255,26 @@ class EvalSummary:
     pass_with_sanitization_rate: float
     semantic_rescue_rate: float
     executable_after_repair_rate: float
+    narration_genericness_rate: float
+    fallback_template_usage_rate: float
+    pass_without_sanitization_rate: float
+    false_success_risk_rate: float
+    success_blocked_by_filter_loss_count: int
+    success_blocked_by_filter_loss_rate: float
+    semantic_rescue_executable_rate: float
+    user_visible_quality_distribution: dict[str, int]
+    model_behavior_quality_distribution: dict[str, int]
+    sanitizer_reason_code_distribution: dict[str, int]
+    clarification_reason_code_distribution: dict[str, int]
+    confidence_band_distribution: dict[str, int]
+    pre_execution_risk_flag_distribution: dict[str, int]
+    execution_guard_reason_distribution: dict[str, int]
+    sql_shape_change_stage_distribution: dict[str, int]
+    sql_shape_change_reason_distribution: dict[str, int]
+    user_visible_status_distribution: dict[str, int]
+    technical_pipeline_status_distribution: dict[str, int]
+    # Sprint C new distributions
+    execution_error_subtype_distribution: dict[str, int]
 
 
 @dataclass
@@ -401,6 +433,19 @@ def _default_compile_trace() -> dict[str, Any]:
     }
 
 
+def _default_pre_execution_trace() -> dict[str, Any]:
+    return {
+        "available": False,
+        "pre_execution_risk_flags": [],
+        "execution_guard_reason": None,
+        "execution_skipped_reason": None,
+        "why_not_executed": None,
+        "executed_sql_fingerprint": None,
+        "bind_summary": {},
+        "should_execute": None,
+    }
+
+
 def _default_execute_trace() -> dict[str, Any]:
     return {
         "available": False,
@@ -419,6 +464,7 @@ def _default_execute_trace() -> dict[str, Any]:
         "rows_returned_before_limit": None,
         "rows_returned_after_limit": None,
         "execution_error_subtype": None,
+        "execution_error_message_normalized": None,
         "executed_sql_fingerprint": None,
         "bind_summary": {},
         "execution_guard_reason": None,
@@ -437,7 +483,7 @@ def _default_narration_trace() -> dict[str, Any]:
         "raw_response": None,
         "sanitized_response": None,
         "final_response": None,
-        "final_response_source": "fallback",
+        "final_response_source": "fallback_template",
         "sanitizer_applied": False,
         "sanitizer_effective": False,
         "sanitizer_mode": "pass_through",
@@ -642,7 +688,7 @@ def compute_trace_summary(results: list[EvalResult]) -> dict[str, Any]:
         "narration_context_mismatch_count": sum(1 for r in results if r.narration_context_mismatch),
         "sanitizer_effective_rate": rate(sum(1 for r in results if r.sanitizer_effective)),
         "final_response_mapping_error_count": sum(1 for r in results if r.final_response_mapping_error),
-        "sanitizer_saved_response_count": sum(1 for r in results if r.sanitizer_effective and r.narration_ok),
+        "sanitizer_saved_response_count": sum(1 for r in results if r.user_visible_status == "pass_with_sanitization"),
         "raw_leak_but_final_clean_count": sum(1 for r in results if r.raw_leak_but_final_clean),
     }
 
@@ -985,7 +1031,7 @@ def _sanitize_narration_output(
         return {
             "sanitized_response": fallback_text,
             "final_response": fallback_text,
-            "final_response_source": "fallback",
+            "final_response_source": "fallback_template",
             "sanitizer_mode": "safe_rewrite",
             "sanitizer_applied": True,
             "sanitizer_effective": True,
@@ -1031,7 +1077,7 @@ def _sanitize_narration_output(
         return {
             "sanitized_response": fallback_text,
             "final_response": fallback_text,
-            "final_response_source": "fallback",
+            "final_response_source": "fallback_template",
             "sanitizer_mode": "safe_rewrite",
             "sanitizer_applied": True,
             "sanitizer_effective": raw_text != fallback_text,
@@ -1080,7 +1126,7 @@ def _sanitize_narration_output(
     return {
         "sanitized_response": fallback_text,
         "final_response": fallback_text,
-        "final_response_source": "fallback",
+        "final_response_source": "fallback_template",
         "sanitizer_mode": "safe_rewrite",
         "sanitizer_applied": True,
         "sanitizer_effective": raw_text != fallback_text,
@@ -1675,7 +1721,14 @@ def _build_single_output_markdown(
         f"- user_visible_pass_rate: {_format_pct(summary.user_visible_pass_rate)}",
         f"- pass_with_sanitization_rate: {_format_pct(summary.pass_with_sanitization_rate)}",
         f"- semantic_rescue_rate: {_format_pct(summary.semantic_rescue_rate)}",
+        f"- semantic_rescue_executable_rate: {_format_pct(summary.semantic_rescue_executable_rate)}",
         f"- executable_after_repair_rate: {_format_pct(summary.executable_after_repair_rate)}",
+        f"- narration_genericness_rate: {_format_pct(summary.narration_genericness_rate)}",
+        f"- fallback_template_usage_rate: {_format_pct(summary.fallback_template_usage_rate)}",
+        f"- pass_without_sanitization_rate: {_format_pct(summary.pass_without_sanitization_rate)}",
+        f"- false_success_risk_rate: {_format_pct(summary.false_success_risk_rate)}",
+        f"- success_blocked_by_filter_loss_count: {summary.success_blocked_by_filter_loss_count}",
+        f"- success_blocked_by_filter_loss_rate: {_format_pct(summary.success_blocked_by_filter_loss_rate)}",
         f"- avg_latency_ms: {summary.avg_latency_ms:.1f}",
         f"- p95_latency_ms: {summary.p95_latency_ms:.1f}",
         "",
@@ -1691,6 +1744,50 @@ def _build_single_output_markdown(
     lines.extend(["", "## Root Cause Category Counts"])
     for cat, count in sorted(summary.root_cause_category_counts.items(), key=lambda x: x[0]):
         lines.append(f"- {cat}: {count}")
+
+    lines.extend(["", "## User Visible Quality Distribution"])
+    for key, count in sorted(summary.user_visible_quality_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## Model Behavior Quality Distribution"])
+    for key, count in sorted(summary.model_behavior_quality_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## Sanitizer Reason Distribution"])
+    for key, count in sorted(summary.sanitizer_reason_code_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## Clarification Reason Distribution"])
+    for key, count in sorted(summary.clarification_reason_code_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## Confidence Band Distribution"])
+    for key, count in sorted(summary.confidence_band_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## Pre-Execution Risk Flag Distribution"])
+    for key, count in sorted(summary.pre_execution_risk_flag_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## Execution Guard Reason Distribution"])
+    for key, count in sorted(summary.execution_guard_reason_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## SQL Shape Change Stage Distribution"])
+    for key, count in sorted(summary.sql_shape_change_stage_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## SQL Shape Change Reason Distribution"])
+    for key, count in sorted(summary.sql_shape_change_reason_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## User Visible Status Distribution"])
+    for key, count in sorted(summary.user_visible_status_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
+
+    lines.extend(["", "## Technical Pipeline Status Distribution"])
+    for key, count in sorted(summary.technical_pipeline_status_distribution.items(), key=lambda x: x[0]):
+        lines.append(f"- {key}: {count}")
 
     lines.extend(["", "## Short Verdict Index"])
     lines.extend(_render_short_verdict_index(traces))
@@ -1755,6 +1852,20 @@ def _build_single_output_markdown(
                 f"- sql_shape_change_stage: {final.get('sql_shape_change_stage')}",
                 f"- sql_shape_change_reason: {final.get('sql_shape_change_reason')}",
                 f"- sql_shape_change_summary: {final.get('sql_shape_change_summary')}",
+                f"- clarification_reason_code: {final.get('clarification_reason_code')}",
+                f"- clarification_missing_dimensions: {final.get('clarification_missing_dimensions')}",
+                f"- clarification_was_avoidable: {final.get('clarification_was_avoidable')}",
+                f"- plan_confidence: {final.get('plan_confidence')}",
+                f"- semantic_confidence: {final.get('semantic_confidence')}",
+                f"- confidence_band: {final.get('confidence_band')}",
+                f"- false_success_risk: {final.get('false_success_risk')}",
+                f"- success_blocked_by_filter_loss: {final.get('success_blocked_by_filter_loss')}",
+                f"- pre_execution_risk_flags: {final.get('pre_execution_risk_flags')}",
+                f"- execution_guard_reason: {final.get('execution_guard_reason')}",
+                f"- execution_skipped_reason: {final.get('execution_skipped_reason')}",
+                f"- why_not_executed: {final.get('why_not_executed')}",
+                f"- executed_sql_fingerprint: {final.get('executed_sql_fingerprint')}",
+                f"- bind_summary: {final.get('bind_summary')}",
                 "",
                 "### Retrieval",
                 f"- schema_tables: {(trace.get('retrieval') or {}).get('schema_tables')}",
@@ -2064,13 +2175,19 @@ def _classify_narrator_leaks(text: str | None) -> tuple[bool, bool]:
 
 
 def _extract_exec_error_subtype(detail: str | None) -> str | None:
-    """Extract the bracketed error class written by OracleExecutor, e.g. '[oracle_syntax_error]'."""
+    """Extract the bracketed error class written by OracleExecutor, e.g. '[oracle_syntax_error]'.
+
+    Also recognises pre-execution guard codes and a small set of plain-text
+    patterns for legacy paths that do not carry a bracket tag.
+    """
     if not detail:
         return None
+    # 1. Bracket format set by OracleExecutor: "Database error... [oracle_syntax_error]."
     m = _EXEC_ERR_CLASS_PAT.search(detail)
     if m:
         return m.group(1)
     lowered = detail.lower()
+    # 2. Well-known pre-execution guard reason codes
     if "precheck_date_literal_invalid" in lowered:
         return "oracle_date_type_error"
     if "precheck_invalid_filter_value" in lowered:
@@ -2079,8 +2196,9 @@ def _extract_exec_error_subtype(detail: str | None) -> str | None:
         return "ambiguous_business_status"
     if "high_risk_but_executable" in lowered:
         return "high_risk_but_executable"
+    # 3. Timeout signals
     if "timeout" in lowered:
-        return "timeout_error"
+        return "timeout"
     return "unknown_execution_error"
 
 
@@ -2200,63 +2318,86 @@ async def _run_dataset_concurrent(
 
             try:
                 if question_timeout_s > 0:
-                    r = await asyncio.wait_for(
-                        _run_one(chat, item, session_prefix),
-                        timeout=question_timeout_s,
-                    )
+                    inner_task = asyncio.ensure_future(_run_one(chat, item, session_prefix))
+                    try:
+                        r = await asyncio.wait_for(asyncio.shield(inner_task), timeout=question_timeout_s)
+                    except asyncio.TimeoutError:
+                        inner_task.cancel()
+                        try:
+                            await inner_task
+                        except (asyncio.CancelledError, Exception):
+                            pass
+                        # Recover partial trace from task-scoped service state
+                        _planner = getattr(chat, "_planner", None)
+                        _orchestrator = getattr(chat, "_orchestrator", None)
+                        _partial_planner = {}
+                        _partial_orchestrator = {}
+                        if _planner and hasattr(_planner, "_last_trace_by_task"):
+                            _partial_planner = dict(_planner._last_trace_by_task.get(id(inner_task)) or {})  # noqa: SLF001
+                        if _orchestrator and hasattr(_orchestrator, "_last_trace_by_task"):
+                            _partial_orchestrator = dict(_orchestrator._last_trace_by_task.get(id(inner_task)) or {})  # noqa: SLF001
+                        # Determine planner completion from partial trace
+                        _planner_ok = bool(_partial_planner.get("final_plan"))
+                        _orch_last_stage = _partial_orchestrator.get("last_completed_stage")
+                        _timeout_reason = f"question_timeout>{question_timeout_s}s"
+                        r = EvalResult(
+                            id=item.id,
+                            domain=item.domain,
+                            category=item.category,
+                            question=item.text,
+                            expected_table=item.expected_table,
+                            expected_intent_type=item.expected_intent_type,
+                            status="execution_error",
+                            raw_status="execution_error",
+                            error_detail=_timeout_reason,
+                            execution_error_subtype="timeout",
+                            execution_status="execution_error",
+                            root_cause_layer="executor",
+                            primary_failure_reason=_timeout_reason,
+                            question_trace={
+                                "input": {
+                                    "question_id": item.id,
+                                    "question": item.text,
+                                    "domain": item.domain,
+                                    "category": item.category,
+                                    "expected_table": item.expected_table,
+                                    "expected_intent_type": item.expected_intent_type,
+                                },
+                                "partial_planner_trace": _partial_planner or None,
+                                "partial_orchestrator_trace": _partial_orchestrator or None,
+                                "why_not_executed": (
+                                    "timeout_before_plan" if not _planner_ok
+                                    else f"timeout_after_{_orch_last_stage or 'plan'}"
+                                ),
+                                "final_judgment": {
+                                    "status": "execution_error",
+                                    "raw_status": "execution_error",
+                                    "root_cause_layer": "executor",
+                                    "root_cause_stage": "execute",
+                                    "primary_failure_reason": _timeout_reason,
+                                    "secondary_failure_reason": None,
+                                    "business_status": "execution_error",
+                                    "quality_status": "fail",
+                                    "safety_status": "pass",
+                                    "business_failure_stage": "execute",
+                                    "quality_failure_stage": "execute",
+                                    "safety_failure_stage": "none",
+                                    "first_failing_stage": "execute",
+                                    "final_failing_stage": "execute",
+                                    "root_cause_category": "execution_failure",
+                                    "root_cause_detail": f"execute:{_timeout_reason}",
+                                    "planner_ok": _planner_ok,
+                                    "repair_ok": bool(_partial_planner.get("repair")),
+                                    "semantic_ok": bool(_partial_planner.get("semantic")),
+                                    "validation_ok": bool((_partial_orchestrator.get("validation") or {}).get("ok")),
+                                    "compile_ok": bool((_partial_orchestrator.get("compile") or {}).get("ok")),
+                                    "execute_ok": False,
+                                    "narration_ok": True,
+                                },
+                            },
+                        )
                 else:
                     r = await _run_one(chat, item, session_prefix)
-            except asyncio.TimeoutError:
-                r = EvalResult(
-                    id=item.id,
-                    domain=item.domain,
-                    category=item.category,
-                    question=item.text,
-                    expected_table=item.expected_table,
-                    expected_intent_type=item.expected_intent_type,
-                    status="execution_error",
-                    raw_status="execution_error",
-                    error_detail=f"question_timeout>{question_timeout_s}s",
-                    execution_error_subtype="timeout_error",
-                    execution_status="execution_error",
-                    root_cause_layer="executor",
-                    primary_failure_reason=f"question_timeout>{question_timeout_s}s",
-                    question_trace={
-                        "input": {
-                            "question_id": item.id,
-                            "question": item.text,
-                            "domain": item.domain,
-                            "category": item.category,
-                            "expected_table": item.expected_table,
-                            "expected_intent_type": item.expected_intent_type,
-                        },
-                        "final_judgment": {
-                            "status": "execution_error",
-                            "raw_status": "execution_error",
-                            "root_cause_layer": "executor",
-                            "root_cause_stage": "execute",
-                            "primary_failure_reason": f"question_timeout>{question_timeout_s}s",
-                            "secondary_failure_reason": None,
-                            "business_status": "execution_error",
-                            "quality_status": "fail",
-                            "safety_status": "pass",
-                            "business_failure_stage": "execute",
-                            "quality_failure_stage": "execute",
-                            "safety_failure_stage": "none",
-                            "first_failing_stage": "execute",
-                            "final_failing_stage": "execute",
-                            "root_cause_category": "execution_failure",
-                            "root_cause_detail": f"execute:question_timeout>{question_timeout_s}s",
-                            "planner_ok": True,
-                            "repair_ok": True,
-                            "semantic_ok": True,
-                            "validation_ok": True,
-                            "compile_ok": True,
-                            "execute_ok": False,
-                            "narration_ok": True,
-                        },
-                    },
-                )
             except Exception as exc:
                 r = EvalResult(
                     id=item.id,
@@ -2386,7 +2527,7 @@ def _bucket_execution_error(result: EvalResult) -> str | None:
         return "expression_rendering_issue"
     if subtype == "mis_shaped_params" or "ORA-01008" in detail:
         return "runtime_mis_shaped_params"
-    if subtype == "timeout_error" or "TIMEOUT" in detail:
+    if subtype == "timeout" or "TIMEOUT" in detail:
         return "timeout_heavy_join"
     return "data_specific_edge_case_or_unknown"
 
@@ -2479,6 +2620,7 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         "intent_guard": None,
         "validation": _default_validation_trace(),
         "compile": _default_compile_trace(),
+        "pre_execution": _default_pre_execution_trace(),
         "execute": _default_execute_trace(),
         "narration": _default_narration_trace(),
         "final_judgment": None,
@@ -2632,6 +2774,12 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         result.final_filter_coverage = dict(intent_guard_state.get("final_filter_coverage") or {})
         result.false_success_risk = bool(intent_guard_state.get("false_success_risk"))
         result.success_blocked_by_filter_loss = bool(intent_guard_state.get("success_blocked_by_filter_loss"))
+        result.clarification_reason_code = intent_guard_state.get("clarification_reason_code")
+        result.clarification_missing_dimensions = list(intent_guard_state.get("clarification_missing_dimensions") or [])
+        result.clarification_was_avoidable = bool(intent_guard_state.get("clarification_was_avoidable"))
+        result.plan_confidence = intent_guard_state.get("plan_confidence")
+        result.semantic_confidence = intent_guard_state.get("semantic_confidence")
+        result.confidence_band = intent_guard_state.get("confidence_band")
 
         if plan.needs_clarification:
             narration_started = time.perf_counter()
@@ -2650,11 +2798,21 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
             compile_state.update(_immutable_snapshot(orchestrator_trace.get("compile") or {}))
             compile_state["available"] = True
             trace["compile"] = compile_state
+            pre_execution_state = _default_pre_execution_trace()
+            pre_execution_state.update(_immutable_snapshot(orchestrator_trace.get("pre_execution") or {}))
+            pre_execution_state["available"] = bool(orchestrator_trace.get("pre_execution"))
+            trace["pre_execution"] = pre_execution_state
             execute_state = _default_execute_trace()
             execute_state.update(_immutable_snapshot(orchestrator_trace.get("execute") or {}))
             execute_state["available"] = True
             trace["execute"] = execute_state
             result.execute_question = item.text
+            result.pre_execution_risk_flags = list(pre_execution_state.get("pre_execution_risk_flags") or [])
+            result.execution_guard_reason = pre_execution_state.get("execution_guard_reason")
+            result.execution_skipped_reason = pre_execution_state.get("execution_skipped_reason")
+            result.why_not_executed = pre_execution_state.get("why_not_executed")
+            result.executed_sql_fingerprint = pre_execution_state.get("executed_sql_fingerprint") or compile_state.get("executed_sql_fingerprint")
+            result.bind_summary = dict(pre_execution_state.get("bind_summary") or compile_state.get("bind_summary") or {})
 
             if orchestration_result.failed_phase == ErrorPhase.VALIDATION:
                 narration_started = time.perf_counter()
@@ -2681,7 +2839,11 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
                     if orchestration_result.execution_result
                     else None
                 )
-                result.execution_error_subtype = _extract_exec_error_subtype(result.error_detail)
+                # Prefer subtype already set on execution result (propagated from executor)
+                result.execution_error_subtype = (
+                    (orchestration_result.execution_result.execution_error_subtype if orchestration_result.execution_result else None)
+                    or _extract_exec_error_subtype(result.error_detail)
+                )
             else:
                 narration_started = time.perf_counter()
                 answer = await narrator.narrate_success(item.text, orchestration_result)
@@ -2752,8 +2914,20 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         result.narrator_sql_leak = result.final_narrator_sql_leak
         result.narrator_presentation_leak = result.final_narrator_presentation_leak
         narration_ok = bool(final_response and not final_response_policy_violations and not result.final_response_mapping_error)
-        result.user_visible_quality = "pass" if narration_ok else "fail"
-        result.model_behavior_quality = "pass" if not raw_response_policy_violations else "fail"
+        if narration_ok:
+            if final_response_source in {"sanitized", "fallback_template"}:
+                result.user_visible_quality = "pass_with_sanitization"
+            else:
+                result.user_visible_quality = "pass"
+        else:
+            result.user_visible_quality = "fail"
+
+        if not narration_ok:
+            result.model_behavior_quality = "fail"
+        elif raw_response_policy_violations or bool(narrator_trace.get("prompt_contract_violated")):
+            result.model_behavior_quality = "degraded"
+        else:
+            result.model_behavior_quality = "pass"
         result.raw_leak_but_final_clean = bool(raw_response_policy_violations and not final_response_policy_violations)
         violation_types = list(raw_response_policy_violations)
 
@@ -3111,7 +3285,7 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         "final_plan_source_chain": ["planner_raw", "normalize", "repair", "semantic", "canonicalize"],
         "compiled_sql_source_plan_stage": "canonicalize",
         "narrator_summary_source_stage": (trace.get("narration") or {}).get("narrator_summary_source_stage"),
-        "narrator_final_source_stage": "sanitize" if result.final_response_source == "sanitized" else result.final_response_source,
+        "narrator_final_source_stage": "sanitize" if result.final_response_source in {"sanitized", "fallback_template"} else result.final_response_source,
         "technical_pipeline_status": result.technical_pipeline_status,
         "user_visible_status": result.user_visible_status,
         "planner_output_usable": result.planner_output_usable,
@@ -3127,6 +3301,18 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         "final_filter_coverage": result.final_filter_coverage,
         "false_success_risk": result.false_success_risk,
         "success_blocked_by_filter_loss": result.success_blocked_by_filter_loss,
+        "clarification_reason_code": result.clarification_reason_code,
+        "clarification_missing_dimensions": result.clarification_missing_dimensions,
+        "clarification_was_avoidable": result.clarification_was_avoidable,
+        "plan_confidence": result.plan_confidence,
+        "semantic_confidence": result.semantic_confidence,
+        "confidence_band": result.confidence_band,
+        "pre_execution_risk_flags": result.pre_execution_risk_flags,
+        "execution_guard_reason": result.execution_guard_reason,
+        "execution_skipped_reason": result.execution_skipped_reason,
+        "why_not_executed": result.why_not_executed,
+        "executed_sql_fingerprint": result.executed_sql_fingerprint,
+        "bind_summary": result.bind_summary,
         "user_visible_quality": result.user_visible_quality,
         "model_behavior_quality": result.model_behavior_quality,
         "sanitizer_reason_code": (trace.get("narration") or {}).get("sanitizer_reason_code"),
@@ -3331,10 +3517,56 @@ def _make_summary(
     no_failure_count = sum(1 for r in results if r.root_cause_category == "no_failure")
     user_visible_pass = sum(1 for r in results if r.user_visible_status in {"pass", "pass_with_sanitization"})
     pass_with_sanitization = sum(1 for r in results if r.user_visible_status == "pass_with_sanitization")
+    pass_without_sanitization = sum(
+        1
+        for r in results
+        if r.user_visible_quality == "pass"
+    )
+    false_success_risk_count = sum(1 for r in results if r.false_success_risk)
+    success_blocked_by_filter_loss_count = sum(1 for r in results if r.success_blocked_by_filter_loss)
     semantic_rescue_count = sum(1 for r in results if r.semantic_rescue_applied)
+    semantic_rescue_executable_count = sum(1 for r in results if r.semantic_rescue_was_executable is True)
     repaired = [r for r in results if r.repair_applied]
     executable_after_repair = sum(1 for r in repaired if r.compile_ok)
     executable_after_repair_rate = (executable_after_repair / len(repaired)) if repaired else 0.0
+    narration_generic_count = sum(
+        1
+        for r in results
+        if bool(((r.question_trace or {}).get("narration") or {}).get("narration_genericness_flag"))
+    )
+    fallback_template_count = sum(
+        1
+        for r in results
+        if bool(((r.question_trace or {}).get("narration") or {}).get("narrator_used_fallback_template"))
+    )
+    user_visible_quality_distribution = dict(Counter(r.user_visible_quality for r in results))
+    model_behavior_quality_distribution = dict(Counter(r.model_behavior_quality for r in results))
+    clarification_reason_code_distribution = dict(Counter((r.clarification_reason_code or "none") for r in results))
+    confidence_band_distribution = dict(Counter((r.confidence_band or "unknown") for r in results))
+    pre_execution_risk_flag_distribution = dict(
+        Counter(
+            flag
+            for r in results
+            for flag in (r.pre_execution_risk_flags or ["none"])
+        )
+    )
+    execution_guard_reason_distribution = dict(Counter((r.execution_guard_reason or "none") for r in results))
+    sql_shape_change_stage_distribution = dict(Counter(r.sql_shape_change_stage for r in results))
+    sql_shape_change_reason_distribution = dict(Counter(r.sql_shape_change_reason for r in results))
+    user_visible_status_distribution = dict(Counter(r.user_visible_status for r in results))
+    technical_pipeline_status_distribution = dict(Counter(r.technical_pipeline_status for r in results))
+    sanitizer_reason_code_distribution = dict(
+        Counter(
+            (((r.question_trace or {}).get("narration") or {}).get("sanitizer_reason_code") or "none")
+            for r in results
+        )
+    )
+    # Sprint C: dedicated subtype distribution (separated from exec_subtypes raw counter)
+    execution_error_subtype_distribution = dict(Counter(
+        (r.execution_error_subtype or "none")
+        for r in results
+        if r.raw_status == "execution_error"
+    ))
 
     return EvalSummary(
         total_questions=total,
@@ -3408,7 +3640,26 @@ def _make_summary(
         user_visible_pass_rate=rate(user_visible_pass),
         pass_with_sanitization_rate=rate(pass_with_sanitization),
         semantic_rescue_rate=rate(semantic_rescue_count),
+        semantic_rescue_executable_rate=rate(semantic_rescue_executable_count),
         executable_after_repair_rate=executable_after_repair_rate,
+        narration_genericness_rate=rate(narration_generic_count),
+        fallback_template_usage_rate=rate(fallback_template_count),
+        pass_without_sanitization_rate=rate(pass_without_sanitization),
+        false_success_risk_rate=rate(false_success_risk_count),
+        success_blocked_by_filter_loss_count=success_blocked_by_filter_loss_count,
+        success_blocked_by_filter_loss_rate=rate(success_blocked_by_filter_loss_count),
+        user_visible_quality_distribution=user_visible_quality_distribution,
+        model_behavior_quality_distribution=model_behavior_quality_distribution,
+        sanitizer_reason_code_distribution=sanitizer_reason_code_distribution,
+        clarification_reason_code_distribution=clarification_reason_code_distribution,
+        confidence_band_distribution=confidence_band_distribution,
+        pre_execution_risk_flag_distribution=pre_execution_risk_flag_distribution,
+        execution_guard_reason_distribution=execution_guard_reason_distribution,
+        sql_shape_change_stage_distribution=sql_shape_change_stage_distribution,
+        sql_shape_change_reason_distribution=sql_shape_change_reason_distribution,
+        user_visible_status_distribution=user_visible_status_distribution,
+        technical_pipeline_status_distribution=technical_pipeline_status_distribution,
+        execution_error_subtype_distribution=execution_error_subtype_distribution,
     )
 
 
@@ -3503,6 +3754,14 @@ def _build_report_markdown(
         + [
             f"- structured_parse_errors: {summary.structured_parse_errors}",
             "",
+            "G2. Execution error subtype distribution (clarified)",
+        ]
+        + [
+            f"- {k}: {v}"
+            for k, v in sorted(summary.execution_error_subtype_distribution.items(), key=lambda x: -x[1])
+        ]
+        + [
+            "",
             "H. Narrator leak analizi",
             f"- narrator_leak_rate(final): {_format_pct(summary.final_narrator_leak_rate)}",
             f"- presentation_leak_rate(final): {_format_pct(summary.final_presentation_leak_rate)}",
@@ -3518,7 +3777,14 @@ def _build_report_markdown(
             f"- user_visible_pass_rate: {_format_pct(summary.user_visible_pass_rate)}",
             f"- pass_with_sanitization_rate: {_format_pct(summary.pass_with_sanitization_rate)}",
             f"- semantic_rescue_rate: {_format_pct(summary.semantic_rescue_rate)}",
+            f"- semantic_rescue_executable_rate: {_format_pct(summary.semantic_rescue_executable_rate)}",
             f"- executable_after_repair_rate: {_format_pct(summary.executable_after_repair_rate)}",
+            f"- narration_genericness_rate: {_format_pct(summary.narration_genericness_rate)}",
+            f"- fallback_template_usage_rate: {_format_pct(summary.fallback_template_usage_rate)}",
+            f"- pass_without_sanitization_rate: {_format_pct(summary.pass_without_sanitization_rate)}",
+            f"- false_success_risk_rate: {_format_pct(summary.false_success_risk_rate)}",
+            f"- success_blocked_by_filter_loss_count: {summary.success_blocked_by_filter_loss_count}",
+            f"- success_blocked_by_filter_loss_rate: {_format_pct(summary.success_blocked_by_filter_loss_rate)}",
             "",
             "I. Wrong-plan root-cause bucketlari",
         ]
@@ -3576,6 +3842,40 @@ def _build_report_markdown(
             "",
             "O. Sonuc metrikleri",
             metric_table,
+            "",
+            "P. Planner ve execution dagilimlari",
+        ]
+        + [
+            f"- clarification_reason/{k}: {v}"
+            for k, v in sorted(summary.clarification_reason_code_distribution.items(), key=lambda x: x[0])
+        ]
+        + [
+            f"- confidence_band/{k}: {v}"
+            for k, v in sorted(summary.confidence_band_distribution.items(), key=lambda x: x[0])
+        ]
+        + [
+            f"- pre_execution_risk/{k}: {v}"
+            for k, v in sorted(summary.pre_execution_risk_flag_distribution.items(), key=lambda x: x[0])
+        ]
+        + [
+            f"- execution_guard_reason/{k}: {v}"
+            for k, v in sorted(summary.execution_guard_reason_distribution.items(), key=lambda x: x[0])
+        ]
+        + [
+            f"- sql_shape_change_stage/{k}: {v}"
+            for k, v in sorted(summary.sql_shape_change_stage_distribution.items(), key=lambda x: x[0])
+        ]
+        + [
+            f"- sql_shape_change_reason/{k}: {v}"
+            for k, v in sorted(summary.sql_shape_change_reason_distribution.items(), key=lambda x: x[0])
+        ]
+        + [
+            f"- user_visible_status/{k}: {v}"
+            for k, v in sorted(summary.user_visible_status_distribution.items(), key=lambda x: x[0])
+        ]
+        + [
+            f"- technical_pipeline_status/{k}: {v}"
+            for k, v in sorted(summary.technical_pipeline_status_distribution.items(), key=lambda x: x[0])
         ]
     )
 

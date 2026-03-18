@@ -103,6 +103,9 @@ class Orchestrator:
         """
         self._set_last_trace({
             "input_plan": plan.model_dump(mode="json"),
+            "last_completed_stage": None,
+            "current_stage_at_failure": None,
+            "root_cause_stage": None,
             "validation": None,
             "compile": None,
             "execute": None,
@@ -120,6 +123,11 @@ class Orchestrator:
             "resolved_tables": sorted(validation.resolved_tables.keys()),
             "latency_ms": validation_ms,
         }
+        if validation.ok:
+            self._last_trace["last_completed_stage"] = "validation"
+        else:
+            self._last_trace["current_stage_at_failure"] = "validation"
+            self._last_trace["root_cause_stage"] = "validation"
 
         if not validation.ok:
             logger.info("Plan validation failed: %s", validation.errors)
@@ -135,41 +143,6 @@ class Orchestrator:
             "this indicates a bug in ValidationService."
         )
 
-        precheck = assess_pre_execution_risk(plan, table)
-        self._last_trace["pre_execution"] = {
-            "pre_execution_risk_flags": precheck["pre_execution_risk_flags"],
-            "execution_guard_reason": precheck["execution_guard_reason"],
-            "execution_skipped_reason": precheck["execution_skipped_reason"],
-            "should_execute": precheck["should_execute"],
-        }
-
-        if not precheck["should_execute"]:
-            reason = str(precheck["execution_skipped_reason"] or "pre_execution_blocked")
-            self._last_trace["compile"] = {
-                "ok": False,
-                "error": reason,
-                "skipped": True,
-                "why_not_executed": reason,
-            }
-            self._last_trace["execute"] = {
-                "status": ExecutionStatus.ERROR.value,
-                "row_count": 0,
-                "columns": [],
-                "error_message": reason,
-                "execution_guard_reason": precheck["execution_guard_reason"],
-                "execution_skipped_reason": reason,
-                "pre_execution_risk_flags": precheck["pre_execution_risk_flags"],
-                "why_not_executed": reason,
-            }
-            return OrchestrationResult(
-                validation=validation,
-                execution_result=ExecutionResult(
-                    status=ExecutionStatus.ERROR,
-                    error_message=reason,
-                ),
-                failed_phase=ErrorPhase.EXECUTION,
-            )
-
         # 3 – Compile
         compile_started = time.perf_counter()
         try:
@@ -184,6 +157,8 @@ class Orchestrator:
                 "error": str(exc),
                 "latency_ms": int((time.perf_counter() - compile_started) * 1000),
             }
+            self._last_trace["current_stage_at_failure"] = "compile"
+            self._last_trace["root_cause_stage"] = "compile"
             logger.error("Compilation error: %s", exc)
             return OrchestrationResult(
                 validation=validation,
@@ -201,9 +176,47 @@ class Orchestrator:
             "bind_summary": bind_summary(compiled),
             "latency_ms": int((time.perf_counter() - compile_started) * 1000),
         }
+        self._last_trace["last_completed_stage"] = "compile"
 
         logger.info("Compiled SQL:\n%s", compiled.sql)
         logger.info("Params: %s", compiled.params)
+
+        precheck = assess_pre_execution_risk(plan, table)
+        self._last_trace["pre_execution"] = {
+            "pre_execution_risk_flags": precheck["pre_execution_risk_flags"],
+            "execution_guard_reason": precheck["execution_guard_reason"],
+            "execution_skipped_reason": precheck["execution_skipped_reason"],
+            "why_not_executed": precheck["execution_skipped_reason"],
+            "should_execute": precheck["should_execute"],
+            "executed_sql_fingerprint": sql_fingerprint(compiled.sql),
+            "bind_summary": bind_summary(compiled),
+        }
+
+        if not precheck["should_execute"]:
+            reason = str(precheck["execution_skipped_reason"] or "pre_execution_blocked")
+            self._last_trace["execute"] = {
+                "status": "skipped",
+                "row_count": 0,
+                "columns": [],
+                "error_message": reason,
+                "execution_guard_reason": precheck["execution_guard_reason"],
+                "execution_skipped_reason": reason,
+                "pre_execution_risk_flags": precheck["pre_execution_risk_flags"],
+                "why_not_executed": reason,
+                "executed_sql_fingerprint": sql_fingerprint(compiled.sql),
+                "bind_summary": bind_summary(compiled),
+                "latency_ms": 0,
+            }
+            return OrchestrationResult(
+                validation=validation,
+                compiled_query=compiled,
+                execution_result=ExecutionResult(
+                    status=ExecutionStatus.ERROR,
+                    error_message=reason,
+                ),
+                failed_phase=ErrorPhase.EXECUTION,
+            )
+
 
         # 4 – Execute
         execute_started = time.perf_counter()
@@ -211,15 +224,21 @@ class Orchestrator:
             execution = await self._executor.execute(compiled)
         except Exception as exc:
             logger.error("Execution error: %s", exc)
+            subtype = getattr(exc, "execution_error_subtype", None) or "unknown_execution_error"
+            msg_norm = getattr(exc, "execution_error_message_normalized", None) or str(exc)[:120]
             execution = ExecutionResult(
                 status=ExecutionStatus.ERROR,
                 error_message=str(exc),
+                execution_error_subtype=subtype,
+                execution_error_message_normalized=msg_norm,
             )
         self._last_trace["execute"] = {
             "status": execution.status.value,
             "row_count": execution.row_count,
             "columns": list(execution.columns),
             "error_message": execution.error_message,
+            "execution_error_subtype": execution.execution_error_subtype,
+            "execution_error_message_normalized": execution.execution_error_message_normalized,
             "execution_time_ms": execution.execution_time_ms,
             "executed_sql_fingerprint": sql_fingerprint(compiled.sql),
             "bind_summary": bind_summary(compiled),
@@ -228,6 +247,11 @@ class Orchestrator:
             "pre_execution_risk_flags": precheck["pre_execution_risk_flags"],
             "latency_ms": int((time.perf_counter() - execute_started) * 1000),
         }
+        if execution.status == ExecutionStatus.ERROR:
+            self._last_trace["current_stage_at_failure"] = "execute"
+            self._last_trace["root_cause_stage"] = "execute"
+        else:
+            self._last_trace["last_completed_stage"] = "execute"
 
         # 5 – Determine execution-phase failure and return.
         failed = (

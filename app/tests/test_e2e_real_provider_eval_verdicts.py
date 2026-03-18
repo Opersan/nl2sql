@@ -137,6 +137,27 @@ def test_summary_includes_new_verdict_metrics() -> None:
     ok.first_failing_stage = "none"
     ok.root_cause_category = "unknown"
     ok.trace_flags = {"changed_sql_shape": False}
+    ok.user_visible_status = "pass"
+    ok.technical_pipeline_status = "pass"
+    ok.semantic_rescue_applied = False
+    ok.semantic_rescue_was_executable = None
+    ok.sql_shape_change_stage = "none"
+    ok.sql_shape_change_reason = "no_change"
+    ok.false_success_risk = False
+    ok.success_blocked_by_filter_loss = False
+    ok.clarification_reason_code = "none"
+    ok.confidence_band = "high"
+    ok.pre_execution_risk_flags = []
+    ok.execution_guard_reason = None
+    ok.user_visible_quality = "pass"
+    ok.model_behavior_quality = "pass"
+    ok.question_trace = {
+        "narration": {
+            "narration_genericness_flag": False,
+            "narrator_used_fallback_template": False,
+            "sanitizer_reason_code": "no_sanitization_needed",
+        }
+    }
 
     leak = _base_result()
     leak.id = "q2"
@@ -150,6 +171,27 @@ def test_summary_includes_new_verdict_metrics() -> None:
     leak.final_narrator_presentation_leak = True
     leak.narrator_presentation_leak = True
     leak.trace_flags = {"changed_sql_shape": True}
+    leak.user_visible_status = "pass_with_sanitization"
+    leak.technical_pipeline_status = "fail_guarded"
+    leak.semantic_rescue_applied = True
+    leak.semantic_rescue_was_executable = True
+    leak.sql_shape_change_stage = "semantic"
+    leak.sql_shape_change_reason = "semantic_filter_override"
+    leak.false_success_risk = True
+    leak.success_blocked_by_filter_loss = True
+    leak.clarification_reason_code = "filter_intent_missing"
+    leak.confidence_band = "low"
+    leak.pre_execution_risk_flags = ["oracle_date_type_error"]
+    leak.execution_guard_reason = "precheck_date_literal_invalid"
+    leak.user_visible_quality = "pass_with_sanitization"
+    leak.model_behavior_quality = "degraded"
+    leak.question_trace = {
+        "narration": {
+            "narration_genericness_flag": True,
+            "narrator_used_fallback_template": True,
+            "sanitizer_reason_code": "policy_leak_removed",
+        }
+    }
 
     summary = _make_summary(
         [ok, leak],
@@ -166,6 +208,30 @@ def test_summary_includes_new_verdict_metrics() -> None:
     assert summary.first_fail_stage_counts["narration"] == 1
     assert summary.root_cause_category_counts["narrator_leak"] == 1
     assert summary.sql_shape_changed_rate == 0.5
+    assert summary.narration_genericness_rate == 0.5
+    assert summary.fallback_template_usage_rate == 0.5
+    assert summary.pass_without_sanitization_rate == 0.5
+    assert summary.false_success_risk_rate == 0.5
+    assert summary.success_blocked_by_filter_loss_count == 1
+    assert summary.success_blocked_by_filter_loss_rate == 0.5
+    assert summary.semantic_rescue_executable_rate == 0.5
+    assert summary.user_visible_quality_distribution["pass"] == 1
+    assert summary.user_visible_quality_distribution["pass_with_sanitization"] == 1
+    assert summary.model_behavior_quality_distribution["pass"] == 1
+    assert summary.model_behavior_quality_distribution["degraded"] == 1
+    assert summary.sanitizer_reason_code_distribution["no_sanitization_needed"] == 1
+    assert summary.sanitizer_reason_code_distribution["policy_leak_removed"] == 1
+    assert summary.clarification_reason_code_distribution["filter_intent_missing"] == 1
+    assert summary.confidence_band_distribution["high"] == 1
+    assert summary.confidence_band_distribution["low"] == 1
+    assert summary.pre_execution_risk_flag_distribution["oracle_date_type_error"] == 1
+    assert summary.execution_guard_reason_distribution["precheck_date_literal_invalid"] == 1
+    assert summary.sql_shape_change_stage_distribution["semantic"] == 1
+    assert summary.sql_shape_change_reason_distribution["semantic_filter_override"] == 1
+    assert summary.user_visible_status_distribution["pass"] == 1
+    assert summary.user_visible_status_distribution["pass_with_sanitization"] == 1
+    assert summary.technical_pipeline_status_distribution["pass"] == 1
+    assert summary.technical_pipeline_status_distribution["fail_guarded"] == 1
 
 
 def test_immutable_snapshot_detaches_nested_structures() -> None:

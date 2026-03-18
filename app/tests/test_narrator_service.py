@@ -98,6 +98,23 @@ class TestSuccessNarration:
         assert trace.get("narrator_used_fallback_template") is True
 
 
+class TestNarrationShapeClassification:
+    def test_shape_listing(self, narrator: NarratorService) -> None:
+        assert narrator._infer_shape_from_summary("status=success\nshape=listing") == "listing"  # noqa: SLF001
+
+    def test_shape_grouped_aggregate(self, narrator: NarratorService) -> None:
+        assert narrator._infer_shape_from_summary("status=success\nshape=grouped_aggregate") == "grouped_aggregate"  # noqa: SLF001
+
+    def test_shape_scalar_metric(self, narrator: NarratorService) -> None:
+        assert narrator._infer_shape_from_summary("status=success\nshape=scalar_metric") == "scalar_metric"  # noqa: SLF001
+
+    def test_shape_empty_result(self, narrator: NarratorService) -> None:
+        assert narrator._infer_shape_from_summary("status=success\nsatır_sayısı=0") == "empty_result"  # noqa: SLF001
+
+    def test_shape_clarification(self, narrator: NarratorService) -> None:
+        assert narrator._infer_shape_from_summary("Açıklama gerekli. Mesaj: Hangi alan?") == "clarification"  # noqa: SLF001
+
+
 # ---------------------------------------------------------------------------
 # Validation-error narration
 # ---------------------------------------------------------------------------

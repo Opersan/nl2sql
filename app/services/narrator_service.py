@@ -151,7 +151,9 @@ class NarratorService:
             "prompt_length": len(prompt),
             "full_prompt_text": prompt,
             "raw_response": None,
+            "sanitized_response": None,
             "final_response": None,
+            "final_response_source": "fallback_template",
             "narration_shape": self._infer_shape_from_summary(summary),
             "narration_business_value_score": 0,
             "narration_genericness_flag": False,
@@ -159,6 +161,9 @@ class NarratorService:
             "final_narration_quality": "unknown",
             "narrator_used_fallback_template": False,
             "prompt_contract_violated": False,
+            "sanitizer_reason_code": None,
+            "user_visible_quality": "fail",
+            "model_behavior_quality": "fail",
             "error": None,
         })
         try:
@@ -171,17 +176,35 @@ class NarratorService:
                     shape=str(self._last_trace.get("narration_shape") or "listing"),
                     summary=summary,
                 )
+            raw_vs_cleaned_changed = bool(raw and raw.strip() != cleaned.strip())
+            if generic:
+                source = "fallback_template"
+            elif raw_vs_cleaned_changed:
+                source = "sanitized"
+            else:
+                source = "raw"
             quality_score = self._business_value_score(cleaned, summary)
+            narration_quality = "high" if quality_score >= 70 else ("medium" if quality_score >= 40 else "low")
+            if source == "raw" and not contract_violation:
+                model_bq = "pass"
+            elif contract_violation:
+                model_bq = "degraded"
+            else:
+                model_bq = "degraded"
             self._last_trace.update(
                 {
                     "raw_response": raw,
+                    "sanitized_response": cleaned if raw_vs_cleaned_changed else None,
                     "final_response": cleaned,
+                    "final_response_source": source,
                     "narration_business_value_score": quality_score,
                     "narration_genericness_flag": generic,
                     "raw_narration_quality": "poor" if contract_violation else "acceptable",
-                    "final_narration_quality": "high" if quality_score >= 70 else ("medium" if quality_score >= 40 else "low"),
+                    "final_narration_quality": narration_quality,
                     "narrator_used_fallback_template": generic,
                     "prompt_contract_violated": contract_violation,
+                    "user_visible_quality": "pass" if source == "raw" else "pass_with_sanitization",
+                    "model_behavior_quality": model_bq,
                 }
             )
             return cleaned
@@ -270,16 +293,69 @@ class NarratorService:
 
     @staticmethod
     def _fallback_template(*, shape: str, summary: str) -> str:
+        """Deterministic higher-value fallback templates per output shape."""
         if shape == "empty_result":
-            return "Kriterlere uygun kayıt bulunamadı."
-        if shape in {"grouped_aggregate", "scalar_metric"}:
-            return "Sorgu sonucu metrik bazında üretildi. Özet değerleri üstteki kriterlere göre hazır."
+            # Try to mention filter criteria
+            m_filter = re.search(r"uygulanan_filtreler=([^\n]+)", summary)
+            filter_hint = (m_filter.group(1).strip() if m_filter and m_filter.group(1).strip() not in {"yok", ""} else None)
+            if filter_hint:
+                return f"Belirtilen kriterlere ({filter_hint}) uygun kayıt bulunamadı."
+            return "Belirtilen kriterlere uygun kayıt bulunamadı."
+        if shape == "scalar_metric":
+            # Try to extract row count (which in scalar context is the metric value set)
+            m_rows = re.search(r"satır sayısı:\s*(\d+)", summary, re.IGNORECASE)
+            m_cols = re.search(r"seçili_alanlar=([^\n]+)", summary)
+            col_hint = ""
+            if m_cols:
+                cols = [c.strip() for c in m_cols.group(1).split(",") if c.strip()]
+                agg_cols = [c for c in cols if any(k in c.lower() for k in ("count", "sum", "avg", "miktar", "toplam", "sayi", "sayı"))]
+                col_hint = agg_cols[0] if agg_cols else (cols[0] if cols else "")
+            if m_rows and col_hint:
+                return f"Sorgu metrikleri hesaplandı. {col_hint.upper()} değeri {m_rows.group(1)} kayıt üzerinden hesaplandı."
+            if m_rows:
+                return f"Sorgu tamamlandı. Toplam {m_rows.group(1)} kayıt üzerinden metrik hesaplandı."
+            return "Sorgu sonucu metrik bazında üretildi. Özet değerleri kriterlerinize göre hazır."
+        if shape == "grouped_aggregate":
+            m_rows = re.search(r"satır sayısı:\s*(\d+)", summary, re.IGNORECASE)
+            m_group = re.search(r"group_by_hint=([^\n]+)", summary)
+            m_top = re.search(r"top_group_label=([^\n]+)", summary)
+            row_hint = f" {m_rows.group(1)} satırda" if m_rows else ""
+            group_hint = f" {m_group.group(1).strip()}" if m_group else ""
+            top_hint = f" En yüksek grup: {m_top.group(1).strip()}." if m_top else ""
+            return f"Sorgulama{row_hint}{group_hint} kırılımıyla tamamlandı.{top_hint}"
         if shape == "clarification":
-            m = re.search(r"Mesaj:\s*(.+)$", summary)
-            if m:
-                return m.group(1).strip()
+            # Use clarification message if available, otherwise return useful prompt
+            m_dims = re.search(r"missing_dimensions=([^\n]+)", summary)
+            m_msg = re.search(r"Mesaj:\s*(.+)$", summary)
+            if m_dims:
+                dims = m_dims.group(1).strip()
+                return f"Sorguyu yanıtlamak için şu bilgilere ihtiyacım var: {dims}. Lütfen netleştirin."
+            if m_msg:
+                return m_msg.group(1).strip()
             return "İstenen sonucu üretebilmem için tarih aralığı veya metrik boyutunu netleştirmeniz gerekiyor."
-        return "Sorgu tamamlandı. Uygun kayıtlar listelendi ve özetlendi."
+        # listing
+        m_rows = re.search(r"satır sayısı:\s*(\d+)", summary, re.IGNORECASE)
+        m_fields = re.search(r"iş_alanları=([^\n]+)", summary)
+        m_filter = re.search(r"uygulanan_filtreler=([^\n]+)", summary)
+        m_sort = re.search(r"uygulanan_sıralama=([^\n]+)", summary)
+        m_clip = re.search(r"row_limit_hit=evet", summary)
+        parts: list[str] = []
+        if m_rows:
+            n = int(m_rows.group(1))
+            parts.append(f"Toplam {n} kayıt listelendi.")
+        else:
+            parts.append("Sorgu tamamlandı.")
+        if m_fields:
+            fields = [f.strip() for f in m_fields.group(1).split(",") if f.strip()][:3]
+            if fields:
+                parts.append(f"Gösterilen alanlar: {', '.join(fields)}.")
+        if m_filter and m_filter.group(1).strip() not in {"yok", ""}:
+            parts.append(f"Uygulanan filtreler: {m_filter.group(1).strip()}.")
+        if m_sort and m_sort.group(1).strip() not in {"yok", ""}:
+            parts.append(f"Sıralama: {m_sort.group(1).strip()}.")
+        if m_clip:
+            parts.append("Sonuçlar limit nedeniyle kırpıldı; daha fazla kayıt mevcut olabilir.")
+        return " ".join(parts) if parts else "Uygun kayıtlar listelendi ve özetlendi."
 
     @staticmethod
     def _is_generic_low_value(text: str) -> bool:
@@ -340,10 +416,21 @@ class NarratorService:
         filters = []
         sort = []
         row_limit_hit = False
+        group_by_hint = ""
+        top_group_label = ""
         if plan is not None:
             filters = [f"{f.column} {f.op.value}" for f in plan.filters[:4]]
             sort = [f"{o.column} {o.direction.value}" for o in plan.order_by[:3]]
             row_limit_hit = bool(er.row_count >= plan.limit)
+            if plan.group_by:
+                group_by_hint = ", ".join(plan.group_by[:3])
+        # For grouped_aggregate with rows: derive top group from first row of results
+        if shape == "grouped_aggregate" and er.rows and plan and plan.group_by:
+            top_row = er.rows[0]
+            group_col = plan.group_by[0]
+            top_val = top_row.get(group_col.lower()) or top_row.get(group_col)
+            if top_val is not None:
+                top_group_label = str(top_val)[:60]
 
         payload = [
             "Sorgu başarılı.",
@@ -357,6 +444,10 @@ class NarratorService:
             f"uygulanan_sıralama={'; '.join(sort) if sort else 'yok'}",
             f"row_limit_hit={'evet' if row_limit_hit else 'hayır'}",
         ]
+        if group_by_hint:
+            payload.append(f"group_by_hint={group_by_hint}")
+        if top_group_label:
+            payload.append(f"top_group_label={top_group_label}")
         return "\n".join(payload)
 
     @staticmethod
@@ -385,4 +476,8 @@ class NarratorService:
     @staticmethod
     def _build_clarification_summary(plan: QueryPlan) -> str:
         msg = plan.clarification_message or "Daha fazla bilgi gerekiyor."
-        return f"Açıklama gerekli. Mesaj: {msg}"
+        parts = [f"Açıklama gerekli. Mesaj: {msg}"]
+        missing = plan.clarification_missing_dimensions or []
+        if missing:
+            parts.append(f"missing_dimensions={', '.join(str(d) for d in missing[:4])}")
+        return "\n".join(parts)

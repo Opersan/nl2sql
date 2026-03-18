@@ -286,6 +286,7 @@ class QueryPlan(BaseModel):
     limit: int = Field(default=100, ge=1, le=1000)
     needs_clarification: bool = False
     clarification_message: str | None = Field(default=None, min_length=1)
+    clarification_missing_dimensions: list[str] = Field(default_factory=list)
 
     @property
     def is_multi_table(self) -> bool:

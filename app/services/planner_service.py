@@ -59,6 +59,7 @@ from app.services.catalog_service import CatalogService
 from app.services.document_retrieval_service import DocumentRetrievalService
 from app.services.intent_guard import (
     build_filter_loss_guard_decision,
+    derive_clarification_diagnostics,
     derive_confidence_band,
 )
 from app.services.plan_normalizer import (
@@ -179,6 +180,21 @@ class PlannerService:
                 "triggered": True,
                 "reason": "sensitive_or_invalid_request",
             }
+            # Always set intent_guard so downstream eval can read clarification diagnostics
+            self._last_trace["intent_guard"] = {
+                "requested_filter_signals": [],
+                "planner_filter_coverage": {},
+                "final_filter_coverage": {},
+                "false_success_risk": False,
+                "success_blocked_by_filter_loss": False,
+                "clarification_reason_code": "policy_guard_triggered",
+                "clarification_missing_dimensions": [],
+                "clarification_was_avoidable": False,
+                "plan_confidence": "rule_low",
+                "semantic_confidence": "rule_low",
+                "confidence_band": "low",
+                "plan_confidence_band": "low",
+            }
             self._last_trace["final_plan"] = self._snapshot_plan(plan)
             return plan
 
@@ -295,12 +311,20 @@ class PlannerService:
                         f"Sorguda {dim_label} net ama plan bu filtreyi güvenilir şekilde koruyamadı. "
                         "Lütfen ilgili filtreyi açıkça belirtin."
                     ),
+                    "clarification_missing_dimensions": missing_dims,
                     "select_columns": [],
+                    "filters": [],
                     "aggregations": [],
                     "group_by": [],
                     "order_by": [],
                 }
             )
+
+        clarification_diag = derive_clarification_diagnostics(
+            planner_plan=planner_plan_snapshot,
+            final_plan=query_plan,
+            guard_decision=guard,
+        )
 
         plan_band, plan_conf = derive_confidence_band(
             needs_clarification=planner_plan_snapshot.needs_clarification,
@@ -319,15 +343,9 @@ class PlannerService:
             "final_filter_coverage": guard["final_filter_coverage"],
             "false_success_risk": guard["false_success_risk"],
             "success_blocked_by_filter_loss": guard["success_blocked_by_filter_loss"],
-            "clarification_reason_code": (
-                guard["clarification_reason_code"]
-                or ("planner_clarification" if query_plan.needs_clarification else None)
-            ),
-            "clarification_missing_dimensions": guard["clarification_missing_dimensions"],
-            "clarification_was_avoidable": bool(
-                planner_plan_snapshot.needs_clarification
-                and not query_plan.needs_clarification
-            ),
+            "clarification_reason_code": clarification_diag["clarification_reason_code"],
+            "clarification_missing_dimensions": clarification_diag["clarification_missing_dimensions"],
+            "clarification_was_avoidable": clarification_diag["clarification_was_avoidable"],
             "plan_confidence": plan_conf,
             "semantic_confidence": sem_conf,
             "confidence_band": sem_band,

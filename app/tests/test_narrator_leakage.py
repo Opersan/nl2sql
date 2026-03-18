@@ -71,8 +71,8 @@ def test_narrator_sanitizer_fallback_success_summary() -> None:
         raw_status="success",
         expected_context={"source_summary_text_for_narrator": "Sorgu başarılı. Satır sayısı: 100."},
     )
-    assert out["sanitizer_mode"] == "fallback_summary"
-    assert out["final_response_source"] == "fallback"
+    assert out["sanitizer_mode"] == "safe_rewrite"
+    assert out["final_response_source"] == "fallback_template"
     assert out["final_response"] == "Toplam 100 kayıt listelendi."
 
 
@@ -84,7 +84,7 @@ def test_narrator_sanitizer_fallback_error() -> None:
         raw_status="execution_error",
         expected_context={"source_summary_text_for_narrator": "Çalıştırma hatası. Hata: ORA-00942"},
     )
-    assert out["sanitizer_mode"] == "fallback_error"
+    assert out["sanitizer_mode"] == "safe_rewrite"
     assert out["final_response"] == "İşlem tamamlanamadı. Lütfen daha sonra tekrar deneyin."
 
 

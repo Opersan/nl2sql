@@ -62,6 +62,23 @@ class ExecutionResult(BaseModel):
     row_count: int = 0
     error_message: str | None = None
     execution_time_ms: int | None = None
+    # Sprint C — execution error decomposition
+    execution_error_subtype: str | None = Field(
+        default=None,
+        description=(
+            "Deterministic error sub-type label derived from the Oracle error code "
+            "or timeout signal.  One of: oracle_date_type_error, invalid_number, "
+            "invalid_identifier, ambiguous_column, not_null_violation, "
+            "numeric_value_error, timeout, unknown_execution_error, etc."
+        ),
+    )
+    execution_error_message_normalized: str | None = Field(
+        default=None,
+        description=(
+            "Short normalised error message derived from the raw exception string. "
+            "Safe for trace/debug output; never contains raw bind-parameter values."
+        ),
+    )
 
 
 class ErrorPhase(str, Enum):

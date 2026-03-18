@@ -1313,6 +1313,161 @@
           ]
         }
       ]
+    },
+    {
+      "name": "MTL_SYSTEM_ITEMS_TL",
+      "description": "Oracle Inventory item master tablosudur. Inventory item tanımını organization seviyesinde tutar. INVENTORY_ITEM_ID ve ORGANIZATION_ID birlikte benzersiz kaydı tanımlar. DESCRIPTION base dilde tutulur; çok dilli açıklamalar için MTL_SYSTEM_ITEMS_TL kullanılır.",
+      "aliases": [
+        "item master",
+        "inventory item",
+        "item",
+        "material master",
+        "stok kartı",
+        "malzeme kartı",
+        "ürün kartı",
+        "item master"
+      ],
+      "primary_key": [
+        "inventory_item_id",
+        "organization_id"
+      ],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "inventory_item_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Item kaydının teknik anahtarıdır.",
+          "aliases": [
+            "inventory item id",
+            "item id",
+            "stok id",
+            "malzeme id"
+          ]
+        },
+        {
+          "name": "organization_id",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Item tanımının bağlı olduğu inventory organization kimliğidir.",
+          "aliases": [
+            "inventory org",
+            "organization id",
+            "envanter organizasyonu"
+          ]
+        },
+        {
+          "name": "segment1",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Item numarası/kodu genellikle bu kolonda tutulur.",
+          "aliases": [
+            "item number",
+            "item code",
+            "stok kodu",
+            "malzeme kodu"
+          ]
+        },
+        {
+          "name": "description",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Item açıklaması installation base language içinde tutulur.",
+          "aliases": [
+            "item description",
+            "açıklama",
+            "ürün açıklaması",
+            "malzeme açıklaması"
+          ]
+        },
+        {
+          "name": "primary_uom_code",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Oracle Manufacturing tarafında kullanılan 3 karakterlik ana ölçü birimidir.",
+          "aliases": [
+            "primary uom",
+            "uom code",
+            "ana ölçü birimi"
+          ]
+        },
+        {
+          "name": "primary_unit_of_measure",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Oracle Purchasing tarafında görülen ana ölçü birimidir.",
+          "aliases": [
+            "unit of measure",
+            "measure",
+            "ölçü birimi"
+          ]
+        },
+        {
+          "name": "purchasing_enabled_flag",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Item'ın satınalma işlemlerinde kullanılabilir olup olmadığını gösterir.",
+          "aliases": [
+            "purchasable",
+            "purchasing enabled",
+            "satın alınabilir"
+          ]
+        },
+        {
+          "name": "buyer_id",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Item için tanımlı buyer kimliğidir.",
+          "aliases": [
+            "buyer id",
+            "item buyer",
+            "satın almacı"
+          ]
+        },
+        {
+          "name": "list_price_per_unit",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Varsayılan liste birim fiyatıdır.",
+          "aliases": [
+            "list price",
+            "unit list price",
+            "liste fiyatı"
+          ]
+        },
+        {
+          "name": "market_price",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Piyasa fiyatı bilgisidir; bazı PO satırlarına default olabilir.",
+          "aliases": [
+            "market price",
+            "piyasa fiyatı"
+          ]
+        },
+        {
+          "name": "enabled_flag",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Item master segmentinin aktif olup olmadığını gösterir.",
+          "aliases": [
+            "enabled",
+            "active flag",
+            "aktif mi"
+          ]
+        }
+      ]
     }
   ],
   "relationships": [

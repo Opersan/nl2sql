@@ -26,6 +26,18 @@ class CompilationError(NL2SQLError):
 class ExecutionError(NL2SQLError):
     """Raised when the query executor encounters an error."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        detail: str | None = None,
+        execution_error_subtype: str | None = None,
+        execution_error_message_normalized: str | None = None,
+    ) -> None:
+        super().__init__(message, detail=detail)
+        self.execution_error_subtype = execution_error_subtype
+        self.execution_error_message_normalized = execution_error_message_normalized
+
 
 class PlannerError(NL2SQLError):
     """Raised when the LLM planner cannot produce a valid query plan."""

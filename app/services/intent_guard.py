@@ -122,21 +122,83 @@ def derive_confidence_band(
     needs_clarification: bool,
     requested_signals: list[dict[str, str]],
     coverage: dict[str, Any],
-) -> tuple[str, float]:
+) -> tuple[str, str]:
     if needs_clarification:
-        return "low", 0.35
+        return "low", "rule_low"
 
     strong_count = int(coverage.get("strong_signal_count") or 0)
     missing = len(list(coverage.get("missing_signal_codes") or []))
     ratio = float(coverage.get("coverage_ratio") or 0.0)
 
     if strong_count >= 1 and missing > 0:
-        return "low", 0.4
+        return "low", "rule_low"
     if ratio >= 0.8:
-        return "high", 0.88
+        return "high", "rule_high"
     if requested_signals:
-        return "medium", 0.65
-    return "high", 0.9
+        return "medium", "rule_medium"
+    return "high", "rule_high"
+
+
+def derive_clarification_diagnostics(
+    *,
+    planner_plan: QueryPlan,
+    final_plan: QueryPlan,
+    guard_decision: dict[str, Any],
+) -> dict[str, Any]:
+    missing_dimensions = list(
+        dict.fromkeys(
+            str(dim)
+            for dim in (guard_decision.get("clarification_missing_dimensions") or [])
+            if dim
+        )
+    )
+
+    if guard_decision.get("success_blocked_by_filter_loss"):
+        return {
+            "clarification_reason_code": "filter_intent_missing",
+            "clarification_missing_dimensions": missing_dimensions,
+            "clarification_was_avoidable": False,
+        }
+
+    if not final_plan.needs_clarification:
+        return {
+            "clarification_reason_code": None,
+            "clarification_missing_dimensions": missing_dimensions,
+            "clarification_was_avoidable": False,
+        }
+
+    # final_plan.needs_clarification is True — reason code must always be non-None
+    if missing_dimensions:
+        return {
+            "clarification_reason_code": "missing_filter_dimension",
+            "clarification_missing_dimensions": missing_dimensions,
+            "clarification_was_avoidable": False,
+        }
+
+    planner_has_query_shape = bool(
+        planner_plan.table
+        and (
+            planner_plan.select_columns
+            or planner_plan.filters
+            or planner_plan.aggregations
+            or planner_plan.group_by
+        )
+    )
+    clarification_was_avoidable = bool(planner_has_query_shape and not planner_plan.needs_clarification)
+
+    if planner_plan.needs_clarification:
+        reason_code = "planner_requested_clarification"
+    elif clarification_was_avoidable:
+        reason_code = "avoidable_clarification"
+    else:
+        # Fallback: insufficient structured signal — never leave as None
+        reason_code = "low_confidence"
+
+    return {
+        "clarification_reason_code": reason_code,
+        "clarification_missing_dimensions": missing_dimensions,
+        "clarification_was_avoidable": clarification_was_avoidable,
+    }
 
 
 def build_filter_loss_guard_decision(
