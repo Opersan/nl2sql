@@ -232,3 +232,89 @@ def apply_semantic_normalization(
         updates["measures"] = [a.alias or f"{a.function.value}_{a.column}" for a in final_aggs]
 
     return plan.model_copy(update=updates)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: Registry boundary validation
+# ---------------------------------------------------------------------------
+
+def validate_registry_against_catalog(
+    snapshot: CatalogSnapshot,
+    *,
+    registry: SemanticRegistry | None = None,
+) -> list[str]:
+    """Validate that every table/column reference in the registry exists in *snapshot*.
+
+    Returns a list of human-readable error strings.  An empty list means
+    the registry is fully consistent with the active catalog.
+
+    Checks performed
+    ----------------
+    * Every ``root_table`` and ``child_table`` referenced by a registry entity
+      must resolve to a real table in the catalog snapshot.
+    * Every column referenced in ``intent_defaults`` (filters, aggregations,
+      group_by, select_columns, computed_measures) must exist in its
+      respective table.
+    """
+    reg = registry if registry is not None else _load_registry()
+    catalog_table_names = {t.name.upper() for t in snapshot.tables}
+    errors: list[str] = []
+
+    def _check_table(tbl: str, context: str) -> bool:
+        if tbl.upper() not in catalog_table_names:
+            errors.append(f"{context}: table '{tbl}' not found in catalog")
+            return False
+        return True
+
+    def _check_column(tbl: str, col: str, context: str) -> None:
+        if not col:
+            return
+        real_tbl = snapshot.get_table(tbl)
+        if real_tbl is None:
+            return  # table error already recorded
+        if not real_tbl.has_column(col):
+            errors.append(f"{context}: column '{col}' not found in table '{tbl}'")
+
+    for entity in reg.entities:
+        ctx = f"entity '{entity.entity_id}'"
+        root_ok = _check_table(entity.root_table, f"{ctx}.root_table")
+        for child in entity.child_tables:
+            _check_table(child, f"{ctx}.child_tables")
+
+        for intent_name, intent_def in entity.intent_defaults.items():
+            ictx = f"{ctx}.intent_defaults[{intent_name!r}]"
+            tbl_for_intent = entity.root_table if root_ok else None
+
+            for f in intent_def.filters or []:
+                ftbl = f.table or tbl_for_intent or ""
+                if ftbl:
+                    _check_column(ftbl, f.column, f"{ictx}.filters")
+
+            for agg in intent_def.aggregations or []:
+                atbl = agg.table or tbl_for_intent or ""
+                if atbl and agg.column:
+                    _check_column(atbl, agg.column, f"{ictx}.aggregations")
+
+            for col in intent_def.select_columns or []:
+                if tbl_for_intent:
+                    _check_column(tbl_for_intent, col, f"{ictx}.select_columns")
+
+            for cm in intent_def.computed_measures or []:
+                cmtbl = cm.table or tbl_for_intent or ""
+                if cmtbl:
+                    _check_column(cmtbl, cm.name, f"{ictx}.computed_measures")
+
+    if errors:
+        logger.warning(
+            "[registry-validation] %d issue(s) found against catalog (%d tables):\n  %s",
+            len(errors),
+            len(snapshot.tables),
+            "\n  ".join(errors),
+        )
+    else:
+        logger.info(
+            "[registry-validation] OK — registry consistent with catalog (%d tables)",
+            len(snapshot.tables),
+        )
+
+    return errors

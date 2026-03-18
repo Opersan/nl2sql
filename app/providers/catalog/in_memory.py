@@ -1,18 +1,135 @@
-"""In-memory catalog provider with XXBT_PDKS_PER_DETAILS_V table.
+"""In-memory catalog provider — single source of truth for ALL tables.
 
-This provider is the default for Sprint 1 and tests.  It serves a
-hard-coded catalog that mirrors the real Oracle HR view.
+This provider is the authoritative catalog for both the API and the eval
+pipeline.  Any schema change must be made here and nowhere else.
+
+Tables:
+  PO domain  : PO_HEADERS_ALL, PO_LINES_ALL, PO_LINE_LOCATIONS_ALL,
+               PO_DISTRIBUTIONS_ALL, MTL_SYSTEM_ITEMS_B
+  HR domain  : XXBT_PDKS_PER_DETAILS_V
 """
 
 from __future__ import annotations
+
+import hashlib
 
 from app.domain.catalog_models import (
     CatalogSnapshot,
     ColumnMetadata,
     ColumnType,
+    ForeignKeyMetadata,
+    RelationshipMetadata,
     TableMetadata,
 )
 from app.providers.catalog.base import CatalogProvider
+
+
+def catalog_fingerprint(snapshot: CatalogSnapshot) -> str:
+    """Return a short deterministic fingerprint of all table/column names.
+
+    Used to assert that API and eval use an identical catalog at runtime.
+    Format: first 12 hex chars of SHA-256 over sorted table:column data.
+    """
+    parts: list[str] = []
+    for t in sorted(snapshot.tables, key=lambda x: x.name):
+        cols = ",".join(sorted(c.name for c in t.columns))
+        parts.append(f"{t.name}:{cols}")
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:12]
+
+
+def _build_po_tables() -> tuple[list[TableMetadata], list[RelationshipMetadata]]:
+    """Build PO domain table definitions.  Single authoritative source."""
+
+    def _col(name: str, dtype: ColumnType = ColumnType.NUMBER, **kw) -> ColumnMetadata:
+        return ColumnMetadata(name=name, data_type=dtype, **kw)
+
+    ph = TableMetadata(
+        name="PO_HEADERS_ALL",
+        description="Satın alma siparişi başlıkları",
+        aliases=["po headers", "po_headers", "satinalma", "siparis basliklari"],
+        primary_key=["po_header_id"],
+        columns=[
+            _col("po_header_id", nullable=False),
+            _col("vendor_id"),
+            _col("creation_date",        ColumnType.DATE),
+            _col("authorization_status", ColumnType.VARCHAR),
+            _col("currency_code",        ColumnType.VARCHAR),
+            _col("type_lookup_code",     ColumnType.VARCHAR),
+        ],
+    )
+    pl = TableMetadata(
+        name="PO_LINES_ALL",
+        description="Satın alma siparişi kalemleri",
+        aliases=["po lines", "po_lines", "siparis kalemleri"],
+        primary_key=["po_line_id"],
+        foreign_keys=[ForeignKeyMetadata(
+            column="po_header_id",
+            referenced_table="PO_HEADERS_ALL",
+            referenced_column="po_header_id",
+        )],
+        columns=[
+            _col("po_line_id",       nullable=False),
+            _col("po_header_id"),
+            _col("item_id"),
+            _col("line_num"),
+            _col("item_description", ColumnType.VARCHAR),
+            _col("quantity"),
+            _col("unit_price"),
+        ],
+    )
+    pll = TableMetadata(
+        name="PO_LINE_LOCATIONS_ALL",
+        description="Sevkiyat lokasyonları",
+        aliases=["po shipments", "po_line_locations", "sevkiyat"],
+        primary_key=["line_location_id"],
+        foreign_keys=[ForeignKeyMetadata(
+            column="po_line_id",
+            referenced_table="PO_LINES_ALL",
+            referenced_column="po_line_id",
+        )],
+        columns=[
+            _col("line_location_id", nullable=False),
+            _col("po_line_id"),
+            _col("quantity_received"),
+            _col("quantity_billed"),
+        ],
+    )
+    pd_ = TableMetadata(
+        name="PO_DISTRIBUTIONS_ALL",
+        description="Dağıtım satırları",
+        aliases=["po distributions", "dagitim"],
+        primary_key=["po_distribution_id"],
+        foreign_keys=[ForeignKeyMetadata(
+            column="line_location_id",
+            referenced_table="PO_LINE_LOCATIONS_ALL",
+            referenced_column="line_location_id",
+        )],
+        columns=[
+            _col("po_distribution_id",  nullable=False),
+            _col("line_location_id"),
+            _col("quantity_ordered"),
+            _col("code_combination_id"),
+            _col("unit_price"),
+        ],
+    )
+    mtl = TableMetadata(
+        name="MTL_SYSTEM_ITEMS_B",
+        description="Malzeme ana verileri",
+        aliases=["items", "malzeme", "stok"],
+        primary_key=["inventory_item_id"],
+        columns=[
+            _col("inventory_item_id", nullable=False),
+            _col("segment1",    ColumnType.VARCHAR),
+            _col("description", ColumnType.VARCHAR),
+        ],
+    )
+    rels = [
+        RelationshipMetadata(from_table="PO_HEADERS_ALL",        from_column="po_header_id",    to_table="PO_LINES_ALL",           to_column="po_header_id"),
+        RelationshipMetadata(from_table="PO_LINES_ALL",          from_column="po_line_id",       to_table="PO_LINE_LOCATIONS_ALL",  to_column="po_line_id"),
+        RelationshipMetadata(from_table="PO_LINE_LOCATIONS_ALL", from_column="line_location_id", to_table="PO_DISTRIBUTIONS_ALL",   to_column="line_location_id"),
+        RelationshipMetadata(from_table="PO_LINES_ALL",          from_column="item_id",          to_table="MTL_SYSTEM_ITEMS_B",     to_column="inventory_item_id"),
+    ]
+    return [ph, pl, pll, pd_, mtl], rels
 
 
 def _build_employee_table() -> TableMetadata:
@@ -93,10 +210,19 @@ def _build_employee_table() -> TableMetadata:
 
 
 class InMemoryCatalogProvider(CatalogProvider):
-    """Catalog provider backed by an in-memory table list."""
+    """Catalog provider backed by an in-memory table list.
+
+    Single source of truth for ALL tables.  Used by both the API and the
+    eval pipeline — never instantiate a different catalog provider in
+    scripts.
+    """
 
     def __init__(self) -> None:
-        self._snapshot = CatalogSnapshot(tables=[_build_employee_table()])
+        po_tables, po_rels = _build_po_tables()
+        self._snapshot = CatalogSnapshot(
+            tables=[*po_tables, _build_employee_table()],
+            relationships=po_rels,
+        )
 
     async def get_snapshot(self) -> CatalogSnapshot:
         return self._snapshot

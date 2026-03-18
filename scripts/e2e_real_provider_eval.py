@@ -178,6 +178,23 @@ class EvalResult:
     question_trace: dict[str, Any] | None = None
     queue_wait_ms: int = 0
     processing_ms: int = 0
+    # --- Diagnosis layer (Sprint C2) — derived, never overwrite existing fields ---
+    primary_root_cause_stage: str = "none"
+    primary_root_cause_category: str = "no_failure"
+    secondary_root_cause_category: str | None = None
+    business_success: bool = False
+    technical_success: bool = False
+    user_visible_success: bool = False
+    model_behavior_success: bool = False
+    failure_severity: str = "none"
+    primary_failure_family: str = "none"
+    secondary_failure_family: str | None = None
+    false_success_flag: bool = False
+    compile_valid_but_business_invalid_flag: bool = False
+    sanitized_but_model_failed_flag: bool = False
+    safe_but_low_value_flag: bool = False
+    short_reason: str = "no_failure"
+    diagnostic_summary: dict[str, Any] | None = None
 
 
 @dataclass
@@ -275,6 +292,17 @@ class EvalSummary:
     technical_pipeline_status_distribution: dict[str, int]
     # Sprint C new distributions
     execution_error_subtype_distribution: dict[str, int]
+    # Sprint C2 diagnosis distributions
+    primary_root_cause_stage_distribution: dict[str, int]
+    primary_root_cause_category_distribution: dict[str, int]
+    failure_severity_distribution: dict[str, int]
+    primary_failure_family_distribution: dict[str, int]
+    technical_success_rate: float
+    user_visible_success_rate: float
+    model_behavior_success_rate: float
+    false_success_rate: float
+    sanitized_but_model_failed_rate: float
+    compile_valid_but_business_invalid_rate: float
 
 
 @dataclass
@@ -1792,6 +1820,31 @@ def _build_single_output_markdown(
     lines.extend(["", "## Short Verdict Index"])
     lines.extend(_render_short_verdict_index(traces))
 
+    # --- Sprint C2: Diagnosis Summary ---
+    lines.extend(["", "## Diagnosis Layer Distributions"])
+    lines.extend(["", "### Primary Root Cause Stage Distribution"])
+    for key, count in sorted(summary.primary_root_cause_stage_distribution.items(), key=lambda x: -x[1]):
+        lines.append(f"- {key}: {count}")
+    lines.extend(["", "### Primary Root Cause Category Distribution"])
+    for key, count in sorted(summary.primary_root_cause_category_distribution.items(), key=lambda x: -x[1]):
+        lines.append(f"- {key}: {count}")
+    lines.extend(["", "### Failure Severity Distribution"])
+    for key, count in sorted(summary.failure_severity_distribution.items(), key=lambda x: -x[1]):
+        lines.append(f"- {key}: {count}")
+    lines.extend(["", "### Primary Failure Family Distribution"])
+    for key, count in sorted(summary.primary_failure_family_distribution.items(), key=lambda x: -x[1]):
+        lines.append(f"- {key}: {count}")
+    lines.extend([
+        "",
+        "### Success + Failure Rates (Diagnosis Layer)",
+        f"- technical_success_rate: {_format_pct(summary.technical_success_rate)}",
+        f"- user_visible_success_rate: {_format_pct(summary.user_visible_success_rate)}",
+        f"- model_behavior_success_rate: {_format_pct(summary.model_behavior_success_rate)}",
+        f"- false_success_rate: {_format_pct(summary.false_success_rate)}",
+        f"- sanitized_but_model_failed_rate: {_format_pct(summary.sanitized_but_model_failed_rate)}",
+        f"- compile_valid_but_business_invalid_rate: {_format_pct(summary.compile_valid_but_business_invalid_rate)}",
+    ])
+
     lines.extend(["", "## Question Traces", ""])
 
     for idx, trace in enumerate(traces, 1):
@@ -1867,6 +1920,29 @@ def _build_single_output_markdown(
                 f"- executed_sql_fingerprint: {final.get('executed_sql_fingerprint')}",
                 f"- bind_summary: {final.get('bind_summary')}",
                 "",
+                "### Diagnostic Summary",
+            ]
+        )
+        diag = trace.get("diagnostic_summary") or {}
+        lines.extend([
+            f"- primary_root_cause_stage: {diag.get('primary_root_cause_stage', 'none')}",
+            f"- primary_root_cause_category: {diag.get('primary_root_cause_category', 'no_failure')}",
+            f"- secondary_root_cause_category: {diag.get('secondary_root_cause_category')}",
+            f"- failure_severity: {diag.get('failure_severity', 'none')}",
+            f"- primary_failure_family: {diag.get('primary_failure_family', 'none')}",
+            f"- secondary_failure_family: {diag.get('secondary_failure_family')}",
+            f"- business_success: {diag.get('business_success')}",
+            f"- technical_success: {diag.get('technical_success')}",
+            f"- user_visible_success: {diag.get('user_visible_success')}",
+            f"- model_behavior_success: {diag.get('model_behavior_success')}",
+            f"- false_success_flag: {diag.get('false_success_flag')}",
+            f"- compile_valid_but_business_invalid_flag: {diag.get('compile_valid_but_business_invalid_flag')}",
+            f"- sanitized_but_model_failed_flag: {diag.get('sanitized_but_model_failed_flag')}",
+            f"- safe_but_low_value_flag: {diag.get('safe_but_low_value_flag')}",
+            f"- short_reason: {diag.get('short_reason', 'no_failure')}",
+            "",
+        ])
+        lines.extend([
                 "### Retrieval",
                 f"- schema_tables: {(trace.get('retrieval') or {}).get('schema_tables')}",
                 f"- schema_docs: {[doc.get('doc_id') for doc in ((trace.get('retrieval') or {}).get('schema_docs') or [])]}",
@@ -2506,6 +2582,233 @@ def _bucket_wrong_plan(result: EvalResult) -> list[str]:
         out.append("unnecessary_clarification_disguised_as_success")
 
     return sorted(set(out))
+
+
+def _derive_diagnosis(result: "EvalResult", trace: dict[str, Any]) -> dict[str, Any]:
+    """Derive the Sprint C2 diagnosis layer from existing trace fields.
+
+    Deterministic mapping only — no LLM, no new signals.
+    All inputs come from already-computed EvalResult / trace fields.
+    Returns the dict written as trace["diagnostic_summary"].
+    """
+    # ------------------------------------------------------------------
+    # 1.  Four success dimensions
+    # ------------------------------------------------------------------
+    business_success     = result.business_status in {"success", "empty_result"}
+    technical_success    = (
+        result.planner_ok
+        and result.compile_ok
+        and result.execute_ok
+        and not result.structured_parse_error
+    )
+    user_visible_success  = result.user_visible_status in {"pass", "pass_with_sanitization"}
+    model_behavior_success = result.model_behavior_quality == "pass"
+
+    # ------------------------------------------------------------------
+    # 2.  Atomic signals from existing trace fields
+    # ------------------------------------------------------------------
+    parse_error       = bool((trace.get("llm_raw_output") or {}).get("parse_error"))
+    guard_blocked     = bool(result.why_not_executed)
+    runtime_exec_fail = result.raw_status == "execution_error" and not guard_blocked
+    compile_fail      = result.raw_status == "compile_error"
+    validation_fail   = result.raw_status == "validation_error"
+    clarification_out = result.raw_status == "clarification"
+
+    semantic_diff = (trace.get("semantic_normalization") or {}).get("diff") or {}
+    semantic_changed_shape = bool(
+        set(semantic_diff.get("changed_fields") or []).intersection(_SQL_SHAPE_FIELDS)
+    )
+
+    final_violations = list(
+        (trace.get("narration") or {}).get("final_response_policy_violations") or []
+    )
+    raw_violations = list(
+        (trace.get("narration") or {}).get("raw_response_policy_violations") or []
+    )
+    sanitizer_saved      = bool(raw_violations and not final_violations and result.sanitizer_effective)
+    narration_final_fail = bool(final_violations)
+    fallback_used        = bool((trace.get("narration") or {}).get("narrator_used_fallback_template"))
+    # "low value" = narrator fell back to template on an otherwise successful result
+    low_value = fallback_used and business_success
+
+    wrong_reasons = set(result.wrong_plan_reasons or [])
+
+    # ------------------------------------------------------------------
+    # 3.  primary_root_cause_stage (fixed enum)
+    # ------------------------------------------------------------------
+    if parse_error:
+        prc_stage = "planner"
+    elif compile_fail and semantic_changed_shape:
+        prc_stage = "semantic"
+    elif compile_fail or validation_fail:
+        prc_stage = "compile"
+    elif guard_blocked:
+        prc_stage = "execution_guard"
+    elif runtime_exec_fail:
+        prc_stage = "execution"
+    elif narration_final_fail:
+        prc_stage = "narration"
+    elif sanitizer_saved:
+        prc_stage = "sanitizer"
+    else:
+        prc_stage = "none"
+
+    # ------------------------------------------------------------------
+    # 4.  primary_root_cause_category — exactly one value from fixed enum
+    # ------------------------------------------------------------------
+    if result.false_success_risk and result.raw_status == "success":
+        prc_cat = "false_success"
+    elif result.success_blocked_by_filter_loss:
+        prc_cat = "filter_loss"
+    elif parse_error:
+        prc_cat = "wrong_entity"
+    elif "wrong_table" in wrong_reasons:
+        prc_cat = "wrong_entity"
+    elif "wrong_join" in wrong_reasons:
+        prc_cat = "wrong_join"
+    elif "wrong_aggregation" in wrong_reasons:
+        prc_cat = "wrong_metric"
+    elif "wrong_filter_column" in wrong_reasons and not clarification_out:
+        prc_cat = "missing_filter"
+    elif clarification_out and result.clarification_was_avoidable:
+        prc_cat = "ambiguity_missed"
+    elif clarification_out:
+        prc_cat = "missing_filter"
+    elif guard_blocked:
+        prc_cat = "execution_blocked_valid"
+    elif runtime_exec_fail:
+        prc_cat = "execution_failed_runtime"
+    elif compile_fail and semantic_changed_shape:
+        prc_cat = "semantic_override_harmful"
+    elif compile_fail or validation_fail:
+        prc_cat = "missing_filter"
+    elif narration_final_fail:
+        prc_cat = "narration_leak_but_sanitized"  # final has violations → sanitizer missed
+    elif sanitizer_saved:
+        prc_cat = "narration_leak_but_sanitized"
+    elif low_value:
+        prc_cat = "narration_low_value"
+    elif result.semantic_rescue_applied and business_success:
+        prc_cat = "semantic_override_needed"
+    elif result.compile_ok and result.wrong_plan and not runtime_exec_fail and not compile_fail:
+        prc_cat = "compile_valid_but_business_invalid"
+    else:
+        prc_cat = "no_failure"
+
+    # ------------------------------------------------------------------
+    # 5.  secondary_root_cause_category
+    # ------------------------------------------------------------------
+    sec_cat: str | None = None
+    if prc_cat == "no_failure" and sanitizer_saved:
+        sec_cat = "narration_leak_but_sanitized"
+    elif prc_cat == "no_failure" and low_value:
+        sec_cat = "narration_low_value"
+    elif prc_cat == "execution_failed_runtime" and result.false_success_risk:
+        sec_cat = "false_success"
+    elif prc_cat == "missing_filter" and result.success_blocked_by_filter_loss:
+        sec_cat = "filter_loss"
+
+    # ------------------------------------------------------------------
+    # 6.  Failure family (coarse grouping for aggregation)
+    # ------------------------------------------------------------------
+    _FAMILY_MAP: dict[str, str] = {
+        "wrong_entity":                      "plan_quality",
+        "wrong_metric":                      "plan_quality",
+        "missing_filter":                    "plan_quality",
+        "filter_loss":                       "plan_quality",
+        "wrong_join":                        "plan_quality",
+        "ambiguity_missed":                  "plan_quality",
+        "semantic_override_needed":          "semantic",
+        "semantic_override_harmful":         "semantic",
+        "compile_valid_but_business_invalid":"compile",
+        "execution_blocked_valid":           "execution_guard",
+        "execution_failed_runtime":          "execution",
+        "narration_low_value":               "narration",
+        "narration_leak_but_sanitized":      "narration",
+        "false_success":                     "plan_quality",
+        "no_failure":                        "none",
+    }
+    primary_family   = _FAMILY_MAP.get(prc_cat, "unknown")
+    secondary_family = _FAMILY_MAP.get(sec_cat, None) if sec_cat else None
+
+    # ------------------------------------------------------------------
+    # 7.  failure_severity
+    # ------------------------------------------------------------------
+    if prc_cat == "no_failure" and not sec_cat:
+        severity = "none"
+    elif prc_cat in {
+        "narration_leak_but_sanitized",
+        "narration_low_value",
+        "semantic_override_needed",
+    }:
+        severity = "degraded"
+    elif not business_success or not user_visible_success:
+        severity = "hard_failure"
+    elif not model_behavior_success:
+        severity = "degraded"
+    else:
+        severity = "none"
+
+    # ------------------------------------------------------------------
+    # 8.  Boolean flags
+    # ------------------------------------------------------------------
+    false_success_flag             = prc_cat == "false_success"
+    compile_valid_biz_invalid_flag = (
+        result.compile_ok
+        and result.wrong_plan
+        and not runtime_exec_fail
+        and not compile_fail
+    )
+    sanitized_but_model_failed_flag = sanitizer_saved and result.model_behavior_quality != "pass"
+    safe_but_low_value_flag         = low_value
+
+    # ------------------------------------------------------------------
+    # 9.  short_reason — 1-2 deterministic sentences, no LLM
+    # ------------------------------------------------------------------
+    _REASON_MAP: dict[str, str] = {
+        "wrong_entity":          "Planner mapped to wrong table or entity.",
+        "wrong_metric":          "Planner dropped required aggregation.",
+        "missing_filter":        "Required filter absent or dropped before execution.",
+        "filter_loss":           "Filter detected in message but lost before execution (filter_loss guard triggered).",
+        "wrong_join":            "JOIN path missing or incorrect for multi-table query.",
+        "ambiguity_missed":      "Clarification requested but query was unambiguous.",
+        "semantic_override_needed":          "Semantic layer corrected plan; pipeline succeeded.",
+        "semantic_override_harmful":         "Semantic mutation changed SQL shape and caused failure.",
+        "compile_valid_but_business_invalid":"SQL compiled but plan does not match business intent.",
+        "execution_blocked_valid":           f"Execution blocked by pre-execution guard: {result.why_not_executed or 'risk_flag'}.",
+        "execution_failed_runtime":          f"Oracle runtime error: {result.execution_error_subtype or 'unknown_execution_error'}.",
+        "narration_low_value":   "Narrator fell back to generic template; LLM response was low-value.",
+        "narration_leak_but_sanitized":      "Narrator LLM leaked CoT/policy; sanitizer corrected final output.",
+        "false_success":         "Pipeline returned success but filter coverage analysis detected false-success risk.",
+        "no_failure":            "No failure detected across all pipeline stages.",
+    }
+    short_reason = _REASON_MAP.get(prc_cat, f"Unclassified: {prc_cat}")
+    if sec_cat and sec_cat != prc_cat:
+        short_reason += f" Secondary: {_REASON_MAP.get(sec_cat, sec_cat)}"
+
+    return {
+        # Step 1 — root cause + success dimensions
+        "primary_root_cause_stage":    prc_stage,
+        "primary_root_cause_category": prc_cat,
+        "secondary_root_cause_category": sec_cat,
+        "business_success":     business_success,
+        "technical_success":    technical_success,
+        "user_visible_success": user_visible_success,
+        "model_behavior_success": model_behavior_success,
+        # Step 2 — derived flags
+        "primary_failure_family":   primary_family,
+        "secondary_failure_family": secondary_family,
+        "failure_stage":    prc_stage,
+        "failure_severity": severity,
+        "false_success_flag":                      false_success_flag,
+        "compile_valid_but_business_invalid_flag": compile_valid_biz_invalid_flag,
+        "sanitized_but_model_failed_flag":         sanitized_but_model_failed_flag,
+        "safe_but_low_value_flag":                 safe_but_low_value_flag,
+        # Step 3 — quick-read summary
+        "question":      result.question,
+        "final_status":  result.raw_status,
+        "short_reason":  short_reason,
+    }
 
 
 def _bucket_execution_error(result: EvalResult) -> str | None:
@@ -3324,6 +3627,29 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         "narrator_used_fallback_template": (trace.get("narration") or {}).get("narrator_used_fallback_template"),
         "prompt_contract_violated": (trace.get("narration") or {}).get("prompt_contract_violated"),
     }
+
+    # ---------------------------------------------------------------
+    # Sprint C2 — Diagnosis layer (added on top, no existing fields changed)
+    # ---------------------------------------------------------------
+    diagnosis = _derive_diagnosis(result, trace)
+    trace["diagnostic_summary"] = diagnosis
+    result.primary_root_cause_stage    = diagnosis["primary_root_cause_stage"]
+    result.primary_root_cause_category = diagnosis["primary_root_cause_category"]
+    result.secondary_root_cause_category = diagnosis["secondary_root_cause_category"]
+    result.business_success      = diagnosis["business_success"]
+    result.technical_success     = diagnosis["technical_success"]
+    result.user_visible_success  = diagnosis["user_visible_success"]
+    result.model_behavior_success = diagnosis["model_behavior_success"]
+    result.failure_severity      = diagnosis["failure_severity"]
+    result.primary_failure_family   = diagnosis["primary_failure_family"]
+    result.secondary_failure_family = diagnosis["secondary_failure_family"]
+    result.false_success_flag                      = diagnosis["false_success_flag"]
+    result.compile_valid_but_business_invalid_flag = diagnosis["compile_valid_but_business_invalid_flag"]
+    result.sanitized_but_model_failed_flag         = diagnosis["sanitized_but_model_failed_flag"]
+    result.safe_but_low_value_flag                 = diagnosis["safe_but_low_value_flag"]
+    result.short_reason    = diagnosis["short_reason"]
+    result.diagnostic_summary = diagnosis
+
     result.question_trace = trace
     return result
 
@@ -3568,6 +3894,18 @@ def _make_summary(
         if r.raw_status == "execution_error"
     ))
 
+    # Sprint C2: diagnosis distributions
+    primary_root_cause_stage_distribution = dict(Counter(r.primary_root_cause_stage for r in results))
+    primary_root_cause_category_distribution = dict(Counter(r.primary_root_cause_category for r in results))
+    failure_severity_distribution = dict(Counter(r.failure_severity for r in results))
+    primary_failure_family_distribution = dict(Counter(r.primary_failure_family for r in results))
+    technical_success_count = sum(1 for r in results if r.technical_success)
+    user_visible_success_count = sum(1 for r in results if r.user_visible_success)
+    model_behavior_success_count = sum(1 for r in results if r.model_behavior_success)
+    false_success_count = sum(1 for r in results if r.false_success_flag)
+    sanitized_but_model_failed_count = sum(1 for r in results if r.sanitized_but_model_failed_flag)
+    compile_valid_biz_invalid_count = sum(1 for r in results if r.compile_valid_but_business_invalid_flag)
+
     return EvalSummary(
         total_questions=total,
         counts=dict(counts),
@@ -3660,6 +3998,17 @@ def _make_summary(
         user_visible_status_distribution=user_visible_status_distribution,
         technical_pipeline_status_distribution=technical_pipeline_status_distribution,
         execution_error_subtype_distribution=execution_error_subtype_distribution,
+        # Sprint C2 diagnosis distributions
+        primary_root_cause_stage_distribution=primary_root_cause_stage_distribution,
+        primary_root_cause_category_distribution=primary_root_cause_category_distribution,
+        failure_severity_distribution=failure_severity_distribution,
+        primary_failure_family_distribution=primary_failure_family_distribution,
+        technical_success_rate=rate(technical_success_count),
+        user_visible_success_rate=rate(user_visible_success_count),
+        model_behavior_success_rate=rate(model_behavior_success_count),
+        false_success_rate=rate(false_success_count),
+        sanitized_but_model_failed_rate=rate(sanitized_but_model_failed_count),
+        compile_valid_but_business_invalid_rate=rate(compile_valid_biz_invalid_count),
     )
 
 

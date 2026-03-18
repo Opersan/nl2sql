@@ -1,0 +1,956 @@
+Oracle EBS R12 Üzerinde Doğal Dilden Sorgu →
+Doğru SQL → Insight/Foresight Üreten Kurumsal
+Sistem Tasarımı
+Executive Summary
+Bu rapor; Oracle E-Business Suite (EBS) R12’nin yüksek karmaşıklıklı veri modeli (multi-org, crossmodule ilişkiler, flexfield’ler, lookup “code→meaning” katmanları, güvenlik bağlamları) üzerinde doğal
+dilden (TR/EN) güvenilir sorgulama yapabilen ve çıktıyı yalnızca “SQL sonucu” olarak değil, KPI/özet/
+grafik önerisi/karar destek içgörüsü ve öngörü olarak sunabilen kurumsal seviye bir “Semantic
+Query + Agentic Analytics + Decision Intelligence” platformunun nasıl kurulacağını ortaya koyar.
+Oracle’ın EBS dokümantasyon kütüphanesi, Multi-Org Implementation yaklaşımı ve Flexfield kavramları;
+ayrıca eTRM’nin (Electronic Technical Reference Manual) tablo bağımlılık/metadata rolü bu raporun
+temel dayanaklarıdır. 
+Bu problem sınıfında “LLM’e şema ver → SQL yazdır → çalıştır” yaklaşımı istatistiksel olarak
+kırılgandır: Akademik Text-to-SQL benchmark’ları (Spider, BIRD) özellikle yeni şemalarda ve büyük/
+gerçek dünyaya yakın verilerde hataların sürdüğünü; hatta güçlü modellerin bile yürütme
+doğruluğunda ciddi farklar verdiğini gösterir. Dolayısıyla üretimde başarı, LLM’den çok semantik
+modelleme + deterministik guardrail + test/eval + governance disiplinine bağlıdır. 
+Endüstri örnekleri bu noktada aynı şablonu tekrarlar:
+Snowflake Cortex Analyst, doğruluk için semantic model / semantic view katmanını merkez alır ve
+ilişkiler/metric’ler/örneklerle SQL üretimini “kontrollü” hale getirir. 
+Power BI Copilot dokümantasyonu, semantic model hazırlanmadığında çıktının düşük kalite/hatalı
+olabileceğini açıkça belirtir. 
+ThoughtSpot, LLM’nin ürettiği SQL’i doğrudan çalıştırmak yerine kendi sorgu diline çevirerek yetki
+kontrollerini garanti etmeye çalışır. 
+Databricks Genie, Unity Catalog nesnelerine en azından SELECT ayrıcalıklarıyla “governance boundary”
+içinde doğal dil analitiği kurgular. 
+Bu “tekrarlayan pattern” sizin Oracle EBS R12 senaryonuz için de en yüksek başarı olasılığına sahip
+yoldur.
+Kritik gerçek: Bu sohbet içinde “3 doküman + Python kodu” içeriklerine erişebileceğim bir kaynak
+bulunmuyor (file_search tarafında erişilebilir doküman yok). Bu nedenle “Mevcut kod” analizi; tipik
+NL→SQL PoC’lerinde görülen mimari kalıplar üzerinden denetim checklist’i / yeniden mimari önerisi
+şeklinde yapılmıştır. Gerçek kod/dokümanlar paylaşıldığında bu bölüm, somut sınıf/flow bazında
+daraltılıp netleştirilebilir.
+1
+2
+3
+4
+5
+6
+1
+Mevcut Yapının Analizi
+Mevcut Python yaklaşımını değerlendirirken temel referans çerçevesi
+EBS R12’de doğal dil sorgulama PoC’lerinin %80’i aşağıdaki çizgide başlar:
+1) Kullanıcı sorusu → 2) Şema/tablo listesi prompt’a gömülür → 3) LLM SQL üretir → 4) SQL çalıştırılır →
+5) Sonuç tablo döndürülür.
+Bu çizgi; küçük şemalarda iş görebilir ama EBS gibi devasa şemalarda (binlerce tablo, TR/EN terimler,
+multi-org bağlamları, flexfield/lookup çözümlemeleri) sürdürülebilir değildir. eTRM’nin varlık nedeni bile,
+EBS tabloları ve bağımlılıklarını raporlama/entegrasyon için görünür kılmaktır. 
+Ayrıca eTRM dokümantasyonu, EBS’de primary/foreign key ilişkilerinin FND modelinde kayıtlı olup
+ürün tarafından fiziksel olarak enforce edilmeyebileceğini belirtir. Bu, “DB constraint’lerinden
+otomatik join çıkarırım” yaklaşımının EBS’de tek başına güvenilir olmayacağını gösterir. 
+Güçlü yönler (tipik PoC kodlarına göre)
+Elinizdeki Python kodu muhtemelen şu alanlarda değerlidir (korunabilir/ürünleştirilebilir parçalar):
+Oracle bağlantısı (salt okunur) + parametrik sorgu yürütme altyapısı (connection pooling,
+timeout, retry, fetch-size). (Bunu EBS üretim yükünü korumak için genişletmek gerekir.) 
+Basit schema discovery: ALL_TAB_COLUMNS / ALL_TABLES gibi sistem view’lerinden temel
+metadata çekme yaklaşımı (geliştirilmeye açıktır). 
+Prompt/LLM entegrasyon “iskeleti” (model çağrısı, response parsing). Bu iskelet korunabilir; fakat
+“LLM’nin neyi yaptığı” kökten değişmelidir.
+Bu varsayımlar, Text-to-SQL’in zor bir genel problem olduğu ve Spıder gibi benchmark’larda yeni şemaya
+genellemenin çok düşük accuracy ile başladığı gerçeğiyle uyumludur: PoC’nin işe yarayan kısmı genelde
+“boru hattı”, çalışmayan kısmı “semantik doğruluk”tur. 
+Zayıf yönler ve genişletilebilirlik sorunları (en sık gördüğüm kırılma noktaları)
+Bu sınıfta PoC’ler genelde aşağıdaki seviyede kalır:
+Sadece veri çekme / SQL generation: LLM SQL üretir ama cross-module join’ler, multi-org
+filtreleri, code→meaning çözümlemeleri ve “doğru KPI” mantığı eksik kalır. (EBS’de flexfield ve
+lookup’lar olmadan iş kullanıcıları çoğu zaman “ham kod”u anlamaz.) Flexfield’lerin
+segmentlerden oluştuğu ve EBS’in “intelligent key code”u gösterip arkada ID sakladığı Oracle
+dokümanlarında açık anlatılır. 
+Semantic querying eşiği geçilemez: çünkü semantik katman (business glossary, synonyms,
+metric tanımı, join graph) yoktur. 
+Business insight generation yoktur: tablo döner, ama “ne anlama geliyor, ne değişti, neden
+değişti, ne yapmalı” üretmez. 
+Foresight/predictive hiç yoktur ya da “LLM tahmini” gibi riskli bir forma kayar (veriye dayalı
+zaman serisi/istatistiksel modelleme yerine).
+7
+8
+• 
+• 
+• 
+9
+• 
+10
+• 
+• 
+• 
+2
+Üretim ortamı eksikleri tipik olarak şunlardır:
+Güvenlik & kötüye kullanım: Prompt injection, yetkisiz tablo/kolon sızdırma, hassas veri (PII)
+döndürme, DML/DDL çalıştırma riski. OWASP LLM Top 10 bu tehdit sınıflarını kurumsal GenAI
+uygulamalarının birincil risk alanı olarak listeler. 
+Governance & uyumluluk: Kim ne sordu, hangi veriye erişti, hangi SQL çalıştı, hangi sonuç
+döndü—denetlenemez. NIST AI RMF; risk yönetimini “govern, map, measure, manage”
+fonksiyonlarıyla kurumsal bir disiplin olarak ele alır. 
+Doğruluk ölçümü (evaluation): Golden question set, adversarial test, permission boundary test
+yoktur; dolayısıyla ilerleme ölçülemez. 
+Performans kontrolü: Oracle tarafında plan/cost gözetimi yoktur; hatalı sorgu üretim DB’yi
+yorabilir. Oracle DBMS_XPLAN, EXPLAIN PLAN çıktısının standart formatlarda gösterilmesini
+sağlar; bu “query plan verification” için temel araçtır. 
+Oracle R12 için Hedef Mimari
+Aşağıdaki hedef mimari, EBS R12’nin gerçeklerine göre “semantik doğruluğu” merkezde tutar: eTRM +
+FND metadata + glossary + relationship graph; ardından kontrollü Text-to-SQL; ardından sonuç
+yorumlama + insight/foresight.
+Katmanlı mimari (kurumsal referans tasarım)
+[Presentation Layer]
+ - Chat UI / BI embed / API
+ - Yönetici özeti + Analist detayı + Drill-down
+[Analytics Layer]
+ - KPI library + chart recommender + anomaly/trend + root-cause helpers
+ - Forecasting & scenario engine (guardrailed)
+[Execution Layer]
+ - SQL runner (read-only), caching, pagination
+ - Explain-plan + cost guardrails (DBMS_XPLAN)
+ - Result shaping (types, rounding, units)
+[Reasoning Layer]
+ - Intent classifier (metrics vs ops vs investigation vs forecast)
+ - Schema linker (TR/EN) + join-path planner (graph)
+ - SQL compiler (LLM-assisted but constrained)
+ - Validator & policy enforcer (RBAC, row/col limits, DML block)
+[Semantic Layer]
+ - Business glossary + synonyms + KPI definitions
+ - Semantic entities (Invoice, PO, Item, Ledger, OU, etc.)
+ - Relationship graph / knowledge graph (eTRM + curated rules)
+ - Flexfield & lookup meaning resolvers
+[Ingestion & Metadata Layer]
+ - Schema discovery (dictionary + eTRM export)
+• 
+11
+• 
+12
+• 
+• 
+13
+3
+ - Metadata catalog (table/column descriptions, stats, lineage)
+ - Data profiling (value examples, null-rate, cardinality)
+ - CDC/replica (opsiyonel ama önerilir)
+Bu tasarımın Oracle tarafı şu gerçeklere dayanır:
+EBS “orijin” bilgisi eTRM’de merkezi biçimde görülür; eTRM, EBS nesnelerinin tanımlarını ve
+bağımlılıklarını arayüzde göstermeyi amaçlar. 
+Ancak ilişkiler (PK/FK) her zaman fiziksel olarak enforced olmayabilir; bu nedenle join graph
+çıkarımı “sadece DB constraint”ten değil, eTRM/FND model + domain kurallarıyla yapılmalıdır. 
+Multi-Org (Operating Unit, Legal Entity, ledgers, security profile) kurgusu EBS’de raporlama
+güvenliği/doğruluğu için kritiktir; Oracle’ın Multi-Org Implementation Guide’ı organizasyon
+yapısı, security profile ve MO profile option adımlarını açıklar. 
+Flexfield katmanı EBS’in özelleştirilebilir ana mekanizmasıdır; KFF/DFF ayrımı ve segment/value
+yaklaşımı hem veri modeline hem kullanıcı diline doğrudan etki eder. 
+Modül bazlı “semantic data products” önerisi
+EBS R12’de “her tabloya açık doğal dil sorgu” hedefi yerine şu strateji daha başarılıdır:
+İlk aşamada modül bazlı canonical semantic model: GL, AP, AR, PO, INV/OM gibi “en yüksek
+sorgu hacimli” alanlarda 10–30 adet “business entity view” üretmek. 
+Bu view/semantic model üzerinde NLQ çalıştırmak; ham tabloları sadece “advanced mode” veya
+“engineer” profiline açmak.
+Bu, Snowflake Cortex Analyst gibi platformların da önerdiği pattern ile uyumludur: semantic model
+YAML/semantic view içinde ilişkiler, metric tanımları ve örnekler verildiğinde doğruluk ve güvenilirlik
+artar. 
+Text-to-SQL + Semantic Layer Tasarımı
+Neden “hybrid” (LLM + deterministik motor) en doğru seçenek?
+Text-to-SQL araştırmaları bize üç şey söylüyor:
+1) Yeni şemaya genelleme zor: Spider, farklı şema/test ayrımıyla bunu özellikle ölçer ve erken modellerin
+çok düşük exact match ürettiğini vurgular. 
+2) Şema linking ve ilişki kodlama kritik: RAT-SQL, schema encoding + schema linking’i relation-aware
+attention ile ele alarak bu zorluğu hedefler. 
+3) Çıktıyı “syntax/grammar” ile sınırlandırmak kaliteyi artırabilir: PICARD, decoding’i kısıtlayarak Spider/
+CoSQL’da performansı yükseltir; bu yaklaşım üretimde “hatalı SQL şekli” riskini de düşürür. 
+BIRD benchmark’ı ise gerçek dünyaya daha yakın bir problemi vurgular: büyük veritabanı içerikleri,
+“value comprehension” ve SQL verimliliği. Bu, EBS gibi büyük ve “kirli/karmaşık” sistemlerde PoC’lerin
+neden patladığını açıklar. 
+Sonuç:
+- LLM: dil anlama, niyet çıkarımı, eşanlamlı/sözlük eşleme, açıklama üretimi gibi “probabilistic” alanlarda
+• 
+14
+• 
+8
+• 
+15
+• 
+10
+• 
+• 
+3
+9
+16
+17
+18
+4
+güçlü.
+- Deterministik motor: join-path doğrulama, RBAC/policy, Oracle dialect, plan kontrolü, DML bloklama
+gibi “kesinlik” gerektiren alanlarda şart.
+Bu nedenle “hybrid compiler” mimarisi öneriyorum.
+Önerilen NL→SQL akışı: “Query Plan → Compile → Validate → Execute”
+Aşağıdaki akış, LLM’yi “SQL yazan” değil, “query intent & plan çıkaran” role iter:
+1) Intent çıkarımı (LLM + kurallar)
+- Soru tipi: KPI mı, operasyonel liste mi, reconciliation mı, trend mi, anomaly mi, forecast mı?
+- Zaman penceresi / organizasyon bağlamı (OU, ledger, inv org) / para birimi / ölçü birimi.
+2) Semantic resolution (RAG + glossary + graph)
+- Sözlükten terim eşle (TR/EN): “fatura”→invoice, “alış faturası”→AP invoice, “tahsilat”→AR cash receipts
+vb.
+- İlgili entity setini daralt: (AP Invoice, Supplier, Payments).
+3) Join path reasoning (deterministik graph + eTRM)
+- Relationship graph’ta en güvenilir join yolları (curated edge’ler) + maliyet/karmaşıklık skoru.
+- Örn: AR’de AR_PAYMENT_SCHEDULES_ALL ile RA_CUSTOMER_TRX_ALL arasındaki ilişki, eTRM
+açıklamasında CUSTOMER_TRX_ID üzerinden join olarak belirtilir. 
+4) SQL production (LLM-assisted constrained)
+- LLM’ye ham şema yığmak yerine, seçilmiş tablolar/kolonlar + join path + metric tanımları verilir.
+- Çıktı ya:
+- (A) deterministik bir DSL / JSON query plan, sonra compiler SQL’e çevirir, veya
+- (B) constrained decoding ile (Oracle dialect grammar) SQL üretilir. PICARD benzeri yaklaşım burada
+kıymetlidir. 
+- Snowflake’in “custom instructions” yaklaşımı üretimde kontrol fikrini güçlendirir: semantic model içine
+“financial year nedir”, “performance ne demek” gibi talimatlar eklenip sql generation yönlendirilir. 
+5) Query validation (tamamen deterministik)
+- SQL parse + lint + allowlist: DML/DDL yok, sadece SELECT.
+- Dialect uyumu ve güvenli rewrite (limit, rownum, pagination).
+- SQL AST tabanlı kontroller için SQL parser/optimizer kütüphaneleri kullanılabilir (örn. SQLGlot kendini
+parser/transpiler/optimizer olarak tanımlar). 
+6) Explain plan / cost guardrail (Oracle)
+- EXPLAIN PLAN ve DBMS_XPLAN ile plan/cost değerlendirilir; “tam tablo taraması + dev join” gibi
+risklerde otomatik degrade (özet tabloya yönlendirme / kullanıcıya açıklama / onay workflow).
+DBMS_XPLAN, plan çıktısını standart formatlarda göstermek için Oracle’ın resmi paketidir. 
+7) Execute (read-only, governed)
+- Mümkünse raporlama replikası/standby veya ETL/CDC ile ayrıştırılmış reporting store.
+8) Result interpretation (LLM + analytics)
+- Sonuç tablosu + KPI + grafik önerisi + “neden/aksiyon” üretimi.
+Hallucination azaltma ve ambiguity resolution
+RAG’in amacı burada “genel bilgi” değil, kurumsal bağlama grounding: glossary, metric tanımları, join
+kuralları, EBS kısıtları. RAG kavramı, parametric + non-parametric memory kombinasyonu olarak
+tanımlanır ve özellikle provenance/knowledge update gibi sorunlara çözüm getirir. 
+19
+20
+21
+22
+13
+23
+5
+Ambiguity çözümü için iki kademeli strateji öneriyorum:
+Sessiz disambiguation: sistem önce kullanıcıdan soru sormadan; (a) security context, (b) en sık
+kullanılan OU/ledger default’u, (c) son 30 gün gibi varsayılanlar ile bir “best-effort” plan çıkarır ve
+bunu kullanıcıya “varsayım olarak” şeffafça gösterir. 
+Zorunlu disambiguation: kritik finansal raporlama / ay kapanış / vergi gibi senaryolarda “onay
+veya soru” olmadan execute etmez.
+Bu yaklaşım, Power BI Copilot’ın “model hazırlığı yoksa yanlış/misleading sonuç” uyarısıyla aynı
+çizgidedir: güvenilirlik, kullanıcı deneyiminden önce gelir. 
+Oracle EBS R12 semantik katmanın olmazsa olmazları
+Bu sistemde semantic layer sadece “tablo açıklaması” değildir; şu bileşenleri içermelidir:
+Business glossary (TR/EN): terim→entity/metric/filtre eşlemesi. 
+Flexfield & lookup çözümleyiciler: 
+Flexfield’ler segmentlerden oluşur; KFF/DFF ayrımı ve “kullanıcıya kod gösterip arkada ID
+saklama” ilkesi dokümante edilmiştir. 
+Flex değerleri çok dilli tablolarla tutulur: örn. FND_FLEX_VALUES_TL valid değerleri diller
+bazında saklar. 
+Relationship graph: eTRM + curated rule set ile EBS ilişkilerini tutar. eTRM’nin amacı EBS nesne
+tanımı ve dependency bilgisini göstermektir. 
+Metric store: “Toplam borç”, “vade gecikme oranı”, “3-yollu eşleştirme farkı” gibi KPI’lar tek yerde
+tanımlı olmalı. Bu yaklaşım dbt Semantic Layer gibi ürünlerde “metrikleri merkezden tanımla ve
+sorgula” olarak konumlanır. 
+SQL Sonrası Anlamlandırma, Insight ve Foresight Katmanı
+Bu katman, sistemi “SQL copilot”tan “karar destek platformu”na taşır.
+Sonuçtan otomatik özet, KPI ve görselleştirme önerisi
+Table döndürmek yerine, çıktı sonrası şu pipeline önerilir:
+1) Tablo standardizasyonu: veri tipleri, para birimi/format, yuvarlama, null handling.
+2) KPI türetme: metric store’dan doğru formül seçimi (örn. “Toplam” mı “net” mi, kur farkı dahil mi?).
+3) Sapma/trend analizi:
+- Zaman serisi varsa: yaygın forecasting/seasonality pratikleri için referans yöntem repertuarı gerekir
+(Hyndman & Athanasopoulos “Forecasting: Principles and Practice” bu konuda kapsamlı bir çerçeve
+sunar). 
+4) Anomaly detection:
+- Zaman serisi anomaly yöntemleri üzerine survey’ler, bu alanın geniş ve farklı varsayımlara dayalı
+olduğunu gösterir; bu yüzden “tek model her şeye yeter” yaklaşımı risklidir. 
+5) Root-cause tarzı yorum (guardrailed):
+- Root-cause için “causal graph + anomaly” birleşimi üzerine çalışmalar vardır; multivariate time series’de
+anomali ve root-cause’u causal mekanizma ihlali olarak ele alan yaklaşımlar literatürde yer alır. 
+6) Grafik/şema seçimi:
+• 
+• 
+4
+• 
+• 
+• 
+10
+• 
+24
+• 
+14
+• 
+25
+26
+27
+28
+6
+- Kural tabanlı bir “chart recommender” (örn. time series→line; kategori karşılaştırma→bar; pay→pie
+sınırlı) + LLM’nin açıklama dili.
+Tableau Pulse’un “natural language insight summarization / metric insight” yaklaşımı, bu tarz bir sonuç
+katmanının ürünleştirilebileceğini gösteren iyi bir örnektir. 
+Yönetici özeti vs analist detayı ayrımı
+Aynı sonuçtan iki “view” üretmek gerekir:
+Yönetici özeti: 5–7 cümle; 3 KPI; “ne değişti / neden olabilir / önerilen aksiyon”. 
+Analist detayı: kullanılan filtreler, join path, SQL (gerekirse), data coverage, edge-case uyarıları,
+drill-down linkleri.
+Bu ayrım, kurumsal adoption için kritiktir: kullanıcı güveni “açıklanabilirlik”le yükselir. NIST AI RMF’nin
+ölçme/yönetme yaklaşımı burada bir yönetim çerçevesi sağlar. 
+Foresight (öngörü) üretimi: nerede güvenilir, nerede riskli?
+Öngörü katmanını üç seviyeli kurgulamanızı öneririm:
+Seviye A – güvenli öngörü (yüksek güven): kısa vadeli (örn. 7–30 gün) trend extrapolation +
+confidence band + veri kalitesi uyarıları. 
+Seviye B – koşullu öngörü (orta güven): senaryo analizi (“kur %5 artarsa”, “lead time 3 gün
+uzarsa”), fakat açık varsayımlarla. 
+Seviye C – riskli öngörü (düşük güven): causal iddia (“şu nedenle oldu”) veya otomatik aksiyon
+(“şunu yap”) — burada insan onayı şart.
+Causal inference disiplininde “varsayımlar ve identifiability” kritik olduğu için, causal yorumlar “hipotez”
+seviyesinde ve test edilebilir önerilerle sunulmalıdır. Hernán & Robins’in çevrimiçi kitabı bu alanı
+sistematik biçimde çerçeveler. 
+Agentic analytics yaklaşımı: doğru kullanım
+Agentic sistemler; LLM’nin araçlarla etkileşip “planla-uygula” döngüsü kurmasıdır. ReAct,
+reasoning+acting yaklaşımını bu çerçevede tanımlar ve dış kaynaklarla etkileşimin hallucination’ı
+azaltabileceğini gösterir. 
+Ancak BI/ERP bağlamında agentic yaklaşımı “iletişim” ve “operasyon”u ayrıştırmadan kullanmak
+tehlikelidir:
+Analitik agent: veri bulur/özetler/hipotez kurar (ok). 
+Operasyon agent’i: ERP’de aksiyon alır (ör. ödeme durdur) → burada onay, audit, ve rol bazlı izin
+şarttır. OWASP’ın LLM riskleri bu tarz sistemlerde prompt injection ve yetki aşımını öne çıkarır. 
+Agentic AI kavramının “hedefe yönelik, sınırlı denetimle iş yapabilen” sistemler olarak anlatımı;
+kurumsal governance ile birlikte ele alınmalıdır. 
+29
+• 
+• 
+30
+• 
+• 
+• 
+31
+32
+• 
+• 
+11
+33
+7
+Best Practice ve Şirket Karşılaştırmaları
+Aşağıda “kurumsal doğal dil analitiği” alanında öne çıkan yaklaşımları, sizin Oracle EBS R12 senaryonuza
+göre karşılaştırıyorum.
+Snowflake Cortex Analyst
+Yaklaşım: Doğal dil sorusunu, sizin sağladığınız semantic model (YAML/semantic views) üzerinden
+SQL’e çevirir; semantic view içinde logical tables, dimensions, facts, metrics ve relationships tanımlanır.
+“Rich metadata + join path ön tanımı + metric tanımı + örnekler” ana fikirdir. 
+Güçlü yan:
+- Join path “önceden tanımlı” olduğu için multi-table doğruluğu yükselir. 
+- “Custom instructions” ile terimlerin kurum içi anlamı modele gömülerek controllability artar. 
+Zayıf yan:
+- Bu kaliteyi sağlayan şey “semantic model emek maliyeti”dir (kurulmazsa sistem zayıflar).
+EBS R12 uyumu:
+- Direct EBS DB yerine bir DW/semantic view katmanı kurmak istiyorsanız çok uyumlu “pattern” verir;
+aynısını Oracle tarafında da uygulamalısınız.
+Microsoft Fabric / Power BI Copilot
+Yaklaşım: Copilot, semantic model geliştirme ve tüketme deneyimlerini destekler; fakat Microsoft
+dokümantasyonu, model hazırlanmazsa çıktıların düşük kalite ve yanıltıcı olabileceğini net söyler. 
+Güçlü yan:
+- Kurumsal adoption, governance ve rapor üretim hızında güçlü ekosistem etkisi. 
+Zayıf yan:
+- EBS R12 semantik doğruluğu, yine sizin semantic model kalitenize bağlı (özellikle TR terimler, flexfield
+mantığı, multi-org bağlamı).
+EBS R12 uyumu:
+- Eğer hedef arayüz Power BI ise; “semantic model + NLQ” için ideal tüketim katmanı olabilir.
+ThoughtSpot Sage
+Yaklaşım (önemli güvenlik pattern’i): ThoughtSpot, GPT’nin ürettiği SQL’i doğrudan çalıştırmadığını,
+bunun yerine iç sorgu diline çevirip mevcut güvenlik kontrollerini enforce ettiğini açıkça yazar. 
+Güçlü yan:
+- “LLM SQL üretse bile yetkisiz veri dönmez” güvenlik pattern’i, sizin mimaride kopyalanması gereken en
+değerli yaklaşımlardan biridir. 
+Zayıf yan:
+- Bu yaklaşım, bir “ara dil / semantic query language” ve güçlü policy engine gerektirir.
+34
+3
+21
+35
+36
+5
+5
+8
+EBS R12 uyumu:
+- EBS’de RBAC + multi-org + data security kritik olduğu için, bu pattern çok uygundur.
+Databricks Genie
+Yaklaşım: Dashboard ile ilişkili “Genie space” üzerinden kullanıcılar doğal dille analiz yapar; erişim,
+Unity Catalog nesneleri üzerinde SELECT ayrıcalıklarıyla sınırlandırılır. 
+Güçlü yan:
+- “Governed access” + lakehouse üzerinde self-serve analitiğe uygun. 
+Zayıf yan:
+- EBS’nin OLTP şemasını doğrudan doğal dile açmak yerine, lakehouse’a taşınmış curated model ister.
+EBS R12 uyumu:
+- EBS’den CDC/ETL ile lakehouse’a çıkmayı planlıyorsanız iyi seçenek.
+Tableau Pulse
+Yaklaşım: Ask Data’nın yerini alacak şekilde, metrikler üzerinde doğal dil özet/insight üretimi ve sorucevap yeteneklerini genişletir. 
+EBS R12 uyumu:
+- Özellikle “result interpretation/insight layer” için ilham kaynağı.
+Oracle Select AI (Autonomous DB)
+Oracle tarafında da doğal dil → SQL yönü ürünleşmiş durumda: Select AI; doğal dil prompt’tan SQL
+üretme, çalıştırma ve açıklama gibi yetenekleri “Autonomous Database” içinde sunar. 
+Bu sizin senaryoda iki farklı şekilde değer üretir:
+(A) Eğer EBS verinizi Autonomous / raporlama DB’ye replike edebiliyorsanız, Oracle-native
+NL2SQL kapasitesini değerlendirebilirsiniz. 
+(B) Kullanmasanız bile, Oracle’ın “SQL generation + explain + chat” yaklaşımı; sizin platformun
+execution+explain tasarımına referans olur. 
+Teknoloji Seçim Matrisi, Riskler ve Anti-Pattern’ler
+Karar matrisi (bu projeye özel)
+Karar alanı Seçenek Artılar Eksiler Maliyet /
+Karmaşıklık
+Bu proje için
+öneri
+Vector DB
+gerekli mi?
+Yok (klasik
+search + cache) Basit; az bileşen
+Şema/glossary
+RAG kalitesi
+sınırlı kalır
+Düşük Sadece PoC
+6
+6
+37
+38
+• 
+39
+• 
+40
+9
+Karar alanı Seçenek Artılar Eksiler Maliyet /
+Karmaşıklık
+Bu proje için
+öneri
+Var (metadata/
+glossary
+retrieval)
+TR/EN
+synonyms +
+açıklamalar +
+örnek SQL’ler ile
+grounding
+artar;
+hallucination
+azalır (RAG
+yaklaşımı) 
+Ek altyapı,
+embedding
+lifecycle
+Orta
+Evet (Phase
+2+)
+Vector store
+nerede?
+Oracle içinde
+(AI Vector
+Search)
+Oracle tarafında
+native;
+dokümantasyon
+ve workflow
+mevcut 
+Oracle sürüm/
+ürün bağımlılığı;
+EBS DB’den
+ayrıştırma
+gerektirebilir
+Orta
+Oracle
+ekosistemi
+ağır
+basıyorsa
+güçlü
+seçenek
+Knowledge
+graph
+gerekli mi?
+Sadece ilişki
+graph (tables/
+joins)
+Join-path
+planning için
+yeterli; daha
+hafif
+Metinsel
+doküman+graph
+birleşimi sınırlı
+Orta
+Evet
+(relationship
+graph şart)
+GraphRAG /
+zengin KG
+Metin
+dokümanlardan
+graph çıkarma
++ özetleme +
+retrieval;
+“global context”
+üretiminde
+güçlü 
+Structured data
+için “doğrudan”
+şart değil; doğru
+scope şart
+OrtaYüksek
+EBS’de join/
+semantik
+için sınırlı
+ama değerli
+(özellikle
+doküman/
+glossary)
+Semantic
+layer tool
+gerekli mi?
+Custom
+semantic store
+Tam kontrol;
+EBS’e özel
+Daha çok
+mühendislik
+maliyeti
+Yüksek
+Sadece
+güçlü ekip
+varsa
+dbt Semantic
+Layer
+Metrikleri
+merkezden
+tanımlama;
+“define once,
+query
+anywhere”
+yaklaşımı 
+dbt ekosistemi
+varsayımı
+Orta
+DW/ELT
+varsa çok iyi
+Looker/
+LookML
+Modeling
+language ile
+governed
+semantic model
+Looker lock-in OrtaYüksek
+Looker
+kullanan
+kurumlarda
+23
+41
+42
+25
+43
+10
+Karar alanı Seçenek Artılar Eksiler Maliyet /
+Karmaşıklık
+Bu proje için
+öneri
+BI-native
+semantic
+(Power BI,
+Snowflake
+semantic
+views)
+NLQ doğruluğu
+semantic model
+ile artar 
+Platform
+bağımlılığı Orta
+Tüketim
+platformuna
+göre
+SQL
+doğrulama Sadece LLM Hızlı PoC En riskli: DML/
+yanlış join/perf Düşük Kesinlikle
+hayır
+SQL AST +
+policy engine Güvenlik/kalite Ek geliştirme Orta
+Evet (Phase
+2 zorunlu)
+Plan
+doğrulama Yok Basit
+Prod DB’ye zarar
+riski Düşük Hayır
+EXPLAIN PLAN
++ DBMS_XPLAN
+Oracle-native
+plan
+görünürlüğü Ek round-trip Orta
+Evet
+(özellikle
+crossmodule)
+Observability Ad-hoc log Basit
+Denetlenebilirlik
+zayıf Düşük PoC
+OpenTelemetry
+Standart,
+vendor-neutral;
+tracing/metrics 
+Entegrasyon
+maliyeti Orta
+Evet (Phase
+3+)
+Evaluation Manuel test Hızlı Ölçeklenmez Düşük PoC
+Golden set +
+otomatik eval +
+tracing
+Sürekli kalite
+ölçümü Setup maliyeti Orta
+Evet (Phase
+2 zorunlu)
+RAG eval Yok -
+“RAG iyi mi”
+bilinmez - Hayır
+RAGAS vb.
+RAG pipeline’ı
+referanssız
+ölçmeye yönelik
+framework
+yaklaşımı 
+Metric
+yorumlama
+uzmanlığı ister
+Orta
+Evet
+(özellikle
+schema/
+glossary
+RAG)
+Riskler ve anti-pattern’ler
+Bu projede en tehlikeli anti-pattern, “LLM SQL üretti → direkt çalıştır”dır. ThoughtSpot’un bile LLM
+output’unu direkt çalıştırmama ve araya kendi kontrol katmanını koyma gerekçesi bu riskle birebir
+ilgilidir. 
+44
+13
+45
+46
+5
+11
+Başlıca anti-pattern’ler:
+Ham EBS şemasını tamamen LLM’ye açmak: binlerce tablo/kolon → seçim hataları (BIRD/
+Spider’ın gösterdiği genelleme problemi). 
+Sadece DB constraint’lerinden join graph çıkarma: EBS’de constraint’ler FND modelde kayıtlı
+olup fiziksel enforce edilmeyebilir; bu join doğruluğunu düşürür. 
+Multi-org bağlamını “sonradan filtreleriz” demek: OU/ledger/inv org yanlışsa rapor yanlış
+çıkar (özellikle finans kapanış). Multi-Org implementasyonunda security profile ve profile option
+adımlarının kritik olması bunu destekler. 
+Flexfield ve lookup meaning çözmeden sonuç sunmak: kullanıcıya “kod” döner; semantik
+kaybolur. Flexfield’ler segment/value mantığıyla tasarlanmıştır. 
+Eval/test yok: model değişir, prompt değişir; kalite drift edilir ama görünmez. NIST AI RMF
+“measure/manage” disiplinini önerir. 
+Security threat model yok: OWASP LLM Top 10 risklerini ele almadan prod’a çıkmak. 
+Aşamalı Uygulama Yol Haritası, Ölçümleme ve Nihai Öneri
+Faz bazlı yol haritası (uygulanabilir deliverable odaklı)
+Aşağıdaki plan, “hemen değer üretme” ile “kurumsal hardening”i dengelemek için tasarlandı.
+Faz 1: PoC (doğru scope – hızlı güven kazanımı)
+Hedef: EBS R12 üzerinde 20–30 “golden question” için güvenilir NL→SQL ve doğru tablo çıktısı.
+Deliverable:
+- “Read-only query runner” servis
+- Basit glossary (TR/EN) + seçilmiş entity seti (ör. AP Invoices, AR Receipts, GL Journals)
+- SQL allowlist + DML block
+Risk: Şema kapsamı büyürse PoC çöker (scope creep). Spider/BIRD bulguları bu riskin yapısal olduğunu
+gösterir. 
+Başarı metriği: Golden set üzerinde execution accuracy + kullanıcı doğrulaması.
+Faz 2: Güvenilir semantic query engine (asıl ürün çekirdeği)
+Hedef: EBS cross-module sorgularda doğru join/path + doğru multi-org filtreleri.
+Deliverable:
+- eTRM tabanlı relationship graph (curated)
+- Semantic entities + metric tanımları
+- Query-plan → SQL compiler yaklaşımı
+- Explain plan / cost guardrail (DBMS_XPLAN) 
+Risk: Relationship graph yanlış/eksik olursa sistem “güvenilmez” olur. (eTRM ve “constraints not
+enforced” gerçeği yüzünden graph kalitesi kritik.) 
+Başarı metriği: Cross-module sorularda (AP↔PO, AR↔GL, INV↔OM vb.) doğruluk + düşük yanlışpozitif.
+Faz 3: Analytics & insight layer (benim önerdiğim en yüksek ROI fazı)
+Hedef: Sonuçları “KPI + özet + grafik/uyarı + aksiyon”a dönüştürmek.
+Deliverable:
+• 
+47
+• 
+8
+• 
+48
+• 
+10
+• 
+30
+• 11
+47
+13
+49
+12
+- KPI library + sapma/trend modülleri
+- Chart recommender
+- Otomatik “management summary vs analyst detail”
+Tableau Pulse’un insight yaklaşımı bu ürünleşmenin mümkün olduğunu gösteren bir referans. 
+Risk: LLM’nin “yorum”u veriyle tutarsız olabilir → grounding + şeffaflık şart.
+Başarı metriği: Kullanıcı başına değer (adoption), tekrar kullanım, rapor üretim süresi azalması.
+Faz 4: Foresight & decision intelligence
+Hedef: “What changed / why changed / what to do next” döngüsünü sistematikleştirmek + senaryo
+analizi.
+Deliverable:
+- Forecasting modülü (kısa vadeli güvenli öngörü) 
+- Anomaly detection + root-cause hypothesis motoru 
+- Decision modelleme (karar noktaları, aksiyon seçenekleri, KPI etkisi)
+Decision Intelligence yaklaşımı, veriyi “karar odaklı” sistemleştirmeyi hedefler. 
+Risk: Causal iddialar (neden oldu) yanlış güven verebilir; causal inference varsayımları açık olmalı. 
+Başarı metriği: Öngörü doğruluğu + aksiyonların gerçekleşme oranı + business outcome.
+Faz 5: Enterprise hardening
+Hedef: Kurumsal güvenlik, auditability, ölçek, observability, model risk yönetimi.
+Deliverable:
+- OWASP LLM risklerine göre güvenlik kontrolleri 
+- NIST AI RMF’e hizalanmış risk yönetimi (govern/map/measure/manage) 
+- OpenTelemetry tracing/metrics 
+- Approval workflow (kritik sorgular)
+Risk: Kullanıcı güveni kırılırsa adoption düşer (en büyük kayıp).
+Başarı metriği: Güvenlik ihlali yok, SLO’lar tutuyor, maliyet/latency kontrol altında.
+Değerlendirme ve ölçümleme (bu projeye özel)
+Bu sistemi “model demo” değil “ürün” yapan şey ölçüm sistemidir:
+SQL doğruluğu: syntactic validity + policy compliance (AST tabanlı). 
+Execution accuracy: SQL doğru sonucu üretiyor mu? Spider ve BIRD gibi benchmark’lar Text-toSQL’de yürütme doğruluğunu temel metrik olarak kullanır. 
+Answer correctness: iş açısından doğru mu (domain-expert onayı). 
+Business usefulness: KPI/doğru aksiyon önerisi; kullanıcı geri bildirimi. 
+Latency & cost: plan/cost guardrail başarısı (DBMS_XPLAN) 
+Explainability: join-path, filtreler, varsayımlar şeffaf mı? 
+User trust/adoption: tekrar kullanım, “paylaşılan insight” oranı. 
+Operational stability: hata oranı, timeouts, DB load.
+Benchmark önerisi (minimum set):
+Golden questions set (20→100→500 büyüyen) 
+SQL pair benchmark (NL, expected SQL/expected result) 
+Domain scenario tests (kapanış, aging, 3-way match, stok değerleme) 
+Adversarial tests (prompt injection, “yasak tabloyu getir” denemeleri) → OWASP LLM riskleriyle
+hizalı 
+29
+26
+50
+51
+31
+11
+12
+45
+• 
+• 
+47
+• 
+• 
+• 13
+• 
+• 
+• 
+• 
+• 
+• 
+• 
+52
+13
+Permission boundary tests (kullanıcı rolü A veriyi görür, B görmez)
+Bu proje için nihai öneri (özet)
+Bu proje EBS R12 üzerinde başarılı olacaksa hedefiniz şu olmalı:
+LLM = dil arayüzü + plan çıkarıcı + açıklayıcı, 
+Semantic layer + relationship graph + policy engine = gerçek ürün.
+Ve mümkünse:
+Ham EBS DB yerine read-only reporting replica veya curated DW katmanı (güvenlik +
+performans için), 
+eTRM’den beslenen curated join graph, 
+Flexfield/lookup çözümlemeleri, 
+EXPLAIN PLAN tabanlı cost guardrail.
+Bu seçimlerin hepsi; hem Oracle dokümanlarının EBS mimari gerçekleriyle (multi-org, flexfields, eTRM)
+hem de endüstri örneklerindeki semantik model merkezli yaklaşımla uyumludur. 
+İlk 30 gün / 60 gün / 90 gün planı
+İlk 30 gün (Foundation + doğru scope)
+- Golden question set (20–30) ve modül kapsamını kesinleştir (AP/AR/GL’den başlamak tipik olarak en
+yüksek değer).
+- eTRM’den hedef tabloların dependency/join bilgilerini çekip ilk relationship graph’ı çıkar. 
+- Glossary v0 (TR/EN synonyms + KPI isimleri)
+- SQL allowlist, DML block, row limit
+- Audit log (kim, ne sordu, hangi SQL çalıştı, kaç satır döndü)
+60 gün (Semantic engine v1)
+- Query-plan → SQL compiler yapısı (LLM plan, deterministic compile)
+- Multi-org bağlam kurgusu (OU/ledger) ve zorunlu filtreler
+- Flexfield/lookup meaning resolvers (en azından kritik alanlar) 
+- Explain plan / cost gate (DBMS_XPLAN) 
+- Otomatik test pipeline: golden set + permission boundary
+90 gün (Insight layer v1 + prod hazırlığı)
+- KPI library + trend/sapma rutinleri
+- Yönetici özeti vs analist detayı formatı
+- Basit anomaly detection (guardrailed) 
+- Observability (OpenTelemetry) 
+- İlk kullanım senaryolarını “ekip rutinine” bağlayan workflow (ör. haftalık finans/operasyon brief)
+Bu projede hemen uygulanması gerekenler
+1) eTRM tabanlı relationship graph + curated join rules: EBS’de join doğruluğunun bel kemiği. 
+2) Semantic layer (glossary + KPI tanımları + synonyms): Snowflake/Power BI gibi ürünlerin bile
+doğruluk için şart koştuğu temel. 
+3) LLM output’unu direkt SQL olarak çalıştırmama: ThoughtSpot’un güvenlik pattern’ini kopyalayın
+• 
+• 
+• 
+• 
+• 
+• 
+• 
+53
+7
+54
+13
+55
+45
+56
+44
+14
+(ara dil/policy enforcement). 
+4) EXPLAIN PLAN + cost guardrail: DBMS_XPLAN ile plan görünürlüğü üretim güvenliği için kritik. 
+5) Golden set + permission boundary test: ölçemediğiniz şeyi iyileştiremezsiniz (NIST AI RMF
+“measure/manage” yaklaşımı). 
+Kesinlikle kaçınılması gereken tasarım hataları
+Ham EBS şemasını topluca LLM’ye verip “kendin seç” demek (Spider/BIRD tarzı genelleme
+problemleri). 
+DB constraint’lerinden otomatik join çıkarıp “tamamdır” demek (EBS’de constraintler her zaman
+enforce edilmeyebilir). 
+Multi-org + flexfield + lookup çözmeden “rapor üretiyoruz” sanmak. 
+Eval/observability olmadan prod’a çıkmak (NIST AI RMF ve OWASP LLM riskleriyle ters). 
+LLM’yi “otopilot” yapıp ERP operasyonu yaptırmak (agentic aksiyonlar için onay/audit şart). 
+En yüksek ROI sağlayacak ilk 5 yatırım alanı
+1) Semantic model + KPI/metric store (doğruluğun ana kaynağı; adoption’ı belirler). 
+2) Curated relationship graph (eTRM + domain rules) (cross-module doğruluğun anahtarı). 
+3) Guardrails: policy engine + SQL AST validation + explain plan gate (güvenlik ve prod stabilitesi).
+4) SQL sonrası insight katmanı (Tableau Pulse benzeri “özet/insight” ile iş değeri). 
+5) Evaluation + observability (kalite drift’i yakalamak ve sürekli iyileştirmek). 
+https://docs.oracle.com/cd/E26401_01/index.htm
+https://docs.oracle.com/cd/E26401_01/index.htm
+https://arxiv.org/abs/1809.08887
+https://arxiv.org/abs/1809.08887
+https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-analyst
+https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-analyst
+https://learn.microsoft.com/en-us/power-bi/create-reports/copilot-semantic-models
+https://learn.microsoft.com/en-us/power-bi/create-reports/copilot-semantic-models
+https://www.thoughtspot.com/blog/secure-data-processing-with-llm
+https://www.thoughtspot.com/blog/secure-data-processing-with-llm
+https://docs.databricks.com/aws/en/genie/
+https://docs.databricks.com/aws/en/genie/
+https://docs.oracle.com/cd/E26401_01/doc.122/f53031/T684058T684061.htm
+https://docs.oracle.com/cd/E26401_01/doc.122/f53031/T684058T684061.htm
+https://docs.oracle.com/cd/E26401_01/doc.122/f53031/T684058T684153.htm
+https://docs.oracle.com/cd/E26401_01/doc.122/f53031/T684058T684153.htm
+https://docs.oracle.com/cd/E18727_01/doc.121/e12892/T354897T361274.htm
+https://docs.oracle.com/cd/E18727_01/doc.121/e12892/T354897T361274.htm
+https://owasp.org/www-project-top-10-for-large-language-model-applications/
+https://owasp.org/www-project-top-10-for-large-language-model-applications/
+https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf
+https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf
+5
+13
+12
+• 
+47
+• 
+8
+• 57
+• 58
+• 59
+60
+61
+62
+29
+63
+1
+2 9 47
+3 34 44 60
+4 35
+5
+6
+7 14 56 61
+8 49
+10
+11 52 59
+12 30 58
+15
+https://docs.oracle.com/en/database/oracle/oracle-database/19/arpls/DBMS_XPLAN.html
+https://docs.oracle.com/en/database/oracle/oracle-database/19/arpls/DBMS_XPLAN.html
+https://docs.oracle.com/cd/E18727_01/doc.121/e13423/T443823T443827.htm
+https://docs.oracle.com/cd/E18727_01/doc.121/e13423/T443823T443827.htm
+https://aclanthology.org/2020.acl-main.677/
+https://aclanthology.org/2020.acl-main.677/
+https://arxiv.org/abs/2109.05093
+https://arxiv.org/abs/2109.05093
+https://arxiv.org/abs/2305.03111
+https://arxiv.org/abs/2305.03111
+https://etrm.live/etrm-12.1.1/etrm.oracle.com/pls/et1211d9/etrm_pnav1eaf.html
+https://etrm.live/etrm-12.1.1/etrm.oracle.com/pls/et1211d9/etrm_pnav1eaf.html
+https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-analyst/custom-instructions
+https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-analyst/custom-instructions
+https://sqlglot.com/sqlglot.html
+https://sqlglot.com/sqlglot.html
+https://arxiv.org/abs/2005.11401
+https://arxiv.org/abs/2005.11401
+https://etrm.live/etrm-12.1.1/etrm.oracle.com/pls/et1211d9/etrm_pnav17b7-2.html
+https://etrm.live/etrm-12.1.1/etrm.oracle.com/pls/et1211d9/etrm_pnav17b7-2.html
+https://docs.getdbt.com/docs/use-dbt-semantic-layer/dbt-sl
+https://docs.getdbt.com/docs/use-dbt-semantic-layer/dbt-sl
+https://otexts.com/fpp3/
+https://otexts.com/fpp3/
+https://arxiv.org/abs/2211.05244
+https://arxiv.org/abs/2211.05244
+https://arxiv.org/abs/2206.15033
+https://arxiv.org/abs/2206.15033
+https://www.tableau.com/blog/tableau-metrics-and-natural-language-query-evolve-tableaupulse
+https://www.tableau.com/blog/tableau-metrics-and-natural-language-query-evolve-tableau-pulse
+https://miguelhernan.org/whatifbook
+https://miguelhernan.org/whatifbook
+https://arxiv.org/abs/2210.03629
+https://arxiv.org/abs/2210.03629
+https://www.ibm.com/think/topics/agentic-ai
+https://www.ibm.com/think/topics/agentic-ai
+https://learn.microsoft.com/en-us/power-bi/create-reports/copilot-create-reports
+https://learn.microsoft.com/en-us/power-bi/create-reports/copilot-create-reports
+https://docs.oracle.com/en-us/iaas/autonomous-database-serverless/doc/sql-generation-aiautonomous.html
+https://docs.oracle.com/en-us/iaas/autonomous-database-serverless/doc/sql-generation-ai-autonomous.html
+13 62
+15 48 53 57
+16
+17 20
+18
+19
+21
+22
+23
+24 54
+25
+26
+27 50 55
+28
+29 37
+31
+32
+33
+36
+38 39
+16
+https://blogs.oracle.com/machinelearning/select-ai-enhances-texttosql-support
+https://blogs.oracle.com/machinelearning/select-ai-enhances-texttosql-support
+https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/ai-vector-search-usersguide.pdf
+https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/ai-vector-search-users-guide.pdf
+https://github.com/microsoft/graphrag
+https://github.com/microsoft/graphrag
+https://docs.cloud.google.com/looker/docs/what-is-lookml
+https://docs.cloud.google.com/looker/docs/what-is-lookml
+https://opentelemetry.io/docs/specs/otel/
+https://opentelemetry.io/docs/specs/otel/
+https://arxiv.org/abs/2309.15217
+https://arxiv.org/abs/2309.15217
+https://www.lorienpratt.com/dihandbook/
+https://www.lorienpratt.com/dihandbook/
+40
+41
+42
+43
+45 63
+46
+51
+17

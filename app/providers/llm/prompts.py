@@ -164,7 +164,7 @@ Kurallar:
 4. Belirsizlik varsa → needs_clarification: true ve clarification_message yaz.
 5. intent alanını Türkçe yaz.
 6. Alias kullanabilirsin; validation katmanı çözecektir.
-7. Aktif çalışan = quit_date IS NULL.
+7. Aktif çalışan = CIKIS_TARIHI IS NULL (CIKIS_TARIHI boşsa çalışan aktiftir).
 
 Hibrit bağlam kuralları:
 8. Yapısal katalog (yukarıdaki tablo listesi) asıl referans kaynağıdır.
@@ -643,10 +643,258 @@ Kurallar:
 
 
 def build_narrator_prompt(user_message: str, summary: str) -> str:
-    """Build the narrator prompt from *user_message* and execution *summary*."""
+    """Build the narrator prompt from *user_message* and execution *summary*.
+
+    The ``/no_think`` prefix suppresses Qwen3-series extended thinking mode,
+    preventing ``<think>\u2026</think>`` blocks from leaking into the raw
+    response and eliminating the associated latency and sanitizer overhead.
+    """
     return (
-        f"{_NARRATOR_SYSTEM}\n"
+        f"/no_think\n\n{_NARRATOR_SYSTEM}\n"
         f"Kullanıcı sorusu: {user_message}\n\n"
         f"Sonuç özeti:\n{summary}\n\n"
         "Yanıtını ver:"
     )
+
+
+# ---------------------------------------------------------------------------
+# Two-tier prompt helpers (Phase 2 — compact index + column-pruned detail)
+# ---------------------------------------------------------------------------
+
+_DESC_LIMIT = 60  # Max chars of table description shown in compact index line
+
+
+def build_compact_catalog_index(snapshot: CatalogSnapshot) -> str:
+    """Return a one-line-per-table compact index of the full catalog.
+
+    Format per line:
+        TABLE_NAME | alias: a,b | PK: col | FK→CHILD.col | desc(60)
+
+    This section is placed at the top of the two-tier prompt so the LLM
+    sees all available tables without detailed column info bloating the
+    context window.
+    """
+    lines: list[str] = ["Katalog dizini (tüm tablolar):"]
+    for table in snapshot.tables:
+        parts: list[str] = [table.name]
+        if table.aliases:
+            parts.append(f"alias:{','.join(table.aliases)}")
+        if table.primary_key:
+            parts.append(f"PK:{','.join(table.primary_key)}")
+        if table.foreign_keys:
+            fk_strs = [
+                f"{fk.column}→{fk.referenced_table}.{fk.referenced_column}"
+                for fk in table.foreign_keys[:3]  # show at most 3 FKs per table
+            ]
+            parts.append("FK:" + ";".join(fk_strs))
+        if table.description:
+            parts.append(_truncate(table.description, _DESC_LIMIT))
+        lines.append("  " + " | ".join(parts))
+    return "\n".join(lines)
+
+
+def build_detail_section(
+    tables: list[TableMetadata],
+    pruned_cols: dict[str, list[str]],
+) -> str:
+    """Full column detail for retrieved tables, filtered to pruned columns.
+
+    When *pruned_cols* is empty (pruning disabled or failed), all columns
+    are included.  PK and FK columns are always included regardless of
+    the pruned set — they are essential for join reasoning.
+
+    Parameters
+    ----------
+    tables:
+        Retrieved (top-K) tables to show in detail.
+    pruned_cols:
+        Mapping of table name → list of relevant column names as returned
+        by the column-prune LLM call.  May be empty ({}).
+    """
+    if not tables:
+        return ""
+    parts: list[str] = ["Seçilen tablo detayları:"]
+    for table in tables:
+        wanted = set(pruned_cols.get(table.name, []))
+        if not wanted:
+            # No pruning for this table — include all columns
+            parts.append(_format_table(table))
+            continue
+
+        # Always keep PK + FK columns
+        pk_set = set(table.primary_key)
+        fk_cols = {fk.column for fk in table.foreign_keys}
+        must_include = pk_set | fk_cols
+
+        filtered_columns = [
+            c
+            for c in table.columns
+            if c.name in wanted or c.name in must_include
+        ]
+        filtered_table = table.model_copy(update={"columns": filtered_columns})
+        parts.append(_format_table(filtered_table))
+
+    return "\n\n".join(parts)
+
+
+def _join_sections_two_tier(
+    compact_index: str,
+    detail_section: str,
+    user_message: str,
+    *,
+    docs_block: str = "",
+    examples_block: str = "",
+) -> str:
+    """Join two-tier prompt sections with double-newline separators."""
+    sections = [_PLANNER_SYSTEM, compact_index, detail_section]
+    if docs_block:
+        sections.append(docs_block)
+    if examples_block:
+        sections.append(examples_block)
+    sections.append(f"Kullanıcı sorusu: {user_message}")
+    return "\n\n".join(s for s in sections if s)
+
+
+def build_two_tier_planner_prompt_debug(
+    user_message: str,
+    full_snapshot: CatalogSnapshot,
+    retrieved_snapshot: CatalogSnapshot,
+    pruned_cols: dict[str, list[str]],
+    *,
+    schema_docs=None,
+    examples=None,
+    max_schema_docs: int = DEFAULT_MAX_SCHEMA_DOCS,
+    max_examples: int = DEFAULT_MAX_EXAMPLES,
+    max_doc_content_chars: int = DEFAULT_DOC_CONTENT_CHARS,
+    max_explanation_chars: int = DEFAULT_EXPLANATION_CHARS,
+    max_prompt_chars: int = DEFAULT_PROMPT_MAX_CHARS,
+) -> tuple[str, dict[str, Any]]:
+    """Build the two-tier planner prompt with debug metadata.
+
+    Tier 1 — compact index of the **full** catalog (all tables, 1 line each).
+    Tier 2 — full column detail of **retrieved** tables only, optionally
+              filtered to the pruned column set.
+
+    Returns (prompt_text, debug_dict).
+    """
+    compact_index = build_compact_catalog_index(full_snapshot)
+    detail_section = build_detail_section(
+        retrieved_snapshot.tables, pruned_cols
+    )
+
+    schema_docs_list = schema_docs or []
+    examples_list = examples or []
+
+    cur_docs = max_schema_docs
+    cur_examples = max_examples
+    cur_explanation_chars = max_explanation_chars
+    cur_content_chars = max_doc_content_chars
+    reduction_steps: list[str] = []
+
+    def _build() -> str:
+        docs_block = (
+            build_schema_docs_block(
+                schema_docs_list,
+                max_docs=cur_docs,
+                max_content_chars=cur_content_chars,
+            )
+            if schema_docs_list and cur_docs > 0
+            else ""
+        )
+        ex_block = (
+            build_examples_block(
+                examples_list,
+                max_examples=cur_examples,
+                max_explanation_chars=cur_explanation_chars,
+            )
+            if examples_list and cur_examples > 0
+            else ""
+        )
+        return _join_sections_two_tier(
+            compact_index,
+            detail_section,
+            user_message,
+            docs_block=docs_block,
+            examples_block=ex_block,
+        )
+
+    def _debug(prompt_text: str) -> dict[str, Any]:
+        sel_docs = schema_docs_list[:cur_docs] if cur_docs > 0 else []
+        sel_ex = examples_list[:cur_examples] if cur_examples > 0 else []
+        return {
+            "prompt_length": len(prompt_text),
+            "prompt_budget": max_prompt_chars,
+            "prompt_truncated": bool(reduction_steps),
+            "reduction_steps": list(reduction_steps),
+            "schema_tables_in_prompt": [t.name for t in retrieved_snapshot.tables],
+            "full_catalog_tables": [t.name for t in full_snapshot.tables],
+            "pruned_cols": pruned_cols,
+            "schema_doc_count": len(sel_docs),
+            "example_count": len(sel_ex),
+            "schema_docs": [
+                {
+                    "doc_id": d.doc_id,
+                    "title": d.title,
+                    "table_name": d.table_name,
+                    "doc_type": d.doc_type.value,
+                }
+                for d in sel_docs
+            ],
+            "examples": [
+                {
+                    "doc_id": e.doc_id,
+                    "question": e.question,
+                    "tables": list(e.tables),
+                }
+                for e in sel_ex
+            ],
+            "doc_content_chars": cur_content_chars,
+            "example_explanation_chars": cur_explanation_chars,
+        }
+
+    prompt = _build()
+
+    # Apply the same budget-reduction steps as the single-tier builder
+    if len(prompt) <= max_prompt_chars:
+        return prompt, _debug(prompt)
+
+    # Step 1 – reduce examples
+    while cur_examples > 0 and len(prompt) > max_prompt_chars:
+        cur_examples -= 1
+        reduction_steps.append("reduce_examples")
+        prompt = _build()
+    if len(prompt) <= max_prompt_chars:
+        return prompt, _debug(prompt)
+
+    # Step 2 – reduce schema docs
+    while cur_docs > 0 and len(prompt) > max_prompt_chars:
+        cur_docs -= 1
+        reduction_steps.append("reduce_schema_docs")
+        prompt = _build()
+    if len(prompt) <= max_prompt_chars:
+        return prompt, _debug(prompt)
+
+    # Step 3 – aggressively trim explanations
+    cur_explanation_chars = _AGGRESSIVE_EXPLANATION_CHARS
+    if cur_examples == 0 and examples_list:
+        cur_examples = 1
+    reduction_steps.append("trim_example_explanations")
+    prompt = _build()
+    if len(prompt) <= max_prompt_chars:
+        return prompt, _debug(prompt)
+
+    # Step 4 – aggressively trim doc content
+    cur_content_chars = _AGGRESSIVE_DOC_CONTENT_CHARS
+    if cur_docs == 0 and schema_docs_list:
+        cur_docs = 1
+    reduction_steps.append("trim_schema_doc_content")
+    prompt = _build()
+    if len(prompt) <= max_prompt_chars:
+        return prompt, _debug(prompt)
+
+    # Step 5 – drop optional sections
+    cur_examples = 0
+    cur_docs = 0
+    reduction_steps.append("drop_optional_sections")
+    prompt = _build()
+    return prompt, _debug(prompt)

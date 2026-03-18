@@ -29,16 +29,36 @@ class Settings(BaseSettings):
     max_rows_preview: int = 20
 
     # --- Sprint 3: Metadata ingestion ---
-    metadata_source_path: str = ""
-    metadata_source_type: Literal["json", "csv", "none"] = "none"
+    # Default: use the bundled sample JSON catalog so the API and eval share
+    # a single file-backed source of truth out of the box.
+    metadata_source_path: str = "data/sample_metadata.json"
+    metadata_source_type: Literal["json", "csv", "none"] = "json"
 
     # --- Sprint 3: Schema retrieval ---
-    enable_metadata_retrieval: bool = False
-    retrieval_top_k: int = 5
+    enable_metadata_retrieval: bool = True
+    retrieval_top_k: int = 7
+    retrieval_strategy: Literal["keyword", "semantic", "hybrid"] = "keyword"
+    retrieval_alpha: float = 0.5  # RRF alpha for hybrid retriever
+
+    # --- Phase 2: Column pruning ---
+    # When enabled, a lightweight LLM call strips irrelevant columns from
+    # the retrieved table detail before injecting into the planner prompt.
+    enable_column_prune: bool = True
+
+    # --- Phase 3: Embedding settings ---
+    # Set embedding_base_url + embedding_model to activate semantic / hybrid
+    # retrieval.  Leave empty to fall back to keyword-only retrieval.
+    embedding_base_url: str = ""
+    embedding_api_key: str = "EMPTY"
+    embedding_model: str = ""
+    embedding_batch_size: int = 32
+    catalog_index_cache_path: str = "data/catalog_index.npz"
 
     # --- Sprint 3: Document / example retrieval ---
-    enable_document_retrieval: bool = False
-    document_corpus_path: str = ""
+    # Default: wire the bundled JSONL corpus so the planner prompt is
+    # enriched with schema docs and few-shot examples.
+    enable_document_retrieval: bool = True
+    document_corpus_path: str = "data/sample_schema_documents.jsonl"
     document_loader_strict: bool = True
     retrieval_top_k_examples: int = 2
 

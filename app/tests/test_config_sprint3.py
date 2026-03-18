@@ -6,17 +6,36 @@ from app.core.config import APP_VERSION, Settings
 
 
 class TestSprintThreeConfig:
-    """Verify that new Sprint 3 config fields have sane defaults."""
+    """Verify that Sprint 3 config fields have sane defaults.
+
+    Phase 2 + Phase 4 change the defaults so that the bundled sample files
+    are wired automatically:
+      * metadata_source_type  → 'json'
+      * metadata_source_path  → 'data/sample_metadata.json'
+      * enable_document_retrieval → True
+      * document_corpus_path  → 'data/sample_schema_documents.jsonl'
+    """
 
     def test_metadata_defaults(self) -> None:
-        s = Settings()
-        assert s.metadata_source_type == "none"
-        assert s.metadata_source_path == ""
-        assert s.enable_metadata_retrieval is False
+        s = Settings(_env_file=None)  # type: ignore[call-arg]
+        assert s.metadata_source_type == "json"
+        assert s.metadata_source_path == "data/sample_metadata.json"
+        assert s.enable_metadata_retrieval is True
+
+    def test_document_retrieval_defaults(self) -> None:
+        s = Settings(_env_file=None)  # type: ignore[call-arg]
+        assert s.enable_document_retrieval is True
+        assert s.document_corpus_path == "data/sample_schema_documents.jsonl"
 
     def test_retrieval_defaults(self) -> None:
-        s = Settings()
-        assert s.retrieval_top_k == 5
+        s = Settings(_env_file=None)  # type: ignore[call-arg]
+        assert s.retrieval_top_k == 7
+        assert s.retrieval_strategy == "keyword"
+        assert s.enable_column_prune is True
+        assert s.retrieval_alpha == 0.5
+        assert s.catalog_index_cache_path == "data/catalog_index.npz"
+        assert s.embedding_base_url == ""
+        assert s.embedding_model == ""
 
     def test_oracle_defaults(self, monkeypatch) -> None:
         # Clear oracle env vars so we test the code defaults, not .env overrides.
@@ -41,3 +60,4 @@ class TestSprintThreeConfig:
         assert s.llm_provider == "mock"
         assert s.enable_sql_in_api_response is True
         assert s.max_rows_preview == 20
+

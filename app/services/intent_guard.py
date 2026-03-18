@@ -211,8 +211,16 @@ def build_filter_loss_guard_decision(
     planner_cov = compute_filter_coverage(planner_plan, requested)
     final_cov = compute_filter_coverage(final_plan, requested)
 
-    strong_signals = [s for s in requested if s.get("strength") == "strong"]
-    false_success_risk = bool(strong_signals and final_cov["missing_signal_codes"])
+    # Only strong-strength signals trigger false_success_risk.  Medium signals
+    # (e.g. org_scope) should never by themselves block a plan — they carry
+    # supplementary context, not mandatory filter intent.
+    strong_missing_codes: set[str] = {
+        s["code"]
+        for s in requested
+        if s.get("strength") == "strong"
+        and s["code"] in set(final_cov["missing_signal_codes"])
+    }
+    false_success_risk = bool(strong_missing_codes)
     blocked = bool(false_success_risk and not final_plan.needs_clarification)
 
     return {
@@ -225,6 +233,6 @@ def build_filter_loss_guard_decision(
         "clarification_missing_dimensions": [
             sig.get("dimension")
             for sig in requested
-            if sig.get("code") in set(final_cov["missing_signal_codes"])
+            if sig.get("code") in strong_missing_codes
         ],
     }

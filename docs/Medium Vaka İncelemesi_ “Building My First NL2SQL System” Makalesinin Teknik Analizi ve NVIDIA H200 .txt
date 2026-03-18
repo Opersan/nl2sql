@@ -1,0 +1,872 @@
+Medium Vaka İncelemesi: “Building My First
+NL2SQL System” Makalesinin Teknik Analizi ve
+NVIDIA H200 Üzerinde Uçtan Uca Plan
+Yönetici özeti
+Bu Medium yazısı, yazarın kurumsal bir projede NL2SQL (doğal dil → SQL) sistemi geliştirirken “naif tekprompt”tan, RAG tabanlı tek-atış (single-shot) bir yaklaşım üzerinden hibrit, niyet-sınıflandırmalı ve
+gerektiğinde “agentic thinking mode”a yükselen üretim-odaklı bir mimariye evrildiğini anlatan bir
+mühendislik hikâyesidir. En temel dönüm noktaları: tüm şemayı prompt’a dökmenin ölçeklenmemesi;
+Vanna ile RAG yaklaşımının iş kullanıcılarının karmaşık sorularında zorlanması; bunun üzerine niyet
+ayrıştırma + LangGraph tabanlı çok-adımlı/agentic akış (“Thinking Mode”) eklenmesi; ayrıca SQL
+diyalekti (MySQL/T‑SQL) uyumsuzluğu ve güvenlik/pagination gibi kural/heuristik katmanlarının
+kaçınılmaz hale gelmesidir. 
+Makale, gerçek üretim sorunlarına (bağlam şişmesi, diyalekt savaşları, tutarlılık, kullanıcı bekleme
+deneyimi için SSE streaming) doğru yerlerden temas etse de; kullanılan LLM/embedding modelleri, veri
+setleri, eğitim stratejisi, ölçüm metrikleri ve tekrar edilebilir deney kurulumu gibi kritik ayrıntıları
+vermediği için bilimsel anlamda yeniden üretilebilirliği sınırlıdır. 
+Güncel NL2SQL SOTA literatürü; şema bağlama (schema linking) ve yapısal kısıtlar (ör. PICARD ile
+kısıtlı çözümleme) gibi başlıklarda derin teknik katkılar sunarken, LLM çağında en iyi pratikler;
+dekompozisyon + self-correction (DIN‑SQL) ve prompt mühendisliği + seçilmiş örnekler (DAIL‑SQL)
+ile yüksek yürütme doğruluğuna (execution accuracy) yaklaşmıştır. Makaledeki “Thinking Mode” sezgisel
+olarak bu çizgiyle uyumludur; ancak literatürdeki sistematik tasarım (test harness, benchmark, ablation)
+eksiktir. 
+NVIDIA H200 tarafında, resmi verilere göre H200; 141 GB HBM3e ve 4.8 TB/s bellek bant genişliği ile
+özellikle büyük LLM çıkarımında güçlü bir hedef platformdur. TensorRT‑LLM ile H200 üzerinde
+Llama 2 70B için belirli giriş/çıkış uzunluklarında binlerce token/s düzeyinde throughput raporlanmış;
+ayrıca INT4 AWQ + FP8 hesaplama ile çok büyük modellerin tek GPU’da koşturulabildiği gösterilmiştir.
+Bu rapor, makaledeki mimariyi “netleştirip” formalize eder; SOTA ile teknik olarak kıyaslar; ardından
+(GPU sayısı belirtilmemiş) H200 sunucusunda model seçimi, fine-tuning, RAG/agentic tasarım,
+TensorRT‑LLM/vLLM hızlandırma, Triton dağıtımı, ölçüm/izleme dahil somut bir uygulama planı
+sunar.
+Makalenin mimarisi ve bileşenleri
+Makale, üç aşamalı bir evrim anlatır:
+Sürüm 0: Tek mega-prompt (naif yaklaşım)
+Kullanıcı sorusu + tüm veritabanı şeması + bağlam tek bir prompt’a gömülür ve LLM’den SQL beklenir.
+1
+1
+2
+3
+4
+1
+Bu yaklaşım küçük şemalarda “bazen” çalışsa da; şema büyüdükçe prompt şişmesi, yüzeysel akıl
+yürütme, kolon/tabloların halüsinasyonu ve join hatalarıyla çöker. 
+Sürüm 1: Vanna ile single-shot RAG
+Yazar, Vanna’yı “MIT lisanslı, RAG tabanlı bir Text‑to‑SQL motoru” olarak tanımlıyor: şema/
+dokümantasyon ve opsiyonel geçmiş SQL örnekleriyle bir bilgi tabanı hazırlanıyor; soru geldiğinde ilgili
+metadata/doküman geri getirilip LLM’e veriliyor ve SQL üretiliyor. Bu yaklaşım pratikte günümüz
+kurumsal “NL2SQL as RAG” trendiyle uyumludur. (Vanna’nın açık kaynak yaklaşımı ve LLM/DB bağımsız
+entegrasyon iddiaları, projenin genel üretim karakterine de uyar.) 
+Sürüm 2: Hibrit, niyet-odaklı yönlendirme + “Thinking Mode” agentic akış
+Vanna karmaşık iş sorularında zorlanınca sistem üç niyet sınıfına ayrılır: (i) genel sorular, (ii) metadata/
+şema soruları, (iii) veri soruları (Vanna’ya yönlendirilir). Veri niyetinde ise kullanıcı bir “Thinking Mode”
+açtığında tek-atış RAG yerine çok adımlı agentic workflow devreye girer ve yazarın gözlemine göre
+(örneğin) 70+ satırlık SQL’i daha doğru üretebilir. 
+Makale, agentic tasarımın LangGraph üzerinde “state / reducer / merge” mekanikleriyle yürüdüğünü;
+yanlış state güncellemeleri nedeniyle 40+ mesajın gereksiz yere LLM’e taşınıp maliyet ve doğruluğu
+bozduğunu anlatır. Bu, LangGraph’te state güncellemelerinin reducer’larla kontrol edilmesi fikriyle
+doğrudan ilişkilidir. 
+Aşağıdaki diyagram, makalenin tarif ettiği hibrit yapıyı “mühendislik şeması” olarak birleştirir
+(makaledeki figürleri birebir kopyalamaz; metinden çıkarımla dokümante eder):
+flowchart TB
+ U[User / Analyst] --> UI[Web UI / Chat]
+ UI -->|NL Question + (optional) Thinking Mode toggle| API[Backend API]
+ API --> IC[Intent Classifier]
+ IC -->|General| GEN[General Answer Path]
+ IC -->|Metadata| META[Schema/Metadata QA]
+ IC -->|Data| DATA{Data Path}
+ DATA -->|Thinking Mode OFF| VANNA[Vanna RAG Text-to-SQL]
+ DATA -->|Thinking Mode ON| AG[LangGraph Agentic Workflow]
+ subgraph RAG["Retrieval Layer"]
+ VDB[(Vector DB / Embeddings)]
+ SCH[DB Schema + Docs + Examples]
+ end
+ VANNA <-->|top-k schema/docs/examples| VDB
+ AG <-->|tools: retrieve schema / examples / validate / execute| VDB
+ VANNA --> SQL1[Candidate SQL]
+ AG --> SQL2[Candidate SQL]
+ SQL1 --> GUARD[SQL Guardrails: sanitize / dialect / pagination / safety]
+ SQL2 --> GUARD
+5
+5
+6
+7
+8
+2
+ GUARD --> EXEC[DB Execution (Read-only)]
+ EXEC --> RES[(Result set)]
+ RES --> UI
+ AG -->|progress updates| SSE[SSE Streaming]
+ SSE --> UI
+Bu mimaride kritik bileşenler (makalenin doğrudan söylediği ölçüde) şunlardır:
+Niyet ayrıştırma (intent splitting): genel/metadata/veri sınıflarıyla yönlendirme. 
+RAG bileşenleri: embedding + vektör arama + “schema tokens / example queries”in kalitesinin
+etkisi. 
+Agentic iş akışı: araçlar, doğrulama döngüleri, message routing, retry ve “context juggling”. 
+Bağlam yönetimi: LangGraph reducer/merge semantiği ve yanlış kullanımın “context
+explosion”a yol açması. 
+Üretim kural katmanı: SQL sanitize, diyalekt çevirimi, programatik pagination, domain kısıtları,
+edge-case safety checks. 
+Kullanıcı deneyimi: agentic yol 20+ saniyeye uzayınca SSE ile akışkan geri bildirim. 
+Veri, modeller, eğitim ve çıkarım boru hattı
+Bu bölüm iki parçalıdır: (i) makalenin açıkça tarif ettiği şeyler, (ii) makalenin tarif etmediği ama
+mimarinin zorunlu kıldığı boşluklar.
+Makalenin verdiği somut bilgiler
+Makale, klasik ML eğitim boru hattı (dataset → training → eval) anlatmıyor; yaklaşım esasen “RAG + LLM
+inference” ekseninde. İlk sürümde tüm şema prompt’a basılırken, Vanna ile şema/dokümantasyon/
+örnek SQL’lerden bir bilgi tabanı oluşturulup soru anında ilgili parçalar geri getiriliyor ve LLM
+çağrısıyla SQL üretiliyor. 
+LLM tarafında yazı “GPT” ifadesini kullanıyor; ancak model ailesi/sürümü (ör. GPT‑4, GPT‑4o, vs.), sıcaklık/
+decoding, function calling kullanımı, ya da SQL grammar kısıtları gibi ayrıntılar verilmiyor. 
+Heuristik / kural tabanlı parçalar
+Makale, üretimde başarının yalnızca LLM’e bırakılamadığını pratik biçimde vurguluyor ve T‑SQL
+gereksinimi nedeniyle bir “katman” inşa edildiğini söylüyor:
+SQL sanitization (ör. zararlı komutları ayıklama) 
+Diyalekt dönüşümü (MySQL tarzından T‑SQL’e) 
+Programatik pagination 
+Domain‑specific constraints 
+Edge-case safety checks 
+Bu kısmın pratikte nasıl uygulanabileceğine dair (makalenin söylemediği ama endüstride yaygın) bir
+referans araç: SQLGlot, çok sayıda diyalekt arasında parse/transpile yapabilen bir SQL parser/
+transpiler’dır ve T‑SQL diyalektinin desteklendiğini dokümante eder. 
+Makalenin kritik boşlukları (reprodüksiyon açısından)
+• 9
+• 
+10
+• 11
+• 
+8
+• 
+10
+• 12
+13
+14
+• 
+• 
+• 
+• 
+• 10
+15
+3
+Aşağıdaki unsurlar makalede yoktur; fakat NL2SQL sistem tasarımında performans belirleyicidir:
+Vektör DB seçimi (FAISS/Milvus/pgvector vb.), embedding modeli, chunking stratejisi 
+Şema temsil formatı (DDL, JSON, Markdown), foreign key graph’ın nasıl verildiği 
+Prompt şablonları, örnek seçimi (static vs dynamic), top‑k değerleri 
+Agentic akışın node’ları, araçları, hata düzeltme stratejisi 
+Ölçüm: exact match mi, execution accuracy mi, kullanıcı memnuniyeti mi? (Hiçbiri raporlanmıyor)
+Bu nedenle makaleyi, “teknik dersler” açısından değerli; ancak “akademik/sistematik benchmark raporu”
+olarak sınırlı kabul etmek gerekir.
+Aşağıdaki mermaid diyagram, makalenin anlattığı “bağlam + retrieval + SQL üretimi + güvenlik +
+çalıştırma” veri akışını üretim boru hattı olarak özetler:
+sequenceDiagram
+ participant U as User
+ participant S as NL2SQL Service
+ participant R as Retriever (Vector Search)
+ participant L as LLM
+ participant G as SQL Guardrails
+ participant D as Database
+ U->>S: Natural language question (+ chat history)
+ S->>S: Intent classify (general/metadata/data)
+ S->>R: Retrieve relevant schema/docs/examples (top-k)
+ R-->>S: Context bundle
+ S->>L: Prompt (question + context + dialect constraints)
+ L-->>S: Candidate SQL
+ S->>G: Sanitize + dialect convert + pagination + policy checks
+ alt safe & valid
+ G->>D: Execute (read-only)
+ D-->>G: Results / errors
+ G-->>S: Results
+ S-->>U: Table + explanation (optionally SSE streaming)
+ else invalid / error
+ G-->>S: Error feedback
+ S->>L: Self-correct prompt (error + context)
+ L-->>S: Revised SQL
+ end
+Güncel NL2SQL SOTA ve literatürle karşılaştırma
+Makaledeki yaklaşımı konumlamak için önce problem alanını netleştirmek gerekir: modern NL2SQL,
+özellikle çok tablo + çapraz-domain + görülmemiş şema genellemesi ile zordur. Spider veri seti bu
+zorluğu ölçmek için tasarlanmış; 200 veritabanı üzerinde 10,181 soru ve 5,693 benzersiz SQL içerir ve
+train/test’te farklı şemalar bulunur. 
+• 
+• 
+• 
+• 
+• 
+16
+17
+4
+Klasik (LLM öncesi / erken) SOTA çizgisi: şema bağlama ve yapı önyargısı
+RAT‑SQL: şema ilişkilerini relation-aware self-attention ile encode ederek schema linking’i
+iyileştirir; Spider’da önemli sıçrama raporlar (BERT ile daha da artar). 
+Execution‑Guided Decoding: SQL’in yürütülebilir olmasını decoding sürecinde kullanarak hatalı
+kısmi programları eler ve yürütme doğruluğunu artırır. 
+Makaledeki sistem, bu akademik çizgiyi “model içine gömülü” biçimde uygulamıyor; bunun yerine pratik
+bir eşdeğerini, yani retrieval ile bağlam daraltma + kural katmanı + gerektiğinde hata düzeltme
+döngüsü şeklinde sistem seviyesinde kurguluyor. Bu, endüstride yaygın bir trade‑off: daha az “model
+mimarisi mühendisliği”, daha çok “sistem mühendisliği”.
+Seq2Seq + kısıtlı decoding: yapısal doğruluk odağı
+PICARD: dil modelinin decoding’ini artımlı parse ile kısıtlayarak “geçerli SQL üretme” oranını
+yükseltir; T5 gibi seq2seq modelleri Spider/CoSQL üzerinde belirgin şekilde güçlendirir. 
+T5‑Large’ın 770M parametreli checkpoint olduğu model kartında belirtilir; bu aile NL2SQL’de
+fine‑tune + kısıtlı decoding kombinasyonlarında güçlü bir baseline olmuştur. 
+Makaledeki yaklaşım PICARD benzeri formel bir “decoder constraint” sunmuyor; onun yerine sonrasında
+SQL’i sanitize/convert ederek ve gerekirse tekrar ürettirerek yapısal hataları yönetiyor. Bu, uygulaması
+hızlı; ancak teorik olarak PICARD benzeri “her adımda geçerlilik” garantisine göre daha kırılgandır.
+LLM çağında SOTA: prompt mühendisliği, dekompozisyon ve self-correction
+DIN‑SQL: Text-to-SQL’i alt görevlere bölüp self-correction ile prompting performansını yükseltir;
+Spider ve BIRD üzerinde yürütme doğruluğunda güçlü sonuçlar raporlar. 
+DAIL‑SQL: prompt tasarımını sistematik olarak inceler (soru temsili, örnek seçimi/organizasyonu)
+ve Spark/Spider lider tablosunda yüksek execution accuracy raporlar. 
+BIRD benchmarkı, gerçekçi “büyük ve içerik-yoğun DB” senaryosunu hedefler; 12,751 soru‑SQL
+çifti ve 95 veritabanı (toplam 33.4GB) gibi ölçek vurgular, ayrıca LLM’lerin hâlâ insan
+performansının gerisinde kaldığını gösterir. 
+Makaledeki “Thinking Mode”, DIN‑SQL’in dekompozisyon/self-correction felsefesine oldukça yakındır;
+fark, makalede bunun nasıl sistematize edildiğinin (alt görev tanımları, promptlar, ölçümler) açık
+olmamasıdır. 
+Endüstri paraleli: Uber QueryGPT ile benzerlik
+Uber’ın QueryGPT yazısı; NL→SQL üretiminde LLM + vector database + similarity search bileşimini
+açıkça vurgular. Makaledeki Vanna tabanlı RAG çizgisi ve karmaşık iş sorularına agentic yükseltme
+fikri, bu tür “kurumsal NL2SQL” sistemleriyle aynı ailede konumlanır; ancak Uber örneği tipik olarak
+daha kapsamlı kurumsal değerlendirme/guardrail katmanlarıyla sunulur (makalede bunlar daha çok
+“öğrendim ve ekledim” seviyesinde kalır). 
+Güçlü yönler, sınırlılıklar ve yeniden üretilebilirlik
+Makalenin güçlü yanları “teknik doğrular” ve “üretim gerçekleri”ne dokunmasından gelir:
+Makale, şemayı prompt’a gömmenin ölçeklenmediğini ve retrieval ile bağlam daraltmanın şart
+olduğunu doğru şekilde çerçeveler. Ayrıca karmaşık soruların tek adımda çözülmeyebileceğini ve
+• 
+18
+• 
+19
+• 
+20
+• 
+21
+• 
+22
+• 
+23
+• 
+24
+25
+26
+27
+28
+5
+agentic akışın pratikte ciddi fark yaratabileceğini deneyimsel biçimde aktarır. Bağlam yönetimini
+“sessiz kötü” olarak tanımlaması ve LangGraph reducer/state semantiğiyle yaşadığı sorunlar, agentic
+sistemlerde en sık görülen üretim problemlerindendir. 
+Son olarak diyalekt uyumsuzluğu (T‑SQL vs MySQL) üzerinden “LLM çıktısı mutlaka dönüştürme/koruma
+katmanı ister” sonucuna varması, gerçek dünyada neredeyse evrensel bir zorunluluktur. 
+Buna karşılık sınırlılıklar daha çok “bilimsel raporlama eksikleri” ve “güvenlik/kalite garantisi” etrafında
+toplanır:
+Model ve veri belirsizliği: Hangi LLM, hangi embedding modeli, hangi prompt şablonu, hangi
+vektör DB, kaç örnek, hangi top‑k? Belirsiz. Bu nedenle makaledeki sonuçlar tekrar edilebilir
+değil. 
+Ölçüm eksikliği: Execution accuracy / valid SQL rate / latency / maliyet gibi metrikler
+raporlanmıyor. Sadece anekdot (20+ saniye, 70+ satır SQL) var. 
+Güvenlik politikaları net değil: “sanitizing SQL” ve safety checks deniyor; ancak read-only
+garanti, izinli tablolar, row-level security, audit log gibi kurumsal gereksinimlerin kapsamı
+açıklanmıyor. (Vanna tarafında bu tür kavramlar ürün dokümantasyonunda var; fakat makale
+özelinde uygulanıp uygulanmadığı net değil.) 
+Diyalekt dönüşümü doğruluğu: SQL transpilation (ör. SQLGlot) çoğu vakada yardımcı olsa da,
+semantik eşdeğerliği her zaman garanti etmek zordur; özellikle vendor-spesifik fonksiyonlar/
+CTE/limit/offset davranışlarında risk vardır. 
+Sonuç: Makale, “nasıl düşündüm ve ne öğrendim” düzeyinde başarılı bir mühendislik anlatısıdır; ancak
+SOTA kıyaslaması ve yeniden üretilebilirlik için gerekli teknik detayları sağlamaz. 
+H200 üzerinde geliştirme ve üretim dağıtım planı
+Aşağıdaki plan, H200 GPU sayısı belirtilmediği için iki modda tasarlanmıştır:
+(i) tek GPU (1×H200) varsayımı, (ii) çok GPU (N×H200) ölçekleme notları. H200 ürün sayfası, H200’ün
+141GB HBM3e ve 4.8 TB/s bellek bant genişliği sunduğunu belirtir; pratikte sunucu konfigürasyonunu
+ayrıca doğrulamak gerekir. 
+Hedef mimari seçimi
+Makaledeki derslerle uyumlu, güncel literatürle tutarlı “en sağlam üretim yaklaşımı” genellikle şudur:
+1) Retriever‑first (schema/value aware): Şema + iş dokümanı + örnek SQL + (mümkünse) örnek satır/
+değerleri indeksle.
+2) İki aşamalı üretim:
+- hızlı yol: “tek atış” üretim (yüksek throughput)
+- zor yol: dekompozisyon/self-correction agentic workflow (DIN‑SQL benzeri) 
+3) Execution feedback: Hata mesajı + explain plan + kısıtlar ile otomatik düzeltme (execution-guided
+fikriyle uyumlu). 
+4) Guardrails: read-only, allowlist, row-level security, limit, maliyet/bütçe kontrolleri, audit.
+Bu yaklaşım, makaledeki “Vanna (RAG) + Thinking Mode (agentic) + SQL sanitize/dialect/pagination”
+çizgisini kurumsal seviyeye taşır. 
+9
+8
+29
+• 
+30
+• 
+31
+• 
+32
+• 
+15
+33
+3
+25
+19
+32
+6
+Model aileleri ve net hedef boyutlar
+NL2SQL üretimde tipik olarak iki model sınıfı kullanmak avantajlıdır:
+Üretici model (generator LLM): SQL üretir; yüksek doğruluk ve diyalekt hassasiyeti gerekir. 
+Embedding modeli: retrieval için.
+Bu raporda generator LLM odaklı öneri seti (3–5 aday) aşağıdadır.
+Aday modeller karşılaştırma tablosu
+Aşağıdaki tablo “beklenen performans”ı iki farklı anlamda ele alır:
+(i) genel NL2SQL kabiliyeti (join, karmaşık filtreler, CTE), (ii) kurumsal uyarlanabilirlik (LoRA ile fine‑tune,
+RAG ile özelleştirme). Mutlak skorlar veri setine bağlıdır; bu yüzden burada daha çok göreli beklenti
+verilir.
+Model (önerilen) Parametre Tip Artıları Eksileri
+Tek
+H200’de
+bellek
+(yaklaşık)
+Beklenen
+kullanım
+SQLCoder‑7B‑2 7B
+Causal
+LLM
+NL→SQL için
+doğrudan
+odak; düşük
+maliyet; hızlı
+iterasyon
+Çok
+karmaşık
+crossdomain
+şemalarda
+limitli; uzun
+bağlam
+gerekebilir
+FP16
+~14GB;
+INT4
+~3.5GB
+(yalnız
+ağırlık)
+MVP, hızlı
+prod,
+“default
+mode”
+Qwen2.5‑Coder‑14B‑Instruct
+14.7B
+Causal
+LLM
+Çok uzun
+context (131k)
+ile büyük
+şema/doküman
+taşıma; güçlü
+coder profili
+SQL’de
+“diyalekt
+titizliği”
+prompt/
+finetune
+ister
+FP16
+~29GB;
+INT4
+~7.4GB
+Büyük şema
++ güçlü
+RAG,
+agentic için
+iyi
+DeepSeek‑Coder‑33B‑Instruct
+33B
+Causal
+LLM
+Güçlü coding/
+akıl yürütme;
+join/CTE gibi
+zor SQL’lerde iyi
+potansiyel
+Daha yüksek
+gecikme/
+VRAM; iyi
+prompt şart
+FP16
+~66GB;
+INT4
+~16.5GB
+“Thinking
+Mode” için
+güçlü aday
+Llama 3.1 70B Instruct 70B
+Causal
+LLM
+Genel akıl
+yürütme ve
+talimat takibi;
+agentic
+dekompozisyon
+için güçlü
+Tek GPU
+FP16
+“sınırda” (KV
+cache’e yer
+kalmaz);
+quantization/
+TP gerekir
+FP16
+~140GB;
+INT4
+~35GB
+Yüksek
+doğruluk
+hedefi,
+yüksek
+eşzamanlılık
+• 
+• 
+34
+35
+36
+37
+7
+Model (önerilen) Parametre Tip Artıları Eksileri
+Tek
+H200’de
+bellek
+(yaklaşık)
+Beklenen
+kullanım
+T5‑Large + PICARD 0.77B Seq2Seq
+Kısıtlı decoding
+ile yapısal
+geçerlilik;
+küçük/orta
+ölçek
+Modern
+coder
+LLM’ler
+kadar esnek
+değil;
+prompt
+yerine
+fine‑tune
+ağırlıklı
+FP16
+~1.5–
+3GB
+(model
+ailesine
+göre)
+“Valid SQL
+rate”i
+garantiye
+alma, düşük
+gecikme
+Bellek hesabı notu: FP16 ağırlık belleği kabaca parametre_sayısı × 2 byte ~ GB şeklinde
+hesaplanabilir; INT4 ağırlık belleği × 0.5 byte mertebesindedir (ölçek/packing overhead’i hariç).
+H200’ün 141GB HBM3e sunduğu belirtilir; tek GPU üzerinde 70B FP16 ağırlıklar (~140GB) KV cache için
+pratik alan bırakmadığından INT4/FP8 veya çoklu GPU tensor paralelizmi gerekir. 
+H200 üzerinde hızlandırma stratejisi
+İki servisleme hattı: TensorRT‑LLM (maksimum performans) ve vLLM (maksimum çeviklik)
+TensorRT‑LLM
+NVIDIA, TensorRT‑LLM’in LLM çıkarımı için optimize engine’ler ürettiğini; quantization (FP8/FP4/INT4
+AWQ), paged KV cache, in‑flight batching, speculative decoding gibi optimizasyonları sunduğunu
+dokümante eder. Ayrıca H200 üzerinde Llama 2 70B için belirli senaryolarda ~2263–3803 token/s/
+GPU throughput tablosu yayınlanmıştır (giriş 128, çıkış 4096 gibi). Bu, NL2SQL gibi görece kısa çıktı
+(ör. 50–300 token) senaryolarında doğru batching ile çok yüksek throughput potansiyeli olduğunu
+gösterir.
+vLLM
+vLLM; PagedAttention ve continuous batching ile yüksek throughput sunan, HuggingFace modellerini
+hızlı servislemeye odaklı bir kütüphanedir. “Hızlı prototipleme + çok model deneme” aşamasında
+vLLM genellikle daha düşük sürtünmelidir; ardından hedef model sabitlenince TensorRT‑LLM’e geçmek
+mantıklıdır.
+Quantization seçimi
+Üretim inference: 
+7B–33B aralığında: FP16/BF16 ile bile tek H200’de rahat; ancak concurrency yüksekse KV cache ve
+batching nedeniyle INT8/FP8 tercih edilebilir. 
+70B sınıfında: tek GPU’da pratik çözüm INT4 AWQ veya benzeri ağırlık‑odaklı quantization’dır.
+AWQ yaklaşımı, 4‑bit ağırlık sıkıştırmayı aktivasyon istatistikleriyle daha az doğruluk kaybıyla
+yapmayı hedefler. 
+Fine‑tuning: QLoRA, 4‑bit quantize temel model üzerine LoRA adaptörleriyle verimli fine‑tune
+yapmayı hedefler. 
+38
+39
+40
+41
+42
+• 
+• 
+• 
+43
+• 
+44
+8
+Paralelizm (GPU sayısı belirsiz senaryolar)
+1×H200: 7B/14B/33B FP16; 70B INT4/FP8. 
+N×H200: 70B FP16 için tensor parallelism (TP); 100B+ için TP + pipeline parallelism. NeMo
+Megatron, büyük modellerde model paralelizmi üzerine inşa edilir. 
+Beklenen gecikme ve throughput
+Aşağıdaki değerler, açık kaynak/NVIDIA yayınlarına dayanarak “mühendislik tahmini” olarak verilmiştir;
+gerçek değerler prompt uzunluğu, batch boyutu, decoding ayarları ve DB round‑trip süreleriyle ciddi
+değişir.
+LLM token throughput referansı (H200 + TensorRT‑LLM): Llama 2 70B için ~2263–3803 token/
+s/GPU gibi değerler raporlanmıştır. 
+NL2SQL çıktısı kısa olduğu için (tipik 50–300 token) model üretim süresi genellikle milisaniye–
+düşük yüzlerce ms bandına iner; buna karşılık retrieval + DB execution toplam gecikmede
+baskın hale gelebilir (özellikle karmaşık join ve büyük tablolarda). (Bu çıkarım, token/s
+değerlerinin büyüklüğünden yapılan bir mühendislik çıkarımıdır; sisteminizde ölçümle
+doğrulanmalıdır.) 
+Makaledeki agentic akışın 20+ saniye sürebildiği notu, model üretimi kadar “çok adımlı reasoning
++ tekrar denemeler + DB round‑trip” birleşiminin gecikmeyi yükseltebileceğini gösterir; bu
+nedenle düşünme modunu “sadece gerektiğinde” açmak doğru stratejidir. 
+H200 üzerinde uçtan uca geliştirme: adım adım komutlar / psödokod
+Aşağıdaki örnekler, Docker + PyTorch/HuggingFace + (opsiyonel) TensorRT‑LLM + Triton çizgisinde
+verilmiştir. NVIDIA NGC PyTorch container sürümlerinin CUDA/PyTorch/TensorRT uyumluluğunu release
+notlarında listeler. 
+Docker temel ortamı
+1) NGC PyTorch container ile geliştirme (fine-tune / eval)
+# Host’ta NVIDIA Container Toolkit kurulu varsayılır.
+docker run --gpus all -it --rm \
+--shm-size=64g \
+-v $PWD:/workspace \
+nvcr.io/nvidia/pytorch:25.12-py3 \
+bash
+(NGC PyTorch container örnek sürümü; sizdeki kurumsal imaj politikasına göre sabitleyin.) 
+2) Triton ile servisleme (prod) Triton’un en kolay kurulum yolunun NGC Docker imajı olduğu
+“Quickstart” dokümanında belirtilir. 
+docker pull nvcr.io/nvidia/tritonserver:25.01-py3
+docker run --gpus all --rm -it \
+-p8000:8000 -p8001:8001 -p8002:8002 \
+-v $PWD/model-repo:/models \
+• 
+• 
+45
+• 
+41
+• 
+46
+• 
+31
+47
+48
+49
+9
+nvcr.io/nvidia/tritonserver:25.01-py3 \
+tritonserver --model-repository=/models
+Triton metriklerinin /metrics endpoint’i ve Prometheus uyumlu metrik seti Triton
+dokümantasyonunda açıklanır. 
+Minimal NL2SQL boru hattı psödokodu
+def nl2sql_answer(user_question, chat_history, thinking_mode=False):
+intent = classify_intent(user_question, chat_history) # general / 
+metadata / data
+if intent == "general":
+return llm_general_answer(user_question, chat_history)
+schema = fetch_schema_catalog() # tables, columns, FKs, descriptions
+if intent == "metadata":
+return answer_about_schema(user_question, schema)
+# intent == "data"
+top_schema = retrieve(schema_docs_index, user_question, k=20)
+top_examples = retrieve(sql_examples_index, user_question, k=8)
+prompt = build_sql_prompt(
+question=user_question,
+chat_history=trim_history(chat_history),
+schema_context=top_schema,
+fewshot_examples=top_examples,
+dialect="TSQL",
+policy="READ_ONLY"
+)
+if not thinking_mode:
+sql = generator_llm(prompt)
+sql = postprocess_sql(sql, dialect="TSQL")
+validate_or_raise(sql)
+return execute_readonly(sql)
+# thinking_mode: decomposition + self-correction loop
+plan = planner_llm(build_planner_prompt(prompt))
+for step in plan.steps:
+partial_sql = generator_llm(build_step_prompt(step, schema,
+top_examples))
+partial_sql = postprocess_sql(partial_sql, dialect="TSQL")
+ok, err = try_execute_readonly(partial_sql)
+if not ok:
+partial_sql = generator_llm(build_fix_prompt(partial_sql, err))
+final_sql = generator_llm(build_final_prompt(plan, intermediate_results))
+final_sql = postprocess_sql(final_sql, dialect="TSQL")
+50
+10
+validate_or_raise(final_sql)
+return execute_readonly(final_sql)
+Bu tasarım, DIN‑SQL’in “dekompozisyon + self-correction” fikriyle; makaledeki “Thinking Mode” fikrini
+birleştirir. 
+SQL post-processing heuristikleri
+Makalenin “dialect layer” ihtiyacıyle uyumlu, pratikte yüksek getirili heuristik seti:
+1) Read-only zorlaması: INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE vb. engelle. (Makale
+safety checks dediği için bu sınıf beklenir.) 
+2) Allowlist: yalnız izinli şema/tablolara erişim. (Vanna ekosisteminde user-aware araçlar ve güvenlik
+katmanları konsepti bulunur.) 
+3) LIMIT / TOP / pagination: T‑SQL için TOP (N) veya OFFSET … FETCH .
+4) Diyalekt transpile: SQLGlot ile parse + transpile(dialect="tsql") . 
+5) Identifier quoting standardizasyonu: [schema].[table] formatı, reserved keyword kaçışı.
+6) Execution feedback ile düzeltme: DB hata mesajını prompt’a geri ver, yeniden üret. (Executionguided decoding fikriyle uyumlu.) 
+Fine-tuning: LoRA / QLoRA ile “kurumsal şemaya adaptasyon”
+Ne zaman fine-tuning?
+Yalnız prompt/RAG ile kabul edilebilir doğruluk yakalanamıyorsa; özellikle kurum içi tablo/kolon
+adlandırmaları, iş metrikleri ve diyalekt alışkanlıkları için SFT/LoRA değerli olur.
+LoRA: temel ağırlıkları dondurup düşük-rank adaptörlerle fine‑tune eder. 
+QLoRA: 4‑bit quantize temel model üzerinde LoRA ile fine‑tune ederek bellek ihtiyacını düşürür. 
+Örnek eğitim komutu (HuggingFace + PEFT yaklaşımı, şematik)
+# container içinde
+pip install -U transformers datasets peft accelerate bitsandbytes trl
+accelerate launch finetune_lora_text2sql.py \
+--base_model Qwen/Qwen2.5-Coder-14B-Instruct \
+--train_dataset spider_sft.jsonl \
+--max_seq_len 4096 \
+--lora_r 16 --lora_alpha 32 --lora_dropout 0.05 \
+--learning_rate 2e-4 \
+--per_device_train_batch_size 1 \
+--gradient_accumulation_steps 16 \
+--bf16 \
+--output_dir outputs/qwen14b-text2sql-lora
+Batch size / bellek sezgisi (tek H200)
+- 14B sınıfı için max_seq_len=4096 ve LoRA ile genelde micro_batch=1 + yüksek gradient
+accumulation güvenli başlangıçtır.
+51
+10
+52
+15
+19
+• 53
+• 
+54
+11
+- H200’ün büyük HBM3e kapasitesi, daha büyük seq_len ve daha agresif batch denemelerine alan açar;
+ancak gerçek sınırı model + KV cache + optimizer durumları belirler. H200 bellek kapasitesi resmi
+sayfada 141GB olarak verilir. 
+NeMo ile FP8 odaklı fine-tuning (opsiyonel, daha “NVIDIA-native”)
+NeMo; Megatron tabanlı model paralelizmiyle büyük model eğitimini hedefler. NeMo’nun FP8
+hızlandırmada Transformer Engine kullandığı “mixed precision” dokümanında belirtilir. 
+Inference: TensorRT‑LLM engine üretimi ve servisleme
+TensorRT‑LLM dokümantasyonu, Python API ile engine build + runtime sağladığını belirtir. Ayrıca
+H200 üzerinde INT4 AWQ ve FP8 ile büyük modellerde yüksek throughput örnekleri yayınlanmıştır. 
+Şematik akış (komutlar “örnek”tir; model seçiminize göre değişir):
+# 1) HF modelini indir (önceden cache)
+python -c "from transformers import AutoModelForCausalLM, AutoTokenizer; \
+ AutoTokenizer.from_pretrained('defog/sqlcoder-7b-2'); \
+ AutoModelForCausalLM.from_pretrained('defog/sqlcoder-7b-2')"
+# 2) TensorRT-LLM ortamını kur (tercihen NVIDIA'nın container'ı / resmi repo 
+yönergeleri)
+# 3) Engine build (FP8/INT4 AWQ seçimi modele göre)
+# 4) Triton/TensorRT-LLM backend ile serve et
+TensorRT‑LLM’in quantization (FP8/FP4/INT4 AWQ) ve paged KV cache gibi optimizasyonları NVIDIA
+Developer sayfasında listelenir. 
+İzleme, ölçümleme ve regresyon testleri
+Üretime çıkmadan önce NL2SQL’de “doğru SQL üretimi” kadar “hız ve maliyet” de kritiktir.
+Triton Metrics: Triton’un metrik endpoint’i ve metrik türleri dokümante edilmiştir; Prometheus
+ile scrape edilebilir. 
+Perf Analyzer / Model Analyzer: Triton ekosisteminde load test ve konfigürasyon araması için
+Perf Analyzer ve Model Analyzer dokümanları vardır; Model Analyzer’ın GPU bellek
+gereksinimlerini farklı batching/model instance ayarlarında karakterize etmeye yaradığı belirtilir. 
+NL2SQL kalite metrikleri: 
+Valid SQL rate (parse/execute edilebilen oran) 
+Execution accuracy (gold ile aynı sonucu üretme) 
+Latency p50/p95 (özellikle “thinking mode” açık/kapalı ayrı)
+Bu metrikler literatürde yaygındır; örneğin Spider/BIRD çalışmalarında execution accuracy sık
+kullanılır. 
+3
+45
+55
+56
+57
+58
+• 
+50
+• 
+59
+• 
+• 
+• 
+• 
+60
+12
+Minimal tekrarlanabilir kurulum ve zaman/maliyet tahmini
+Bu bölüm, makaledeki yaklaşımın “en küçük tekrarlanabilir” versiyonunu hedefler: (1) açık bir
+benchmark (Spider), (2) açık bir model (SQLCoder‑7B‑2 veya Qwen2.5‑Coder‑14B), (3) belirli guardrail ve
+ölçüm harness’i.
+Minimal pipeline kapsamı
+Veri hazırlığı (1–2 gün mühendislik zamanı)
+- Spider veri setini indir ve canonical format oluştur (question, db_id, schema, gold_sql). Spider’ın veri
+seti ve değerlendirme araçları açıkça yayınlanmıştır. 
+- Şemayı “LLM‑dostu” formata çevir:
+- tablo listesi
+- kolonlar + tipler
+- foreign keys
+- (Opsiyonel) SQL örnekleri havuzu üret: gold_sql, ya da kurum içi loglardan anonimleştirilmiş örnekler.
+Model seçimi (aynı gün)
+- MVP: SQLCoder‑7B‑2 (doğrudan NL→SQL odaklı). 
+- Alternatif: Qwen2.5‑Coder‑14B‑Instruct (çok uzun bağlam). 
+Baseline inference (0.5–1 gün)
+- RAG’siz prompt baseline
+- Ardından schema‑retrieval + few‑shot eklenmiş sürüm
+- Valid SQL rate + execution accuracy ölç
+Opsiyonel kısa fine-tune (1–4 GPU‑saat + 0.5 gün deney)
+- LoRA/QLoRA ile SFT (Spider train)
+- Eval: Spider dev; raporla
+LoRA ve QLoRA’nın bellek/verimlilik motivasyonları ilgili çalışmalarda açıklanır. 
+Süre ve maliyet tahmini
+Toplam takvim süresi (MVP): 3–5 iş günü 
+Veri + şema temsil: 1–2 gün 
+RAG + prompt + guardrail: 1–2 gün 
+Eval harness + Triton/vLLM servis: 1 gün 
+GPU zamanı: 
+Sadece inference/prototipleme: genelde düşük (dakikalar–saatler) 
+LoRA SFT: veri/batch/seq_len’e bağlı; H200 ile birkaç saat bandı makul bir başlangıç tahminidir
+(ölçerek netleştirin). 
+Bulut maliyeti (opsiyonel kıyas): H200 fiyatları sağlayıcıya göre değişir; örnek olarak AWS’nin
+8×H200 içeren belirli kapasite bloklarında saatlik fiyat artışları haberleştirilmiştir—bu tür bilgiler
+hızla değiştiği için “maliyet = GPU‑saat × sağlayıcı fiyatı” formülüyle hesap yapmak daha doğru
+olur. 
+Örnek inference prompt şablonu
+Aşağıdaki şablon, makaledeki “dialect wars” dersini doğrudan tasarıma taşır (T‑SQL hedefi ve read‑only
+politika).
+61
+34
+35
+62
+• 
+• 
+• 
+• 
+• 
+• 
+• 
+• 
+63
+13
+SYSTEM:
+You are a senior data engineer. Generate ONLY a single T-SQL query.
+Policy: READ-ONLY. Do not use INSERT/UPDATE/DELETE/MERGE/DROP/ALTER/TRUNCATE.
+Return only SQL (no markdown). If the question is ambiguous, ask exactly one 
+clarification question.
+USER:
+Question: {user_question}
+Database dialect: Microsoft SQL Server (T-SQL)
+Relevant schema:
+{top_k_schema_blocks}
+Foreign keys / joins:
+{fk_graph_or_join_hints}
+Few-shot examples (question -> SQL):
+{top_k_examples}
+Constraints:
+- Use only tables/columns appearing in the schema above.
+- If result could be large, use TOP (200) unless the user asks otherwise.
+- Prefer explicit JOIN ... ON with correct FK paths.
+Örnek SQL post-processing (kısa pseudo)
+def postprocess_sql(sql: str) -> str:
+sql = strip_code_fences(sql)
+sql = enforce_single_statement(sql)
+sql = block_non_readonly(sql) # regex + parser check
+sql = ensure_top_limit(sql, top_n=200) # for T-SQL
+sql = sqlglot_transpile(sql, target="tsql") # if needed
+sql = format_sql(sql)
+return sql
+SQLGlot’un parse/transpile yetenekleri ve çoklu diyalekt desteği dokümanlarında belirtilir. 
+Bu raporun ana sonucu şudur: Medium yazısı, üretim gerçeklerine dayalı güçlü sezgiler sunuyor (RAG’in
+zorunluluğu, agentic yükseltme, bağlam yönetimi, diyalekt/guardrail katmanı, SSE ile kullanıcı
+deneyimi). Ancak SOTA ile rekabet edebilir, tekrarlanabilir bir NL2SQL sistemine evrilmesi için;
+Spider/BIRD gibi benchmarklarla ölçüm, DIN‑SQL/DAIL‑SQL çizgisinde dekompozisyon/prompt
+sistematizasyonu ve H200 üzerinde TensorRT‑LLM/Triton ile optimize servisleme adımlarının planlı
+şekilde uygulanması gerekir. 
+15
+64
+65
+14
+https://medium.com/
+%40mail_99211/building-my-first-nl2sql-system-lessons-from-turning-natural-language-into-querymagic-72e6d6f5fcf0
+https://medium.com/%40mail_99211/building-my-first-nl2sql-system-lessons-from-turning-natural-language-into-querymagic-72e6d6f5fcf0
+https://arxiv.org/abs/2304.11015
+https://arxiv.org/abs/2304.11015
+https://www.nvidia.com/en-us/data-center/h200/
+https://www.nvidia.com/en-us/data-center/h200/
+https://developer.nvidia.com/blog/nvidia-tensorrt-llm-enhancements-deliver-massivelarge-language-model-speedups-on-nvidia-h200/
+https://developer.nvidia.com/blog/nvidia-tensorrt-llm-enhancements-deliver-massive-large-language-model-speedups-onnvidia-h200/
+https://github.com/vanna-ai/vanna
+https://github.com/vanna-ai/vanna
+https://sqlglot.com/sqlglot.html
+https://sqlglot.com/sqlglot.html
+https://arxiv.org/abs/1809.08887
+https://arxiv.org/abs/1809.08887
+https://arxiv.org/abs/1911.04942
+https://arxiv.org/abs/1911.04942
+https://arxiv.org/abs/1807.03100
+https://arxiv.org/abs/1807.03100
+https://arxiv.org/abs/2109.05093
+https://arxiv.org/abs/2109.05093
+https://huggingface.co/google-t5/t5-large
+https://huggingface.co/google-t5/t5-large
+https://www.vldb.org/pvldb/vol17/p1132-gao.pdf
+https://www.vldb.org/pvldb/vol17/p1132-gao.pdf
+https://arxiv.org/abs/2305.03111
+https://arxiv.org/abs/2305.03111
+https://www.uber.com/blog/query-gpt/
+https://www.uber.com/blog/query-gpt/
+https://huggingface.co/defog/sqlcoder-7b-2
+https://huggingface.co/defog/sqlcoder-7b-2
+https://huggingface.co/Qwen/Qwen2.5-Coder-14B-Instruct
+https://huggingface.co/Qwen/Qwen2.5-Coder-14B-Instruct
+https://huggingface.co/deepseek-ai/deepseek-coder-33b-instruct
+https://huggingface.co/deepseek-ai/deepseek-coder-33b-instruct
+https://huggingface.co/meta-llama/Llama-3.1-70B-Instruct
+https://huggingface.co/meta-llama/Llama-3.1-70B-Instruct
+https://docs.nvidia.com/tensorrt-llm/index.html
+https://docs.nvidia.com/tensorrt-llm/index.html
+1 5 7 8 9 10 11 12 13 14 16 25 27 28 29 30 31 32 33 64
+2 22 51
+3 39
+4 41 46 57
+6 52
+15
+17 60 65
+18
+19
+20
+21 38
+23
+24
+26
+34
+35
+36
+37
+40 56
+15
+https://nm-vllm.readthedocs.io/
+https://nm-vllm.readthedocs.io/
+https://arxiv.org/abs/2306.00978
+https://arxiv.org/abs/2306.00978
+https://arxiv.org/abs/2305.14314
+https://arxiv.org/abs/2305.14314
+https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/nlp/megatron.html
+https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/nlp/megatron.html
+https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-24-11.html
+https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-24-11.html
+https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch?version=25.12-py3
+https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch?version=25.12-py3
+https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/getting_started/
+quickstart.html
+https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/getting_started/quickstart.html
+https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/
+metrics.html
+https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/metrics.html
+https://arxiv.org/abs/2106.09685
+https://arxiv.org/abs/2106.09685
+https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/features/
+mixed_precision.html
+https://docs.nvidia.com/nemo-framework/user-guide/24.09/nemotoolkit/features/mixed_precision.html
+https://developer.nvidia.com/tensorrt-llm
+https://developer.nvidia.com/tensorrt-llm
+https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/perf_analyzer/docs/
+README.html
+https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/perf_analyzer/docs/README.html
+https://github.com/taoyds/spider
+https://github.com/taoyds/spider
+https://www.theregister.com/2026/01/05/aws_price_increase/
+https://www.theregister.com/2026/01/05/aws_price_increase/
+42
+43
+44 54
+45
+47
+48
+49
+50
+53 62
+55
+58
+59
+61
+63
+16

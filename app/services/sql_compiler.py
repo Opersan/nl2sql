@@ -165,11 +165,49 @@ def _coerce_date_bind(value: object) -> object:
         return value
 
 
-def _coerce_bind_for_column(value: object, meta: TableMetadata | None, column_name: str) -> object:
-    """Coerce bind values for DATE/TIMESTAMP columns.
+# Oracle EBS boolean flag columns that may be VARCHAR2 in production
+# despite NUMBER metadata.  Coercing int 0/1 → str avoids ORA-01722 when
+# Oracle implicitly converts the VARCHAR2 column value to NUMBER for comparison.
+_ORACLE_EBS_FLAG_COLUMNS: frozenset[str] = frozenset({
+    "stajyer",
+    "bordrolu",
+    "dg_goster",
+    "approved_flag",
+    "cancel_flag",
+    "closed_flag",
+    "frozen_flag",
+    "enabled_flag",
+    "purchase_warning_flag",
+    "receipt_required_flag",
+    "inspection_required_flag",
+})
 
-    Keeps non-date columns untouched.
+
+def _coerce_bind_for_column(value: object, meta: TableMetadata | None, column_name: str) -> object:
+    """Coerce bind values for DATE/TIMESTAMP columns and boolean flags.
+
+    * Python ``bool`` → ``int``: ``oracledb`` does not handle Python booleans
+      reliably as NUMBER parameters across driver versions.
+    * Known Oracle EBS flag columns: int ``0``/``1`` is coerced to ``str``
+      ``'0'``/``'1'`` so that comparisons succeed regardless of whether the
+      production column is ``NUMBER`` or ``VARCHAR2``.
+    * DATE/TIMESTAMP: ISO date strings are converted to ``datetime.date``.
     """
+    # Normalise bool before any other check — bool is a subclass of int but
+    # some Oracle driver versions reject it as a parameter type.
+    if isinstance(value, bool):
+        value = int(value)
+    elif isinstance(value, list):
+        value = [int(v) if isinstance(v, bool) else v for v in value]
+
+    # Flag column coercion: int → str for Oracle EBS VARCHAR2-stored flags.
+    col_lower = column_name.lower()
+    if col_lower in _ORACLE_EBS_FLAG_COLUMNS:
+        if isinstance(value, int):
+            value = str(value)
+        elif isinstance(value, list):
+            value = [str(v) if isinstance(v, int) else v for v in value]
+
     if meta is None:
         return value
     col_meta = meta.get_column(column_name)

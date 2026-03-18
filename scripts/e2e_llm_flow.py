@@ -109,156 +109,6 @@ class QuestionResult:
     elapsed_s: float = 0.0
 
 
-# ---------------------------------------------------------------------------
-# Combined catalog: PO (5 tables) + XXBT_PDKS_PER_DETAILS_V (1 table)
-# ---------------------------------------------------------------------------
-
-def _build_combined_catalog():
-    """Return a CatalogSnapshot with both PO and XXBT_PDKS_PER_DETAILS_V tables."""
-    from app.domain.catalog_models import (
-        CatalogSnapshot,
-        ColumnMetadata,
-        ColumnType,
-        ForeignKeyMetadata,
-        RelationshipMetadata,
-        TableMetadata,
-    )
-
-    def _col(name: str, dtype: ColumnType = ColumnType.NUMBER, **kw) -> ColumnMetadata:
-        return ColumnMetadata(name=name, data_type=dtype, **kw)
-
-    ph = TableMetadata(
-        name="PO_HEADERS_ALL",
-        description="Satinalma siparisi basliklari",
-        aliases=["po headers", "po_headers"],
-        primary_key=["po_header_id"],
-        columns=[
-            _col("po_header_id", nullable=False),
-            _col("vendor_id"),
-            _col("creation_date", ColumnType.DATE),
-            _col("authorization_status", ColumnType.VARCHAR),
-            _col("currency_code", ColumnType.VARCHAR),
-            _col("type_lookup_code", ColumnType.VARCHAR),
-        ],
-    )
-    pl = TableMetadata(
-        name="PO_LINES_ALL",
-        description="Satinalma siparisi kalemleri",
-        aliases=["po lines", "po_lines"],
-        primary_key=["po_line_id"],
-        foreign_keys=[ForeignKeyMetadata(
-            column="po_header_id",
-            referenced_table="PO_HEADERS_ALL",
-            referenced_column="po_header_id",
-        )],
-        columns=[
-            _col("po_line_id", nullable=False),
-            _col("po_header_id"),
-            _col("item_id"),
-            _col("line_num"),
-            _col("item_description", ColumnType.VARCHAR),
-            _col("quantity"),
-            _col("unit_price"),
-        ],
-    )
-    pll = TableMetadata(
-        name="PO_LINE_LOCATIONS_ALL",
-        description="Sevkiyat lokasyonlari",
-        aliases=["po shipments", "po_line_locations"],
-        primary_key=["line_location_id"],
-        foreign_keys=[ForeignKeyMetadata(
-            column="po_line_id",
-            referenced_table="PO_LINES_ALL",
-            referenced_column="po_line_id",
-        )],
-        columns=[
-            _col("line_location_id", nullable=False),
-            _col("po_line_id"),
-            _col("quantity_received"),
-            _col("quantity_billed"),
-        ],
-    )
-    pd_ = TableMetadata(
-        name="PO_DISTRIBUTIONS_ALL",
-        description="Dagitim satirlari",
-        aliases=["po distributions"],
-        primary_key=["po_distribution_id"],
-        foreign_keys=[ForeignKeyMetadata(
-            column="line_location_id",
-            referenced_table="PO_LINE_LOCATIONS_ALL",
-            referenced_column="line_location_id",
-        )],
-        columns=[
-            _col("po_distribution_id", nullable=False),
-            _col("line_location_id"),
-            _col("quantity_ordered"),
-            _col("code_combination_id"),
-            _col("unit_price"),
-        ],
-    )
-    mtl = TableMetadata(
-        name="MTL_SYSTEM_ITEMS_B",
-        description="Malzeme ana verileri",
-        aliases=["items", "malzeme"],
-        primary_key=["inventory_item_id"],
-        columns=[
-            _col("inventory_item_id", nullable=False),
-            _col("segment1", ColumnType.VARCHAR),
-            _col("description", ColumnType.VARCHAR),
-        ],
-    )
-    rels = [
-        RelationshipMetadata(from_table="PO_HEADERS_ALL",        from_column="po_header_id",    to_table="PO_LINES_ALL",           to_column="po_header_id"),
-        RelationshipMetadata(from_table="PO_LINES_ALL",          from_column="po_line_id",       to_table="PO_LINE_LOCATIONS_ALL",  to_column="po_line_id"),
-        RelationshipMetadata(from_table="PO_LINE_LOCATIONS_ALL", from_column="line_location_id", to_table="PO_DISTRIBUTIONS_ALL",   to_column="line_location_id"),
-        RelationshipMetadata(from_table="PO_LINES_ALL",          from_column="item_id",          to_table="MTL_SYSTEM_ITEMS_B",     to_column="inventory_item_id"),
-    ]
-
-    emp = TableMetadata(
-        name="XXBT_PDKS_PER_DETAILS_V",
-        description="PDKS ile entegre calisan personel gorunumu. CIKIS_TARIHI NULL olanlar aktif.",
-        aliases=["employee", "employees", "personel", "calisan"],
-        primary_key=["PERSON_ID"],
-        columns=[
-            ColumnMetadata(name="PERSON_ID",        data_type=ColumnType.NUMBER,  nullable=False, description="Benzersiz personel kimligi"),
-            ColumnMetadata(name="SICIL_NO",          data_type=ColumnType.VARCHAR, nullable=False, description="Sicil numarasi",     aliases=["sicil_no", "reg_no", "employee_no"]),
-            ColumnMetadata(name="AD",                data_type=ColumnType.VARCHAR, nullable=False, description="Calisanin adi",       aliases=["ad", "first_name", "name"]),
-            ColumnMetadata(name="SOYAD",             data_type=ColumnType.VARCHAR, nullable=False, description="Calisanin soyadi",    aliases=["soyad", "last_name", "surname"]),
-            ColumnMetadata(name="FULL_NAME",         data_type=ColumnType.VARCHAR, nullable=True,  description="Ad soyad"),
-            ColumnMetadata(name="BIRIM_ADI",         data_type=ColumnType.VARCHAR, nullable=True,  description="Birim adi",           aliases=["birim", "unit_name", "department"]),
-            ColumnMetadata(name="ORGANIZATION_ADI",  data_type=ColumnType.VARCHAR, nullable=True,  description="Organizasyon adi"),
-            ColumnMetadata(name="LOCATION_ADI",      data_type=ColumnType.VARCHAR, nullable=True,  description="Lokasyon adi",        aliases=["lokasyon", "location_name"]),
-            ColumnMetadata(name="UNVAN",             data_type=ColumnType.VARCHAR, nullable=True,  description="Unvan",               aliases=["unvan", "job_title", "title"]),
-            ColumnMetadata(name="GOREV_TANIMI",      data_type=ColumnType.VARCHAR, nullable=True,  description="Gorev tanimi"),
-            ColumnMetadata(name="ISE_GIRIS_TARIHI",  data_type=ColumnType.DATE,    nullable=True,  description="Ise giris tarihi",    aliases=["hire_date", "start_date", "ise_baslama"]),
-            ColumnMetadata(name="CIKIS_TARIHI",      data_type=ColumnType.DATE,    nullable=True,  description="Itten ayrilma tarihi (NULL=aktif)", aliases=["quit_date", "leave_date"]),
-            ColumnMetadata(name="EMAIL",             data_type=ColumnType.VARCHAR, nullable=True,  description="Kurumsal e-posta",    aliases=["email", "e-posta"]),
-            ColumnMetadata(name="DAHILI",            data_type=ColumnType.VARCHAR, nullable=True,  description="Dahili telefon",      aliases=["dahili", "extension_no"]),
-            ColumnMetadata(name="BORDROLU",          data_type=ColumnType.NUMBER,  nullable=True,  description="Bordrolu bayragi",    aliases=["payroll_flag"]),
-            ColumnMetadata(name="STAJYER",           data_type=ColumnType.NUMBER,  nullable=True,  description="Stajyer bayragi",     aliases=["employment_type"]),
-            ColumnMetadata(name="MASRAF_MERKEZI",    data_type=ColumnType.VARCHAR, nullable=True,  description="Masraf merkezi"),
-            ColumnMetadata(name="DOGUM_TARIHI",      data_type=ColumnType.DATE,    nullable=True,  restricted=True, description="Dogum tarihi (kisitli)", aliases=["birth_date"]),
-        ],
-    )
-
-    return CatalogSnapshot(tables=[ph, pl, pll, pd_, mtl, emp], relationships=rels)
-
-
-class _CombinedCatalogProvider:
-    """In-process catalog provider: PO (5) + XXBT_PDKS_PER_DETAILS_V (1) tables."""
-
-    def __init__(self) -> None:
-        self._snapshot = _build_combined_catalog()
-
-    async def get_snapshot(self):
-        return self._snapshot
-
-    async def get_table(self, name: str):
-        return self._snapshot.get_table(name)
-
-    async def search_tables(self, query: str):
-        return self._snapshot.search_tables(query)
-
 
 # ---------------------------------------------------------------------------
 # Combined mock executor: PO synthetic rows + XXBT_PDKS_PER_DETAILS_V mock executor
@@ -372,49 +222,40 @@ def _find_64bit_oracle_client() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Wiring — manual to use combined catalog
+# Wiring — uses the same build_chat_orchestrator() factory as the API
 # ---------------------------------------------------------------------------
 
 async def _build_orchestrator(use_oracle: bool):
-    from app.api.deps import build_document_retrieval, build_llm_provider
-    from app.core.config import settings
-    from app.providers.retrieval.in_memory_retriever import InMemoryRetriever
-    from app.services.catalog_service import CatalogService
-    from app.services.narrator_service import NarratorService
-    from app.services.orchestrator import ChatOrchestrator, Orchestrator
-    from app.services.planner_service import PlannerService
-    from app.services.schema_retrieval_service import SchemaRetrievalService
-    from app.services.session_service import SessionService
-    from app.services.sql_compiler import SQLCompiler
-    from app.services.validation_service import ValidationService
+    from app.api.deps import _build_catalog_provider, build_chat_orchestrator, build_document_retrieval
+    from app.providers.catalog.in_memory import catalog_fingerprint
 
-    llm = build_llm_provider()
     doc_retrieval = await build_document_retrieval()
-    catalog_provider = _CombinedCatalogProvider()
 
-    retrieval = None
-    if settings.enable_metadata_retrieval:
-        retriever = InMemoryRetriever(catalog_provider)
-        retrieval = SchemaRetrievalService(retriever)
-
-    catalog = CatalogService(catalog_provider, retrieval=retrieval)
-    validator = ValidationService(catalog)
-    compiler = SQLCompiler()
-
+    # Build executor explicitly so we control Oracle pool lifecycle
     oracle_exec = None
     if use_oracle:
         from app.providers.executor.oracle_executor import OracleExecutor
         oracle_exec = OracleExecutor()
         await oracle_exec.init_pool(thick_mode_lib_dir=_find_64bit_oracle_client() or None)
-        executor = oracle_exec
+        executor: Any = oracle_exec
     else:
         executor = _CombinedMockExecutor()
 
-    orchestrator = Orchestrator(validator, compiler, executor)
-    planner = PlannerService(llm, catalog, doc_retrieval=doc_retrieval)
-    narrator = NarratorService(llm)
-    sessions = SessionService()
-    chat = ChatOrchestrator(planner, orchestrator, narrator, sessions)
+    # Both API and eval call the SAME factory — catalog provider decided by settings
+    chat = build_chat_orchestrator(doc_retrieval=doc_retrieval, executor=executor)
+
+    # Catalog fingerprint assertion — fail immediately on any catalog mismatch.
+    # Use _build_catalog_provider() to get the reference snapshot from the same
+    # source that build_chat_orchestrator() uses (JSON file or InMemory).
+    ref_provider = _build_catalog_provider()
+    api_fp   = catalog_fingerprint(ref_provider._snapshot)  # type: ignore[attr-defined]
+    eval_fp  = catalog_fingerprint(await chat._planner._catalog._provider.get_snapshot())
+    assert api_fp == eval_fp, (
+        f"CATALOG MISMATCH: api_fingerprint={api_fp!r} != eval_fingerprint={eval_fp!r}. "
+        "Both API and eval must use the same catalog source (check settings.metadata_source_type)."
+    )
+    print(f"[catalog-check] provider={type(ref_provider).__name__} fingerprint={api_fp} (API == eval ✓)", flush=True)
+
     return chat, oracle_exec
 
 

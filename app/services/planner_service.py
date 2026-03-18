@@ -52,8 +52,7 @@ from app.domain.catalog_models import CatalogSnapshot
 from app.domain.query_plan import QueryPlan
 from app.providers.llm.base import LLMProvider
 from app.providers.llm.prompts import (
-    build_hybrid_planner_prompt_debug,
-    build_planner_prompt,
+    build_two_tier_planner_prompt_debug,
 )
 from app.services.catalog_service import CatalogService
 from app.services.document_retrieval_service import DocumentRetrievalService
@@ -199,10 +198,18 @@ class PlannerService:
             return plan
 
         # 1. Structured schema context
+        # Full snapshot for compact index (all tables, one line each)
+        full_snapshot = await self._catalog.get_snapshot()
+        # Retrieved snapshot for detail (top-K relevant tables only)
         context = await self._catalog.get_relevant_context(user_message)
 
-        # 2. Document / example context (hybrid layer)
-        prompt, prompt_trace = await self._build_prompt_with_trace(user_message, context)
+        # 2. Column pruning — ask LLM which columns matter for this query
+        pruned_cols = await self._run_column_prune(user_message, context)
+
+        # 3. Document / example context (hybrid layer)
+        prompt, prompt_trace = await self._build_prompt_with_trace(
+            user_message, full_snapshot, context, pruned_cols
+        )
         self._last_trace["retrieval"] = {
             "schema_tables": [table.name for table in context.tables],
             "schema_table_count": len(context.tables),
@@ -371,45 +378,116 @@ class PlannerService:
         user_message: str,
         context: CatalogSnapshot,
     ) -> str:
-        prompt, _trace = await self._build_prompt_with_trace(user_message, context)
+        full_snapshot = await self._catalog.get_snapshot()
+        pruned_cols = await self._run_column_prune(user_message, context)
+        prompt, _trace = await self._build_prompt_with_trace(
+            user_message, full_snapshot, context, pruned_cols
+        )
         return prompt
 
     async def _build_prompt_with_trace(
         self,
         user_message: str,
+        full_snapshot: CatalogSnapshot,
         context: CatalogSnapshot,
+        pruned_cols: dict[str, list[str]],
     ) -> tuple[str, dict[str, Any]]:
-        """Build the planner prompt, enriching with docs/examples when available."""
+        """Build the two-tier planner prompt with optional docs/examples.
+
+        Tier 1: compact index of the full catalog (all tables, 1 line each).
+        Tier 2: full column detail of retrieved tables, pruned to relevant
+                columns by the column-prune LLM call.
+        """
+        schema_docs = None
+        examples = None
         if self._doc_retrieval is not None:
             doc_result = await self._doc_retrieval.retrieve_context(user_message)
-            prompt, debug = build_hybrid_planner_prompt_debug(
-                user_message,
-                context,
-                schema_docs=doc_result.schema_docs or None,
-                examples=doc_result.examples or None,
-                max_prompt_chars=settings.planner_prompt_max_chars,
-            )
-            retrieval_assessment = "sufficient"
-            if not context.tables:
-                retrieval_assessment = "insufficient"
-            elif not (doc_result.schema_docs or doc_result.examples):
-                retrieval_assessment = "partial"
-            debug["retrieval_assessment"] = retrieval_assessment
-            return prompt, debug
+            schema_docs = doc_result.schema_docs or None
+            examples = doc_result.examples or None
 
-        prompt = build_planner_prompt(user_message, context)
-        return prompt, {
-            "prompt_length": len(prompt),
-            "prompt_budget": settings.planner_prompt_max_chars,
-            "prompt_truncated": False,
-            "reduction_steps": [],
-            "schema_tables_in_prompt": [table.name for table in context.tables],
-            "schema_doc_count": 0,
-            "example_count": 0,
-            "schema_docs": [],
-            "examples": [],
-            "retrieval_assessment": "schema_only" if context.tables else "insufficient",
-        }
+        prompt, debug = build_two_tier_planner_prompt_debug(
+            user_message,
+            full_snapshot,
+            context,
+            pruned_cols,
+            schema_docs=schema_docs,
+            examples=examples,
+            max_prompt_chars=settings.planner_prompt_max_chars,
+        )
+
+        retrieval_assessment = "sufficient"
+        if not context.tables:
+            retrieval_assessment = "insufficient"
+        elif schema_docs is None and examples is None:
+            retrieval_assessment = "schema_only"
+        elif not (schema_docs or examples):
+            retrieval_assessment = "partial"
+        debug["retrieval_assessment"] = retrieval_assessment
+        return prompt, debug
+
+    # ------------------------------------------------------------------
+    # Column pruning
+    # ------------------------------------------------------------------
+
+    async def _run_column_prune(
+        self,
+        user_message: str,
+        context: CatalogSnapshot,
+    ) -> dict[str, list[str]]:
+        """Ask the LLM which columns are needed for *user_message*.
+
+        Returns a mapping of ``{TABLE_NAME: [col1, col2, ...]}`` for the
+        tables in *context*.  Returns an empty dict when pruning is
+        disabled (``settings.enable_column_prune`` is ``False``) or when
+        the LLM call fails (fail-open).
+
+        Single-table contexts with ≤15 columns are skipped — pruning
+        would have no effect and would only add latency.
+        """
+        if not settings.enable_column_prune:
+            return {}
+
+        # Skip pruning when there is nothing to prune
+        total_cols = sum(len(t.columns) for t in context.tables)
+        if len(context.tables) <= 1 and total_cols <= 15:
+            return {}
+
+        schema_lines = [
+            f"{t.name}: " + ", ".join(c.name for c in t.columns)
+            for t in context.tables
+        ]
+        schema_text = "\n".join(schema_lines)
+
+        prune_prompt = (
+            "Aşağıdaki sorguyu cevaplamak için gereken minimum kolon setini belirle.\n"
+            f"Soru: {user_message}\n\n"
+            "Tablolar ve mevcut kolonları:\n"
+            f"{schema_text}\n\n"
+            "SADECE aşağıdaki JSON formatında yanıt ver (başka hiçbir şey yazma):\n"
+            '{"pruned_schema": {"TABLE_NAME": ["col1", "col2"]}}\n\n'
+            "Kurallar:\n"
+            "1. PK ve FK kolonlarını her zaman dahil et.\n"
+            "2. Soruyla ilgisiz kolonları çıkar.\n"
+            "3. Sadece verilen tablo adlarını kullan.\n"
+        )
+
+        from pydantic import BaseModel as _BaseModel
+
+        class _PruneResult(_BaseModel):
+            pruned_schema: dict[str, list[str]] = {}
+
+        try:
+            result = await self._llm.generate_structured(prune_prompt, _PruneResult)
+            logger.debug(
+                "[column-prune] pruned %d tables",
+                len(result.pruned_schema),
+            )
+            return result.pruned_schema
+        except Exception:
+            logger.debug(
+                "[column-prune] pruning call failed — using all columns (fail-open)"
+            )
+            return {}
 
     @staticmethod
     def _snapshot_plan(plan: QueryPlan) -> dict[str, Any]:

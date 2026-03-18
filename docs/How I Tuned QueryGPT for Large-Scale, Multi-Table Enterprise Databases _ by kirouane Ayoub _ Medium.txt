@@ -1,0 +1,1000 @@
+How I Tuned QueryGPT for LargeScale, Multi-Table Enterprise
+Databases
+kirouane Ayoub Follow 24 min read · Jul 8, 2025
+21 2
+Working on a text-to-sql system over a complex database with dozens of
+interconnected tables ? you’re not alone. the team at uber ai faced the same
+challenge and came up with a smart solution called querygpt. it’s an llmbased system that turns natural language into sql, making it way easier for
+people to access data. but what really stood out is how they handle tricky
+stuff like huge context windows when feeding the model too much schema
+and examples.
+And we’re not talking about toy databases with one or two tables , this is built
+for larger sql databases with many interrelated tables, the kind u’d actually
+find in real production systems.
+Get unlimited access to the best of Medium for less than $1/week. Become a member
+Open in app
+Search Write
+Instead of dumping everything into one giant prompt, they built a set of
+specialized agents that work together. one clever move is using dynamic fewshot learning — they search a vector db for similar examples, then combine
+those with a pruned schema and the user’s intent before sending it to the
+model. it’s leaner, faster, and smarter.
+In this post, we’ll build a similar setup using neo4j for vector storage and
+show how each agent works. the code is inspired by querygpt’s ideas, but
+with my own edits to fit real-world use.
+At the end, i’ll also share how i optimized this pipeline for a client project
+and what made the biggest impact.
+The Multi-Agent Philosophy
+The beauty of QueryGPT’s architecture lies in its recognition that different
+aspects of sql generation require different types of reasoning. rather than
+ 
+using a single large language model to handle everything, the system
+employs specialized agents that work together in a coordinated pipeline.
+Each agent has a specific role and can be optimized independently, allowing
+for better performance and resource utilization.
+It vectorized user prompts and performed similarity searches on sql samples
+and schemas to identify pertinent tables and query examples , but the real
+breakthrough came when they realized that different agents could use
+different models based on their specific requirements.
+1. intent agent — narrowing the search space
+prompt = f"""
+Based on the following user query, determine which workspace or workspac
+The available workspaces are: {', '.join(self.workspaces)}
+User Query: "{user_query}"
+Respond with a JSON object with the following structure:
+{{
+"workspaces": ["workspace1", "workspace2"], // List of relevant work
+"explanation": "Brief explanation of why these workspaces were chose
+}}
+"""
+The first step in the pipeline is the intent agent. Its job is to look at the user’s
+natural language question and figure out what business domain or
+workspace it maps to. eg : is the user asking about payments, customer
+behavior, or product inventory ?
+Once the intent is inferred, it helps us do two things:
+ 
+limit which tables are even considered in the next step
+retrieve more relevant few-shot examples from a vector database
+This drastically reduces the noise. instead of searching across the entire
+schema and all samples, we now work within a smaller, domain-specific
+context.
+In our setup we run a lightweight model (like gpt-4o-mini) for this task. it’s
+fast, doesn’t need deep reasoning, and just needs to make a decent
+classification based on the user prompt.
+2.table agent — validating table selection
+prompt = f"""
+Based on the following user query and database schema, determine which t
+User Query: "{user_query}"
+Workspace: {workspace}
+Database Schema:
+{schema_text}
+Respond with a JSON object with the following structure:
+{{
+"tables": ["table1", "table2"], // List of required tables
+"explanation": "Brief explanation of why these tables were chosen"
+}}
+"""
+Next we have the table agent. the uber team found that sometimes
+QueryGPT would pick the wrong tables for a query. to fix this they added the
+Table Agent. this agent’s role is to look at the user’s question and the
+ 
+identified intent and then propose a list of the most likely tables needed to
+answer the query.
+This list of tables is then shown to the user who can either give a thumbs up
+or make changes. this human-in-the-loop approach is a great way to improve
+accuracy and build trust in the system. it ensures that the final query is built
+on the correct foundation.
+3. column prune agent — shrinking the schema
+prompt = f"""
+Based on the following user query and the tables that have been selected
+User Query: "{user_query}"
+Selected Tables Schema:
+{schema_text}
+For each table, return only the columns that are necessary to answer the
+Respond with a JSON object with the following structure:
+{{
+"pruned_schema": {{
+"table_name1": ["column1", "column2"],
+"table_name2": ["column1", "column3"]
+}},
+"explanation": "Brief explanation of why these columns were chosen"
+}}
+"""
+Once we’ve picked the right tables, we still face a challenge: some tables
+have dozens (or hundreds) of columns, and we don’t need all of them in
+every prompt. in fact feeding all those columns into the llm causes prompt
+bloat, token overuse, and even model failure on long requests.
+This is where the column prune agent comes in. it acts as a filter, deciding
+which columns actually matter for the current query. we use an llm to do
+this because the context of the question matters. eg : if a user asks “show me
+customers who spent more than $1000,
+” we don’t need the birth_date or
+email columns—just the ones related to spending.
+This step had a surprising impact. it not only reduced token usage (and
+therefore cost), but it also sped up inference and improved sql quality.
+After experimenting with different models, i found that this step benefits a
+lot from a stronger model. pruning irrelevant columns while keeping query
+fidelity requires deeper reasoning, so using GPT-4.1, Gemini 2.5 Pro, or
+Claude Opus 4 worked significantly better than smaller models.
+4.few-shot search — learning from examples
+Now that we’ve figured out the intent and pruned the schema, we can finally
+retrieve relevant few-shot examples. these are embedded queries paired with
+natural language that are stored in a vector database. when a new query
+comes in, we search for similar examples based on the intent and use them
+as demonstrations.
+Instead of using static prompts, this makes the system adaptive. it’s closer to
+how humans would work — looking at previous examples of similar tasks
+before starting from scratch.
+For this part, we created our own embeddings, pushed them into a neo4jbased vector store, and built a simple retrieval system to fetch them based
+on cosine similarity. you’ll see how in the next section when we walk
+through the code.
+5. sql generator — final step
+prompt = f"""
+You are an expert SQL generator. Convert the following natural language question
+Use the provided database schema to inform your query construction.
+Instructions:
+- Given an input question, first create a syntactically correct query to run.
+- Then look at the results of the query and return the answer.
+- You can order the results by a relevant column to return the most interesting
+- Never query for all the columns from a specific table; only ask for a few rele
+- Pay attention to use only the column names that you can see in the schema desc
+- Be careful not to query columns that do not exist.
+- Pay attention to which column belongs to which table.
+- Qualify column names with the table name when needed.
+- If a user's question implies listing unique entities (such as people, items, o
+- Database Schema:
+{schema_text}
+- Here are some examples of questions and their corresponding SQL queries:
+{samples_text.strip()}
+Now, generate an SQL query for the following question:
+Question: {user_query}
+Respond with a JSON object with the following structure:
+ 
+{{
+"sql": "The SQL query",
+"explanation": "Step-by-step explanation of how the query works"
+}}
+"""
+Finally, with the pruned schema and curated examples, we ask the llm to
+generate the actual sql query. at this point it has all the context it needs: a
+slimmed-down schema, relevant tables, examples that match the intent, and
+even system instructions or hints if needed.
+This step can run on a reasonably powerful model , if everything else is well
+prepared, the query generation itself is fairly straightforward.
+ 
+Code Time :
+Installing dependencies :
+this block installs the required python packages ..
+%%capture
+! pip install llama-index-vector-stores-neo4jvector llama-index-embeddings-opena
+Importing libraries :
+Here we import all the necessary components
+ 
+ 
+from llama_index.vector_stores.neo4jvector import Neo4jVectorStore
+from llama_index.embeddings.openai import OpenAIEmbedding
+import psycopg2
+import json
+import pandas as pd
+from pydantic_ai import Agent
+from typing import List , Dict , Any
+from pydantic import BaseModel, Field
+from datetime import datetime
+import os
+from llama_index.core.schema import TextNode
+import nest_asyncio
+from llama_index.core import VectorStoreIndex
+from llama_index.core.vector_stores import FilterOperator, FilterCondition , Met
+Configuration and initialization :
+This block sets up the environment and initializes key components.
+nest_asyncio.apply()
+OPENAI_API_KEY="sk-proj-xxxxxxxxx"
+os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+LLM_MODEL = "gpt-4o-mini"
+username = "neo4j"
+password = "xxxxxxxxxx-xxxxxxx-xxxxxxxxxxx"
+url = "neo4j+s://xxxxxxxxx.databases.neo4j.io"
+embed_dim = 1536
+embed_model = OpenAIEmbedding(model="text-embedding-3-small")
+neo4j_vector = Neo4jVectorStore(username, password, url, embed_dim , hybrid_sear
+Building the retrieval pipeline :
+ 
+index = VectorStoreIndex.from_vector_store(neo4j_vector)
+retriever = index.as_retriever(similarity_top_k=3)
+This block wraps the neo4j vector store into a VectorStoreIndex , enabling
+LlamaIndex to interface with it. then it creates a retriever that will fetch the
+top 3 most similar examples (based on vector similarity) for a given query—
+crucial for dynamic few-shot prompting in the rag pipeline.
+Defining structured agent outputs
+These pydantic models define the expected output schemas for each agent
+in the pipeline.
+class WorkspaceClassification(BaseModel):
+workspaces: List[str] = Field(..., description="List of relevant workspaces"
+explanation: str = Field(..., description="Brief explanation of why these wo
+class TableSelection(BaseModel):
+tables: List[str] = Field(..., description="List of required tables")
+explanation: str = Field(..., description="Brief explanation of why these ta
+class PrunedSchemaSelection(BaseModel):
+pruned_schema: Dict[str, List[str]] = Field(..., description="Mapping of tab
+explanation: str = Field(..., description="Brief explanation of why these co
+class SQLGeneration(BaseModel):
+sql: str = Field(..., description="The generated SQL query")
+explanation: str = Field(..., description="Step-by-step explanation of how t
+WorkspaceClassification : maps user intent to relevant business domains
+TableSelection : identifies the necessary tables for the query
+PrunedSchemaSelection : filters down to only the relevant columns
+SQLGeneration : holds the final sql query with an explanation
+Utility for modular agent creation
+This function is a simple factory for creating llm-powered agents using the
+pydantic-ai framework. it takes in a model name, a system prompt that
+guides behavior, and the expected output schema (a BaseModel )
+def create_agent(model:str , system_prompt:str ,output_type :BaseModel) :
+"""
+Create an agent with the given model, system prompt, and output type.
+"""
+return Agent(
+model=model,
+system_prompt=system_prompt,
+output_type=output_type,
+retries=3,
+)
+Creating a test database schema
+This function builds a rich, relational sqlite database representing a
+university system with departments, students, professors, courses,
+classrooms, and all their interactions — like enrollments, grades, schedules,
+and attendance.
+def create_db(db_name="sample_retail.db"):
+conn = None
+try:
+conn = sqlite3.connect(db_name)
+cursor = conn.cursor()
+# Enable foreign keys
+cursor.execute("PRAGMA foreign_keys = ON")
+# Drop tables if they exist (to reset) - Drop in reverse order of creati
+tables = [
+"attendance", "grades", "enrollments", "course_professors",
+"schedules", "classrooms", "courses", "students", "professors",
+"departments"
+]
+for t in tables:
+cursor.execute(f"DROP TABLE IF EXISTS {t}")
+# Departments
+cursor.execute("""
+CREATE TABLE departments (
+id INTEGER PRIMARY KEY,
+name TEXT NOT NULL,
+building TEXT
+)
+""")
+# Professors
+cursor.execute("""
+CREATE TABLE professors (
+id INTEGER PRIMARY KEY,
+name TEXT NOT NULL,
+email TEXT UNIQUE,
+department_id INTEGER,
+FOREIGN KEY(department_id) REFERENCES departments(id)
+)
+""")
+# Students
+cursor.execute("""
+CREATE TABLE students (
+id INTEGER PRIMARY KEY,
+name TEXT NOT NULL,
+email TEXT UNIQUE,
+dob DATE,
+department_id INTEGER,
+FOREIGN KEY(department_id) REFERENCES departments(id)
+)
+""")
+# Courses
+cursor.execute("""
+CREATE TABLE courses (
+id INTEGER PRIMARY KEY,
+title TEXT NOT NULL,
+code TEXT UNIQUE,
+credits INTEGER,
+department_id INTEGER,
+FOREIGN KEY(department_id) REFERENCES departments(id)
+)
+""")
+# Classrooms
+cursor.execute("""
+CREATE TABLE classrooms (
+id INTEGER PRIMARY KEY,
+building TEXT,
+room_number TEXT,
+capacity INTEGER
+)
+""")
+# Schedules (when and where a course happens)
+cursor.execute("""
+CREATE TABLE schedules (
+id INTEGER PRIMARY KEY,
+course_id INTEGER,
+classroom_id INTEGER,
+day_of_week TEXT,
+start_time TEXT,
+end_time TEXT,
+FOREIGN KEY(course_id) REFERENCES courses(id),
+FOREIGN KEY(classroom_id) REFERENCES classrooms(id)
+)
+""")
+# Course Professors (many-to-many)
+cursor.execute("""
+CREATE TABLE course_professors (
+id INTEGER PRIMARY KEY,
+course_id INTEGER,
+professor_id INTEGER,
+FOREIGN KEY(course_id) REFERENCES courses(id),
+FOREIGN KEY(professor_id) REFERENCES professors(id)
+)
+""")
+# Student Enrollments (many-to-many)
+cursor.execute("""
+CREATE TABLE enrollments (
+id INTEGER PRIMARY KEY,
+student_id INTEGER,
+course_id INTEGER,
+enrollment_date DATE,
+FOREIGN KEY(student_id) REFERENCES students(id),
+FOREIGN KEY(course_id) REFERENCES courses(id)
+)
+""")
+# Grades (1-to-1 with enrollment)
+cursor.execute("""
+CREATE TABLE grades (
+id INTEGER PRIMARY KEY,
+enrollment_id INTEGER,
+grade TEXT,
+FOREIGN KEY(enrollment_id) REFERENCES enrollments(id)
+)
+""")
+# Attendance (multi-dimensional relation)
+cursor.execute("""
+CREATE TABLE attendance (
+id INTEGER PRIMARY KEY,
+enrollment_id INTEGER,
+date DATE,
+present BOOLEAN,
+FOREIGN KEY(enrollment_id) REFERENCES enrollments(id)
+)
+""")
+conn.commit()
+print(f"Database '{db_name}' created .")
+except sqlite3.Error as e:
+print(f"Database error: {e}")
+finally:
+if conn:
+conn.close()
+# Run the script
+if __name__ == "__main__":
+create_db()
+It’s just a test example to help us validate the full nl-2-sql pipeline in a
+realistic but controlled setup.
+Inserting rich sample data into the university schema
+This function populates the previously created university database with test
+data across all entities: departments, professors, students, courses,
+schedules, enrollments, grades, and attendance.
+def insert_sample_university_data(db_name="sample_retail.db"):
+conn = None
+try:
+conn = sqlite3.connect(db_name)
+cursor = conn.cursor()
+# Clear existing data in reverse order of foreign key dependencies
+tables_to_clear = [
+"attendance", "grades", "enrollments", "course_professors",
+"schedules", "classrooms", "courses", "students", "professors",
+"departments"
+]
+for t in tables_to_clear:
+cursor.execute(f"DELETE FROM {t}")
+# Departments
+departments = [
+(1, "Computer Science", "Engineering Hall"),
+(2, "Mathematics", "Science Building"),
+(3, "Physics", "Quantum Block")
+]
+cursor.executemany("INSERT INTO departments VALUES (?, ?, ?)", departmen
+# Professors
+professors = [
+(1, "John Smith", "jsmith@univ.edu", 1),
+(2, "Alice Johnson", "ajohnson@univ.edu", 2),
+(3, "Michael Lee", "mlee@univ.edu", 1),
+(4, "No Course Prof", "ncp@univ.edu", 3) # Will not be assigned to
+]
+cursor.executemany("INSERT INTO professors VALUES (?, ?, ?, ?)", profess
+# Students
+students = [
+(1, "Fatima Zahra", "fatima@univ.edu", "1999-03-10", 1),
+(2, "Mohammed Idris", "idris@univ.edu", "2001-07-21", 1),
+(3, "Alice Kim", "alice@univ.edu", "1998-11-02", 2),
+(4, "James Bond", "jbond@univ.edu", "1997-04-04", 3),
+]
+cursor.executemany("INSERT INTO students VALUES (?, ?, ?, ?, ?)", studen
+# Courses
+courses = [
+(1, "Machine Learning", "CS301", 3, 1),
+(2, "Calculus I", "MA101", 4, 2),
+(3, "Quantum Physics", "PH201", 4, 3),
+(4, "Operating Systems", "CS202", 3, 1)
+]
+cursor.executemany("INSERT INTO courses VALUES (?, ?, ?, ?, ?)", courses
+# Classrooms
+classrooms = [
+(1, "Engineering Hall", "E101", 120),
+(2, "Science Building", "S204", 90),
+(3, "Quantum Block", "Q303", 60)
+]
+cursor.executemany("INSERT INTO classrooms VALUES (?, ?, ?, ?)", classro
+# Schedules
+schedules = [
+(1, 1, 1, "Monday", "10:00", "12:00"), # ML in E101
+(2, 2, 2, "Tuesday", "09:00", "11:00"), # Calc I in S204
+(3, 3, 3, "Wednesday", "14:00", "16:00"), # Quantum in Q303
+(4, 4, 1, "Monday", "10:00", "12:00"), # OS in E101 (same time as
+]
+cursor.executemany("INSERT INTO schedules VALUES (?, ?, ?, ?, ?, ?)", sc
+# Course Professors
+course_professors = [
+(1, 1, 1), # ML by John Smith
+(2, 2, 2), # Calc I by Alice Johnson
+(3, 3, 3), # Quantum by Michael Lee
+(4, 4, 1) # OS also by John Smith
+]
+cursor.executemany("INSERT INTO course_professors VALUES (?, ?, ?)", cou
+# Enrollments
+enrollments = [
+(1, 1, 1, "2024-09-01"), # Fatima in ML
+(2, 2, 1, "2024-09-01"), # Mohammed in ML
+(3, 1, 4, "2024-09-01"), # Fatima in OS
+(4, 3, 2, "2024-09-01"), # Alice Kim in Calc
+(5, 4, 3, "2024-09-01"), # Bond in Quantum
+(6, 2, 2, "2024-09-01") # Mohammed in Calc
+]
+cursor.executemany("INSERT INTO enrollments VALUES (?, ?, ?, ?)", enroll
+# Grades
+grades = [
+(1, 1, "A"),
+(2, 2, "B"),
+(3, 3, "A"),
+(4, 4, "C"),
+(5, 5, "B"),
+(6, 6, "D")
+]
+cursor.executemany("INSERT INTO grades VALUES (?, ?, ?)", grades)
+# Attendance
+attendance = [
+(1, 1, "2025-03-18", 0), # Fatima absent
+(2, 2, "2025-03-18", 1), # Mohammed present
+(3, 4, "2025-03-18", 1), # Alice present
+(4, 3, "2025-03-18", 0), # Fatima absent in OS
+(5, 1, "2025-04-05", 1),
+(6, 2, "2025-04-05", 1),
+(7, 3, "2025-04-05", 1),
+(8, 4, "2025-04-05", 0) # Bond absent
+]
+cursor.executemany("INSERT INTO attendance VALUES (?, ?, ?, ?)", attenda
+conn.commit()
+print("Sample data inserted successfully.")
+except sqlite3.Error as e:
+print(f"Database error: {e}")
+finally:
+if conn:
+conn.close()
+# Run this after schema creation
+if __name__ == "__main__":
+insert_sample_university_data()
+Extracting structured database schema metadata
+def get_database_schema():
+"""Extract schema information from the database"""
+conn = sqlite3.connect('sample_retail.db')
+cursor = conn.cursor()
+# Get list of tables
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+tables = cursor.fetchall()
+schema_info = {}
+for table in tables:
+table_name = table[0]
+cursor.execute(f"PRAGMA table_info({table_name})")
+columns = cursor.fetchall()
+# Format column information
+column_info = []
+for col in columns:
+column_info.append({
+'name': col[1],
+'type': col[2],
+'primary_key': bool(col[5]),
+})
+schema_info[table_name] = {
+'columns': column_info,
+'description': f"Table containing {table_name} information"
+}
+conn.close()
+return schema_info
+This function introspects the sqlite database and builds a structured json-like
+dictionary describing the schema. it collects table names and their column
+metadata (name, type, primary key status), organizing it in a format that’s
+ideal for feeding into LLMs.
+Creating natural language to SQL examples for RAG
+This function defines a diverse set of sample sql queries, each paired with a
+natural language question and a brief explanation. these examples span
+typical university operations — course enrollment, scheduling, gpa
+calculation, attendance, and more.
+def create_sample_sql_queries():
+"""Create a set of sample SQL queries for the University DB"""
+sample_queries = [
+{
+"natural_language": "List all students enrolled in the 'Database Sys
+"sql": """
+SELECT s.id, s.name
+FROM students s
+JOIN enrollments e ON s.id = e.student_id
+JOIN courses c ON e.course_id = c.id
+WHERE c.title = 'Database Systems'
+""",
+"description": "Fetch students enrolled in a specific course"
+},
+{
+"natural_language": "Which professors teach in the Computer Science
+"sql": """
+SELECT p.id, p.name
+FROM professors p
+JOIN departments d ON p.department_id = d.id
+WHERE d.name = 'Computer Science'
+""",
+"description": "Find professors linked to a department"
+},
+{
+"natural_language": "Show the schedule for the 'Algorithms' course."
+"sql": """
+SELECT s.day_of_week, s.start_time, s.end_time, cl.building, cl.room
+FROM schedules s
+JOIN classrooms cl ON s.classroom_id = cl.id
+JOIN courses c ON s.course_id = c.id
+WHERE c.title = 'Algorithms'
+""",
+"description": "Course schedule details including time and classroom
+},
+{
+"natural_language": "Find all courses taught by Professor John Smith
+"sql": """
+SELECT c.id, c.title
+FROM courses c
+JOIN course_professors cp ON c.id = cp.course_id
+JOIN professors p ON cp.professor_id = p.id
+WHERE p.name = 'John Smith'
+""",
+"description": "List of courses assigned to a specific professor"
+},
+{
+"natural_language": "What are the average grades per course?",
+"sql": """
+SELECT c.title, AVG(
+CASE
+WHEN g.grade = 'A' THEN 4.0
+WHEN g.grade = 'B' THEN 3.0
+WHEN g.grade = 'C' THEN 2.0
+WHEN g.grade = 'D' THEN 1.0
+WHEN g.grade = 'F' THEN 0.0
+END
+) AS average_gpa
+FROM courses c
+JOIN enrollments e ON c.id = e.course_id
+JOIN grades g ON e.id = g.enrollment_id
+GROUP BY c.title
+""",
+"description": "Compute GPA-style average grades per course"
+},
+{
+"natural_language": "How many students are in each department?",
+"sql": """
+SELECT d.name AS department, COUNT(s.id) AS student_count
+FROM departments d
+LEFT JOIN students s ON d.id = s.department_id
+GROUP BY d.name
+""",
+"description": "Count of students per department"
+},
+{
+"natural_language": "List students who missed class on 2024-10-15.",
+"sql": """
+SELECT s.id, s.name
+FROM attendance a
+JOIN enrollments e ON a.enrollment_id = e.id
+JOIN students s ON e.student_id = s.id
+WHERE a.date = '2024-10-15' AND a.present = 0
+""",
+"description": "Absent students on a specific date"
+},
+{
+"natural_language": "Find the top 5 largest classrooms.",
+"sql": """
+SELECT building, room_number, capacity
+FROM classrooms
+ORDER BY capacity DESC
+LIMIT 5
+""",
+"description": "Top classrooms by seating capacity"
+},
+{
+"natural_language": "Which students are enrolled in more than 3 cour
+"sql": """
+SELECT s.id, s.name, COUNT(e.course_id) as course_count
+FROM students s
+JOIN enrollments e ON s.id = e.student_id
+GROUP BY s.id, s.name
+HAVING course_count > 3
+""",
+"description": "Students with high enrollment load"
+},
+{
+"natural_language": "What courses are being taught in 'Building A'?"
+"sql": """
+SELECT DISTINCT c.title
+FROM courses c
+JOIN schedules s ON c.id = s.course_id
+JOIN classrooms cl ON s.classroom_id = cl.id
+WHERE cl.building = 'Building A'
+""",
+"description": "Courses scheduled in a specific building"
+}
+]
+return sample_queries
+# Create sample queries
+sample_queries = create_sample_sql_queries()
+They serve as dynamic few-shot examples for retrieval-augmented
+generation, helping the model generalize better by learning from similar
+prior cases. these will later be embedded and pushed to the vector database
+to support context-aware prompting.
+Embedding SQL examples into the vector store
+This function transforms each sample query into a TextNode —combining the
+user prompt, sql, and description—and embeds it using the chosen
+embedding model. the embedded nodes are then added to a vector store
+(like Neo4j), making them retrievable by similarity. while this example
+embeds only the query content, metadata (like schema descriptions or
+workspace tags) can also be included.
+ 
+from llama_index.core.schema import TextNode
+def create_embeddings(sample_queries, schema_info, vector_store):
+nodes = []
+# Build and embed TextNodes
+for q in sample_queries:
+text = f"Query: {q['natural_language']}\nSQL: {q['sql']}\nDescription: {
+embedding = embed_model.get_text_embedding(text)
+node = TextNode(text=text, embedding=embedding)
+nodes.append(node)
+# Add nodes to vector store (e.g., Neo4jVectorStore)
+vector_store.add(nodes)
+# Metadata for inspection
+query_texts = [q['natural_language'] for q in sample_queries]
+table_descriptions = []
+for table_name, info in schema_info.items():
+column_descriptions = ", ".join([f"{col['name']} ({col['type']})" for co
+table_desc = f"Table {table_name} with columns: {column_descriptions}"
+table_descriptions.append(table_desc)
+In my client implementation, i added workspace labels as metadata for each
+example. this allows filtering the search space during retrieval based on the
+user’s intent. for instance, if a query is related to “Student Management,
+”
+only examples from that workspace are retrieved — making the system more
+focused and efficient.
+IntentAgent — mapping queries to relevant domains
+The IntentAgent identifies which business domain(s)—or workspaces—a
+user's query belongs to. this is the first step in the QueryGPT-style pipeline. it
+uses a system prompt to guide an llms in selecting from a predefined list of
+workspace categories (eg student management, attendance tracking, etc.)
+ 
+class IntentAgent:
+def __init__(self):
+# Define possible workspaces (similar to Uber's workspaces)
+self.workspaces = [
+"student_management", # student info, demographics, enrollmen
+"course_information", # course metadata, schedules, classroom
+"academic_performance", # grades, GPA, course difficulty
+"professor_workload", # professor-course assignments, departm
+"department_statistics", # counts of students/professors per dep
+"attendance_tracking" # attendance logs, absentee patterns
+]
+def determine_intent(self, user_query):
+"""Map user's natural language query to a workspace(s)"""
+prompt = f"""
+Based on the following user query, determine which workspace or workspac
+The available workspaces are: {', '.join(self.workspaces)}
+User Query: "{user_query}"
+Respond with a JSON object with the following structure:
+{{
+"workspaces": ["workspace1", "workspace2"], // List of relevant work
+"explanation": "Brief explanation of why these workspaces were chose
+}}
+"""
+agent = create_agent(system_prompt=prompt ,
+model=LLM_MODEL ,
+output_type=WorkspaceClassification)
+response = agent.run_sync(user_query)
+return response.output
+The output is a structured WorkspaceClassification object with both the
+relevant workspace labels and a natural language explanation.
+In practice, this lets us filter few-shot examples and prune the schema
+based on the domain, narrowing the context and improving downstream
+performance.
+TableAgent — selecting relevant tables from the schema
+The TableAgent takes in the full schema and the user query (along with the
+detected workspace) to determine which database tables are needed to
+answer the question. it generates a schema summary and feeds it, along with
+the query, into an llm. the model then returns a list of relevant tables and an
+explanation for why they were selected.
+class TableAgent:
+def __init__(self,schema_info):
+self.schema_info = schema_info
+def determine_tables(self, user_query, workspace):
+# Create schema descriptions for the prompt
+schema_descriptions = []
+for table_name, info in self.schema_info.items():
+columns_desc = ", ".join([f"{c['name']} ({c['type']})" for c in info
+schema_descriptions.append(f"Table '{table_name}': {columns_desc}")
+schema_text = "\n".join(schema_descriptions)
+prompt = f"""
+Based on the following user query and database schema, determine which t
+User Query: "{user_query}"
+Workspace: {workspace}
+Database Schema:
+ 
+{schema_text}
+Respond with a JSON object with the following structure:
+{{
+"tables": ["table1", "table2"], // List of required tables
+"explanation": "Brief explanation of why these tables were chosen"
+}}
+"""
+agent = create_agent(system_prompt=prompt ,
+model=LLM_MODEL ,
+output_type=TableSelection)
+response = agent.run_sync(user_query)
+return response.output
+This step helps reduce hallucinations and incorrect joins by explicitly
+identifying the subset of the schema the sql generator should work with. it
+also gives users a chance to validate or modify the selection before
+continuing.. (if we are using the interactive mode .. in our case we are not
+using it )
+ColumnPruneAgent — reducing schema size with column-level focus
+The ColumnPruneAgent takes the user query and previously selected tables,
+then asks an llm to identify only the relevant columns needed to answer the
+question. it builds a compact schema prompt and returns a pruned version
+of the table structures, along with reasoning.
+class ColumnPruneAgent:
+def __init__(self,schema_info):
+self.schema_info = schema_info
+def prune_columns(self, user_query, tables):
+schema_descriptions = []
+for table_name in tables:
+if table_name in self.schema_info:
+ 
+columns_desc = ", ".join([f"{c['name']} ({c['type']})" for c in
+schema_descriptions.append(f"Table '{table_name}': {columns_desc
+schema_text = "\n".join(schema_descriptions)
+prompt = f"""
+Based on the following user query and the tables that have been selected
+User Query: "{user_query}"
+Selected Tables Schema:
+{schema_text}
+For each table, return only the columns that are necessary to answer the
+Respond with a JSON object with the following structure:
+{{
+"pruned_schema": {{
+"table_name1": ["column1", "column2"],
+"table_name2": ["column1", "column3"]
+}},
+"explanation": "Brief explanation of why these columns were chosen"
+}}
+"""
+agent = create_agent(system_prompt=prompt ,
+model=LLM_MODEL ,
+output_type=PrunedSchemaSelection)
+response = agent.run_sync(user_query)
+return response.output
+This agent is crucial for managing token efficiency. by stripping out
+irrelevant columns, it keeps the prompt light, reduces latency and cost, and
+improves llm focus, especially helpful when dealing with wide tables or long
+multi-table queries.
+SQLGenerator — composing the final SQL with few-shot RAG
+The SQLGenerator is the final step in the pipeline.
+It uses:
+a pruned schema to keep context small and focused,
+retrieved examples from the vector store as few-shot demonstrations,
+and a detailed prompt with generation instructions.
+All of this is passed to an llm, which returns both the sql query and a step-bystep explanation.
+class SQLGenerator:
+def __init__(self,schema_info):
+self.schema_info = schema_info
+def find_similar_samples(self, user_query):
+similarities = retriever.retrieve(user_query)
+return [similarities[i].node.text for i in range(len(similarities))]
+def generate_sql(self, user_query, workspace, tables, pruned_schema, similar
+schema_text = ""
+for table_name, columns in pruned_schema.items():
+column_info = [col for col in self.schema_info[table_name]['columns'
+column_desc = ", ".join([f"{c['name']} ({c['type']})" for c in colum
+schema_text += f"Table '{table_name}': {column_desc}\n"
+samples_text = ""
+for i, sample in enumerate(similar_samples):
+samples_text += f"Example {i+1}:\n"
+samples_text += f"{sample}"
+samples_text += "\n\n"
+prompt = f"""
+You are an expert SQL generator. Convert the following natural language question
+Use the provided database schema to inform your query construction.
+Instructions:
+- Given an input question, first create a syntactically correct query to run.
+- Then look at the results of the query and return the answer.
+- You can order the results by a relevant column to return the most interesting
+- Never query for all the columns from a specific table; only ask for a few rele
+- Pay attention to use only the column names that you can see in the schema desc
+- Be careful not to query columns that do not exist.
+- Pay attention to which column belongs to which table.
+- Qualify column names with the table name when needed.
+- If a user's question implies listing unique entities (such as people, items, o
+- Database Schema:
+{schema_text}
+- Here are some examples of questions and their corresponding SQL queries:
+{samples_text.strip()}
+Now, generate an SQL query for the following question:
+Question: {user_query}
+Respond with a JSON object with the following structure:
+{{
+"sql": "The SQL query",
+"explanation": "Step-by-step explanation of how the query works"
+}}
+"""
+print(prompt)
+agent = create_agent(system_prompt=prompt ,
+model=LLM_MODEL ,
+output_type=SQLGeneration)
+response = agent.run_sync(user_query)
+return response.output
+A key insight here: the sql prompt must be carefully customized. the
+instructions should guide the model to avoid hallucinating columns, qualify
+names correctly, use only relevant fields, and produce clean, optimized sql.
+the quality of this prompt heavily influences both correctness and
+robustness of the final output.
+QueryGPT — the orchestrator of the full NL-to-SQL pipeline
+The QueryGPT class brings everything together. it runs a complete pipeline
+that converts a user's natural language question into sql by coordinating all
+the sub-agents:
+1. Intent detection — narrows down the domain to filter the search space.
+2. Table selection — identifies only the tables relevant to the user’s intent.
+3. Column pruning — reduces token bloat by keeping only essential
+columns.
+4. Few-shot retrieval — pulls similar embedded examples to guide the llm
+5. SQL generation — builds the final query with explanation using a wellcrafted prompt.
+6. Query execution — runs the query to validate and show actual results.
+class QueryGPT:
+def __init__(self):
+self.schema_info = get_database_schema()
+self.sample_queries = create_sample_sql_queries()
+self.embeddings_data = create_embeddings(self.sample_queries,
+self.schema_info ,
+neo4j_vector)
+self.intent_agent = IntentAgent()
+self.table_agent = TableAgent(self.schema_info)
+self.column_prune_agent = ColumnPruneAgent(self.schema_info)
+self.sql_generator = SQLGenerator(self.schema_info)
+def generate_query(self, user_query):
+"""Process a natural language query and generate SQL"""
+results = {"user_query": user_query}
+intent_result = self.intent_agent.determine_intent(user_query)
+workspace = intent_result.workspaces
+results["intent"] = intent_result
+print(f"🧠 Intent detected: {workspace}")
+table_result = self.table_agent.determine_tables(user_query, workspace)
+tables = table_result.tables
+results["tables"] = table_result
+print(f"📊 Tables identified: {', '.join(tables)}")
+column_result = self.column_prune_agent.prune_columns(user_query, tables
+pruned_schema = column_result.pruned_schema
+results["pruned_schema"] = column_result
+print(f"🔍 Column pruning complete")
+similar_samples = self.sql_generator.find_similar_samples(user_query)
+results["similar_samples"] = similar_samples
+print(f"📝 Found {len(similar_samples)} similar query examples")
+sql_result = self.sql_generator.generate_sql(
+user_query,
+workspace,
+tables,
+pruned_schema,
+similar_samples
+)
+results["sql_result"] = sql_result
+print("\n✅ SQL Query Generated:")
+print("\n" + sql_result.sql + "\n")
+# Step 6: Execute query to validate
+try:
+conn = sqlite3.connect('sample_retail.db')
+df = pd.read_sql_query(sql_result.sql, conn)
+results["execution_success"] = True
+results["query_result"] = df.head(5).to_dict()
+print(df.head(5))
+except Exception as e:
+results["execution_success"] = False
+results["execution_error"] = str(e)
+return results
+# Initialize QueryGPT
+query_gpt = QueryGPT()
+This class abstracts away the complexity of each individual step and makes it
+easy to call the entire system with a single method. it’s a clean encapsulation
+of the QueryGPT-style architecture, and it’s flexible enough to swap models
+or plug in other enhancements later.
+Running a full end-to-end test
+This single line kicks off the entire QueryGPT pipeline.
+ 
+# Test with a simple query
+result = query_gpt.generate_query("How many students are in each department (wit
+Architecture Benefits
+The multi-agent approach delivers several key advantages over monolithic
+systems.
+first, it’s more maintainable — each agent can be developed, tested, and
+optimized independently.
+second, it’s more cost-effective — you can use the right model for each task
+rather than over-provisioning everywhere.
+third, it’s more transparent — users can see and influence the decisionmaking process at each stage.
+Perhaps most importantly, this architecture is more resilient. if one agent
+makes a mistake, the others can often compensate, and the modular design
+makes it easier to identify and fix issues when they arise.
+WhatYouCan Optimize (WhatI Did in My UseCase)
+This setup is just a starting point — enough to show how the querygpt
+architecture works, but there’s plenty of room to tweak it based on your data
+and needs.
+Here are a few key optimizations i made in my own use case:
+Model selection by task: small models (like GPT-4o-mini or GPT-4.1-mini)
+work well for intent classification or table selection, but schema pruning and
+sql generation benefit from larger models like GPT-4.1, Claude 4 Opus, or
+Gemini 2.5 Pro. in my case, i used task-specific models for better costperformance trade-offs.
+Use metadata filtering in RAG: i embedded the workspace tags with each
+query and used them as metadata filters. this narrowed down the candidate
+set during retrieval and made it more accurate and efficient.
+Tune the retrieval k : play around with how many similar examples ( k ) you
+retrieve. more isn't always better—larger k eats up context and can distract
+the model. match k to your model’s context window and your prompt
+design.
+Improve in-context learning: add more diverse, well-labeled few-shot
+examples across different scenarios. this helps the sql generator generalize
+better across edge cases and domain shifts.
+Customize the SQL prompt: this is one of the most important levers. i iterated
+on the SQLGenerator prompt to make it reflect real-world constraints (e.g.,
+no SELECT *
+, handle ambiguous joins, qualify columns) and updated it as i
+discovered failure modes.
+Keep a human in the loop: don’t expect perfect answers on the first try. let
+users inspect intermediate outputs (intent, tables, schema), adjust them, and
+rerun. this interactive loop is often more reliable than a fully automatic
+system.
+Evaluate numerically: i logged structured outputs and manually reviewed
+them to build evaluation sets. don’t just trust qualitative output — track
+success rates, schema accuracy, and sql execution results.
+Add observability: i integrated Langfuse to monitor the pipeline end-to-end.
+it helped me collect structured traces, analyze feedback (positive/negative),
+and iterate quickly post-deployment. that observability was crucial after
+releasing the beta.
+Start with closed-source LLMs, then fine-tune smaller open models: use
+high-quality models like GPT-4.1 or Claude 4 Opus in the beta phase to
+collect structured usage data and user feedback. once you have enough
+examples, you can fine-tune smaller open-source models (like Qwen3-4B128K ) for specific agents like sql generation or column pruning —
+dramatically cutting costs while maintaining performance..
+Add fixed few-shot examples to prompts (for classification agents): i found
+that hard-coding a few high-quality examples directly in the prompts —
+especially for IntentAgent , TableAgent , and ColumnPruneAgent —can
+significantly improve consistency. it gives the model clearer grounding,
+especially when incoming queries are noisy or ambiguous.
+Add explanation field : adding an explanation field to each agent’s output
+schema helps you understand why the llm made a certain decision. this
+makes it easier to debug, tune prompts, provide more context, or even swap
+in a different model if needed. it's a simple addition that gives you much
+better visibility into model behavior.
+QueryGPT’s setup is a great example of how breaking things into smaller
+parts can make NL2SQL systems smarter and easier to manage. instead of
+one big model doing everything, it uses a bunch of focused agents — each
+handling a specific task like intent detection, table selection, or schema
+pruning. this makes the system faster, cheaper, and easier to debug. and
+because it’s modular, you can easily swap models, add feedback, or fine-tune
+parts of it as you go. with a bit of tuning and the right observability tools, it’s
+a solid base for building smart and flexible data agents.
+Happy coding ..

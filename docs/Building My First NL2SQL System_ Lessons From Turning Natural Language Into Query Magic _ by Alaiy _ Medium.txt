@@ -1,0 +1,231 @@
+Building My First NL2SQL System:
+Lessons From Turning Natural
+Language Into Query Magic
+Alaiy Follow 9 min read · Dec 3, 2025
+22 1
+Get unlimited access to the best of Medium for less than $1/week. Become a member
+Open in app
+Search Write
+If you’d told me a year ago that I’d build an NL2SQL system from scratch I
+would’ve smiled, nodded, and quietly changed the topic. But then a company
+project landed in my lap, I said “sure, why not,
+” and suddenly I was knee￾deep in embeddings, vector search, agentic reasoning, and a surprising
+amount of philosophical reflection about context.
+This blog is a mix of what I built, what I learned, and what I broke along the
+way. It’s my first Medium post, so think of it as an honest engineering story
+with a bit of humor sprinkled in.
+How It Started: With Vanna, RAG, and Blissful Ignorance
+Before I jump into what I built, it’s worth stepping back and asking: what
+even is NL2SQL, and why does it matter?
+Back in college, my idea of working with SQL was hilariously simple: spin up
+a small database, create ten tables, add a hundred rows to each, write a few
+SELECT queries, and call it a day.
+But real-world data is nothing like that. In industry, databases don’t contain
+ten tables; they contain hundreds. Some have millions of rows or thousands
+of columns spread across multiple schemas, each representing a different
+part of the business such as orders, shipments, inventory, quality,
+forecasting, and planning.
+Somewhere inside all that chaos lies incredibly rich business insight — but I
+had no way to reach it directly.
+That’s where NL2SQL comes in: the idea that you should be able to talk to
+your data the way you talk to a data engineer. The problem? You can’t just
+copy-paste all those tables, columns, and constraints into one massive GPT
+prompt and say “figure it out.”
+So NL2SQL became my way of bridging that gap: taking natural language and
+translating it into queries that can actually operate on these massive,
+production-scale datasets.
+Figure 0: Naive Approach
+When I started the project, I had:
+Zero experience with NL2SQL
+A surface-level understanding of how RAG worked
+A probably unjustified amount of confidence
+And the comforting thought: “How complicated could it be?”
+The Version 0 of NL2SQL was hilariously naive, take the user’s question,
+dump the entire schema, throw in some context, smash everything into a
+single mega-prompt, and pray that GPT would magically produce the right
+SQL.
+And technically… it worked.
+Sometimes.
+If the question was simple enough and if the schema wasn’t too big.
+But it was also painfully obvious why this approach sucked. The prompt was
+too large, the reasoning was too shallow, and GPT would hallucinate
+columns, misunderstand joins, or forget half the schema because it simply
+couldn’t process everything in one go. The moment queries got even slightly
+complex, the entire “one-prompt solution” collapsed.
+That’s when I realized I needed something smarter, something retrieval￾based, schema-aware, and capable of narrowing context automatically.
+Enter Vanna the open-source Text-to-SQL engine.
+Figure 1: Initial single-shot RAG pipeline
+Vanna (a public, MIT-licensed Python framework for NL2SQL built on RAG
+[Retrieval-Augmented Generation]) works in two steps: first you feed it your
+database schema, documentation, and optionally past SQL examples to build
+a knowledge base; then you ask your questions in natural language.
+Vanna retrieves only the relevant metadata + docs, invokes a large language
+model, and outputs SQL tailored to your database which you can then run
+directly.
+So the first version of the RAG based approach was relatively simple: use
+Vanna to translate natural language to SQL.
+And it worked.
+Well… until it didn’t.
+The moment real business users joined the party, the questions escalated
+from:
+“Show me all customers.”
+to the far more dramatic:
+“Give me a region-wise breakdown of Q4 buyer order performance across
+all active buyers with more than 10,000 units shipped, compare it with last
+year, and explain why shipped quantities dipped — for example due to low
+stock or delayed fulfillment.”
+Vanna, being the polite model she is, tried her absolute best, but this was
+basically asking a bicycle to tow a truck.
+And honestly, at first I didn’t think I needed something more powerful. I
+tried fixing it the “normal” way: adding better SQL examples to the context,
+tightening domain rules, giving the model clearer instructions. I kept
+tweaking, tuning, nudging… hoping it would somehow handle those harder
+edge cases.
+It didn’t.
+The Great Pivot: Enter the Agentic “Thinking Mode”
+Figure 2: The improved agentic pipeline
+I didn’t start this project thinking I’d build a multi-agent system.
+I didn’t even fully understand how agentic workflows operated in practice.
+All I knew was that they were supposed to be powerful…
+When Vanna began struggling with more complex buyer-order scenarios, it
+became clear that a single-shot RAG approach wasn’t going to cut it. So I split
+the intents:
+General questions → answered directly
+Metadata questions → ask the schema
+Data questions → routed to Vanna
+And here’s where the big change came in:
+Within the Data intent, I added a user toggle.
+By default, Vanna tries to answer with RAG. But if the user switches on
+Thinking Mode, the system escalates the query into a deeper, agentic
+workflow.
+And suddenly, without planning for it, I found myself neck-deep in agents,
+tools, intermediate reasoning, message passing, retries, context juggling,
+and the gentle art of preventing the LLM from spiraling into chaos — all
+things I didn’t know a month earlier.
+But surprisingly? I loved it.
+What started as a tiny experimental feature — something I built during a
+hackathon with embarrassingly low expectations — became one of the most
+powerful parts of the system. My “let’s just try this for fun” agentic mode
+ended up generating 70+ line SQL queries correctly on day one.
+I stared at my laptop like: “…wait… it can do that?”
+That was the moment I realized this wasn’t just a backup plan.
+It was the thinking mode of the application — the same way GPT has a
+“normal mode” and a “reasoning mode.” If RAG was the quick answer, the
+agentic workflow became the deep, deliberate problem-solving engine that
+kicked in when the question was too complex for a single pass.
+And eventually, that thinking mode grew into the part of the system I’m most
+proud of.
+Context: The Silent Villain of NL2SQL
+If there was one challenge I completely underestimated, it was context.
+Not SQL. Not RAG retrieval. Not even multi-agent reasoning. Just… keeping
+track of what the user said earlier.
+It sounds simple in theory: pass the right amount of history to the system so
+each agent knows what it needs to know. But in practice, it felt like trying to
+balance a stack of dominoes during an earthquake. Too much context, and
+everything spirals into noise. Too little, and the system forgets what it was
+doing.
+There was a stretch where my application, for reasons known only to itself,
+was passing 40+ messages into the model when it genuinely only needed
+three. The extra messages didn’t just increase cost — they confused the
+entire workflow, causing agents to latch onto irrelevant details or produce
+completely strange reasoning steps.
+Figure 3: Context explosion in action
+And the root cause?
+My incomplete understanding of how state updates actually worked in
+LangGraph.
+Reducers, overwrite rules, merging behavior… all the subtle mechanics that
+determine what gets passed forward, what gets trimmed, and what silently
+sneaks through. It took me longer than I’d like to admit to realize that my
+logic for updating state — especially message lists — was doing almost the
+opposite of what I intended.
+The turning point came only after stepping away from the laptop entirely. I
+spent an entire day at a whiteboard, mapping everything out from scratch
+and talking through every transition out loud — while my friend, who
+definitely had other work to do, was more or less drafted into listening.
+Somewhere in that long, slightly chaotic monologue, the pieces finally
+clicked: how LangGraph reducers manage state, how updates get merged,
+and what “just the right amount” of context should look like for each agent.
+Once that understanding landed, the entire architecture finally made sense
+in a way it never had before.
+The quiet moral here: sometimes the deepest bugs aren’t technical — they’re
+conceptual. And sometimes, all you need is a whiteboard and a very patient friend
+who can tolerate your chaos.
+The Bugs That Nearly Broke My Spirit(But Taught Me the Most)
+Every engineering project has its fair share of bugs, but this one had a
+certain… personality. The kinds of issues that don’t just slow you down —
+they push you to understand things you didn’t know you needed to learn.
+1. TheContext Explosion Bug
+For a long stretch, the system insisted on passing far more messages to the
+LLM than necessary — sometimes dozens — which inflated token usage and
+disrupted the agentic reasoning process. It took a lot of digging,
+experimenting, and slowly untangling how LangGraph handles reducers and
+state merges before things finally fell into place.
+2. SQL Dialect Wars
+My server only accepted T-SQL, while GPT confidently produced MySQL￾style queries as if that were the only dialect in the universe.
+Bridging that gap required building a layer around:
+sanitizing SQL
+converting dialects
+programmatic pagination
+domain-specific constraints
+edge-case safety checks
+It sometimes felt less like coding and more like translating between two
+languages that refuse to agree on even basic grammar.
+3. The Early Failure Mode: “Sometimes Works, Sometimes
+Explodes”
+In the early days, consistency was the biggest challenge. The same query
+could work beautifully one moment and completely collapse the next. There
+was no single dramatic fix — just a long, careful process of strengthening
+domain rules, improving prompts, tightening sanitization, and giving the
+model clearer boundaries.
+The Deep Technical Learnings
+1. I learned RAG properly — notjusttheoretically.
+I finally understood how embeddings capture meaning, how vector search
+impacts retrieval quality, how schema tokens influence accuracy, and why
+good example queries matter so much.
+2. I learned agentic reasoning from scratch.
+Tools, workflows, validation loops, message routing — all the behind-the￾scenes mechanics that tutorials often gloss over.
+3. I learned SSE because users hate waiting silently.
+What is SSE (Server-Sent Events)?
+SSE is a web standard that lets a server push updates or event-data to a client
+over a single, long-lived HTTP connection — instead of the client repeatedly
+asking “any new data?” the server pushes new data as soon as it’s available.
+In practice, this means you can stream real-time feedback, progress updates
+or partial results to users — exactly what I needed when the agentic pipeline
+sometimes took 20+ seconds. Without SSE, users would just stare at a blank
+screen and assume the app crashed. Streaming kept the interaction feeling
+alive and responsive.
+4. I learned how importantitis to handle vague questions
+carefully.
+Early on, the system struggled with queries that didn’t specify enough
+context or intent. Trying to guess what the user “might” mean almost always
+led to inaccurate results. It’s far safer — and ultimately more helpful — to ask
+for clarification when a question is too broad or underspecified.
+Where NL2SQL Is Going (In My Opinion)
+I don’t think the future is simply “convert natural language to SQL.”
+I think NL2SQL will become:
+“talk to your data like you talk to a data engineer.”
+You’ll ask things like:
+“Why did sales dip last month?”
+“Show anomalies in customer behavior.”
+“Forecast next quarter’s numbers.”
+“Explain what went wrong last year.”
+And the system won’t just return tables — it’ll return insights.
+That’s the direction I want this system to evolve toward:
+more human, more contextual, more insightful, and faster.
+Final Thoughts
+This project taught me more than I expected:
+How RAG works under the hood
+How agentic systems come together
+How fragile context can be
+How to design pipelines that feel conversational but remain reliable
+I started by building a simple RAG-based NL2SQL module.
+I ended up building a hybrid engine:
+metadata-aware
+intent-classifying
+RAG-powered
+agentic-reasoning
+SSE-streaming
+and production-ready
+It wasn’t smooth. It wasn’t linear.
+But it was one of the most rewarding engineering journeys I’ve had.
+And this is just version one.

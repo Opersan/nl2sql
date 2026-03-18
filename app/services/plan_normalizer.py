@@ -141,6 +141,25 @@ _RELATIVE_DATE_PATTERNS: list[tuple[re.Pattern[str], Any]] = [
         re.compile(r'^CURRENT_DATE\s*-\s*(\d+)$'),
         lambda m: (date.today() - timedelta(days=int(m.group(1)))).isoformat(),
     ),
+    # Oracle TRUNC(SYSDATE, 'fmt') expressions the LLM may emit as filter values.
+    # Resolved to ISO dates so Oracle does not receive raw SQL function strings as binds.
+    (
+        re.compile(r"^trunc\s*\(\s*sysdate\s*,\s*'iw'\s*\)$", re.I),
+        lambda _: (date.today() - timedelta(days=date.today().weekday())).isoformat(),
+    ),
+    (
+        re.compile(r"^trunc\s*\(\s*sysdate\s*,\s*'mm'\s*\)$", re.I),
+        lambda _: date.today().replace(day=1).isoformat(),
+    ),
+    (
+        re.compile(r"^trunc\s*\(\s*sysdate\s*,\s*'yyyy'\s*\)$", re.I),
+        lambda _: date.today().replace(month=1, day=1).isoformat(),
+    ),
+    # Natural-language week anchors (Turkish / English) the LLM may use
+    (
+        re.compile(r"^(bu_hafta|bu\s+hafta|this_week|current_week)$", re.I),
+        lambda _: (date.today() - timedelta(days=date.today().weekday())).isoformat(),
+    ),
 ]
 
 
@@ -339,6 +358,20 @@ def normalize_raw_plan(
                         new_val = [_normalize_date_value(v) for v in val]
                         if new_val != val:
                             f["value"] = new_val
+                            stats.whitespace_trimmed += 1
+
+                # Normalise Python bool to int — JSON `true`/`false` is parsed as
+                # Python bool, which some Oracle driver versions reject as a parameter
+                # type for NUMBER columns (causes ORA-01722 or ORA-06502).
+                if not f.get("_drop"):
+                    val = f.get("value")
+                    if isinstance(val, bool):
+                        f["value"] = int(val)
+                        stats.whitespace_trimmed += 1
+                    elif isinstance(val, list):
+                        coerced = [int(v) if isinstance(v, bool) else v for v in val]
+                        if coerced != val:
+                            f["value"] = coerced
                             stats.whitespace_trimmed += 1
 
                 # Trim column name whitespace
