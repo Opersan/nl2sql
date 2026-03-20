@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # Maximum total characters for the assembled hybrid planner prompt.
     # Budget guard trims examples → docs → explanations → content before
     # hard-truncating as a last resort.
-    planner_prompt_max_chars: int = 12_000
+    planner_prompt_max_chars: int = 24_000
 
     # NOTE – Example corpus evolution roadmap:
     #   Today ExampleDocument.sql is retained for offline evaluation, gold

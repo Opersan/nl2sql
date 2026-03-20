@@ -26,6 +26,7 @@ When *response_model* is ``QueryPlan``, the raw JSON is first fed through
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from collections.abc import Iterable
@@ -138,9 +139,62 @@ class OpenAICompatibleProvider(LLMProvider):
         self._api_key = api_key
         self._model = model
         self._timeout = timeout
-        self.last_structured_response_text: str | None = None
-        self.last_structured_parse_error: str | None = None
-        self.last_text_response_text: str | None = None
+        # Task-scoped response fields for concurrency safety.
+        # Keyed by id(asyncio.current_task()); fallback stored separately.
+        self._task_state: dict[int, dict[str, str | None]] = {}
+        self._fallback_state: dict[str, str | None] = {
+            "structured_response_text": None,
+            "structured_parse_error": None,
+            "text_response_text": None,
+        }
+
+    # -- Task-scoped state helpers -------------------------------------------
+
+    def _set_field(self, key: str, value: str | None) -> None:
+        """Write a response field scoped to the current asyncio task."""
+        self._fallback_state[key] = value
+        task = asyncio.current_task()
+        if task is not None:
+            tid = id(task)
+            if tid not in self._task_state:
+                self._task_state[tid] = dict(self._fallback_state)
+            self._task_state[tid][key] = value
+            # Prevent unbounded growth.
+            if len(self._task_state) > 2048:
+                self._task_state.clear()
+
+    def _get_field(self, key: str) -> str | None:
+        """Read a response field scoped to the current asyncio task."""
+        task = asyncio.current_task()
+        if task is not None:
+            tid = id(task)
+            if tid in self._task_state:
+                return self._task_state[tid].get(key)
+        return self._fallback_state.get(key)
+
+    @property
+    def last_structured_response_text(self) -> str | None:
+        return self._get_field("structured_response_text")
+
+    @last_structured_response_text.setter
+    def last_structured_response_text(self, value: str | None) -> None:
+        self._set_field("structured_response_text", value)
+
+    @property
+    def last_structured_parse_error(self) -> str | None:
+        return self._get_field("structured_parse_error")
+
+    @last_structured_parse_error.setter
+    def last_structured_parse_error(self, value: str | None) -> None:
+        self._set_field("structured_parse_error", value)
+
+    @property
+    def last_text_response_text(self) -> str | None:
+        return self._get_field("text_response_text")
+
+    @last_text_response_text.setter
+    def last_text_response_text(self, value: str | None) -> None:
+        self._set_field("text_response_text", value)
 
     # -- LLMProvider interface -----------------------------------------------
 

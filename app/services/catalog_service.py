@@ -13,6 +13,8 @@ Otherwise it falls back to the full dump (Sprint 1-2 behaviour).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from app.core.config import settings
 from app.domain.catalog_models import (
     CatalogSnapshot,
@@ -21,6 +23,9 @@ from app.domain.catalog_models import (
 )
 from app.providers.catalog.base import CatalogProvider
 from app.services.schema_retrieval_service import SchemaRetrievalService
+
+if TYPE_CHECKING:
+    from app.services.query_understanding import QueryUnderstanding
 
 
 class CatalogService:
@@ -40,7 +45,10 @@ class CatalogService:
         return await self._provider.get_snapshot()
 
     async def get_relevant_context(
-        self, user_message: str,
+        self,
+        user_message: str,
+        *,
+        query_understanding: "QueryUnderstanding | None" = None,
     ) -> CatalogSnapshot:
         """Return catalog context relevant to *user_message*.
 
@@ -57,7 +65,9 @@ class CatalogService:
         change.
         """
         if settings.enable_metadata_retrieval and self._retrieval is not None:
-            return await self._retrieval.retrieve_context(user_message)
+            return await self._retrieval.retrieve_context(
+                user_message, query_understanding=query_understanding,
+            )
         return await self.get_snapshot()
 
     async def resolve_table(self, name_or_alias: str) -> TableMetadata | None:

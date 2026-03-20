@@ -15,10 +15,15 @@ Sprint 3 wiring
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.domain.catalog_models import CatalogSnapshot
 from app.providers.retrieval.base import SchemaRetriever
+
+if TYPE_CHECKING:
+    from app.services.query_understanding import QueryUnderstanding
 
 logger = get_logger(__name__)
 
@@ -34,6 +39,7 @@ class SchemaRetrievalService:
         user_query: str,
         *,
         top_k: int | None = None,
+        query_understanding: "QueryUnderstanding | None" = None,
     ) -> CatalogSnapshot:
         """Return catalog context relevant to *user_query*.
 
@@ -44,13 +50,17 @@ class SchemaRetrievalService:
         top_k:
             Max tables to retrieve.  Falls back to
             ``settings.retrieval_top_k`` when not provided.
+        query_understanding:
+            Optional pre-pass analysis used for entity-aware scoring.
 
         Returns
         -------
         A ``CatalogSnapshot`` with only the most relevant tables.
         """
         k = top_k if top_k is not None else settings.retrieval_top_k
-        snapshot = await self._retriever.retrieve(user_query, top_k=k)
+        snapshot = await self._retriever.retrieve(
+            user_query, top_k=k, query_understanding=query_understanding,
+        )
 
         logger.info(
             "Retrieved %d table(s) for query (top_k=%d): %.60s",

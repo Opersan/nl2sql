@@ -744,15 +744,80 @@ def _join_sections_two_tier(
     *,
     docs_block: str = "",
     examples_block: str = "",
+    query_context_block: str = "",
 ) -> str:
     """Join two-tier prompt sections with double-newline separators."""
     sections = [_PLANNER_SYSTEM, compact_index, detail_section]
+    if query_context_block:
+        sections.append(query_context_block)
     if docs_block:
         sections.append(docs_block)
     if examples_block:
         sections.append(examples_block)
     sections.append(f"Kullanıcı sorusu: {user_message}")
     return "\n\n".join(s for s in sections if s)
+
+
+def _build_query_context_block(
+    query_understanding_summary: dict[str, Any] | None,
+) -> str:
+    """Build a concise query-context block from QueryUnderstanding signals.
+
+    Placed between the catalog detail and docs/examples so the LLM knows
+    what the user is asking about before seeing examples.
+    """
+    if not query_understanding_summary:
+        return ""
+    qu = query_understanding_summary
+    lines: list[str] = ["Sorgu analizi (belirleyici ön-tarama):"]
+
+    modules = qu.get("inferred_modules", [])
+    if modules:
+        lines.append(f"  Modül: {', '.join(modules)}")
+
+    entities = qu.get("detected_entities", [])
+    if entities:
+        lines.append(f"  Varlık: {', '.join(entities)}")
+
+    output = qu.get("requested_output_type")
+    if output:
+        lines.append(f"  Çıktı tipi: {output}")
+
+    filters = qu.get("extracted_filters", [])
+    if filters:
+        parts = []
+        for f in filters:
+            dim = f.get("dimension", "")
+            val = f.get("value", "")
+            parts.append(f"{dim}={val}" if val else dim)
+        lines.append(f"  Filtreler: {', '.join(parts)}")
+
+    time_hints = qu.get("extracted_time_hints", [])
+    if time_hints:
+        lines.append(f"  Zaman ipuçları: {', '.join(time_hints)}")
+
+    agg_hints = qu.get("extracted_aggregation_hints", [])
+    if agg_hints:
+        lines.append(f"  Agregasyon: {', '.join(agg_hints)}")
+
+    sort_hints = qu.get("extracted_sort_hints", [])
+    if sort_hints:
+        lines.append(f"  Sıralama: {', '.join(sort_hints)}")
+
+    confidence = qu.get("entity_confidence", "")
+    if confidence:
+        lines.append(f"  Güven: {confidence}")
+
+    if qu.get("multi_entity_flag"):
+        lines.append("  ⚠ Çok tablolu / cross-domain sorgu sinyali algılandı.")
+
+    ambiguities = qu.get("possible_ambiguities", [])
+    if ambiguities:
+        lines.append(f"  Belirsizlik: {', '.join(ambiguities)}")
+
+    if len(lines) <= 1:
+        return ""
+    return "\n".join(lines)
 
 
 def build_two_tier_planner_prompt_debug(
@@ -763,6 +828,7 @@ def build_two_tier_planner_prompt_debug(
     *,
     schema_docs=None,
     examples=None,
+    query_understanding_summary: dict[str, Any] | None = None,
     max_schema_docs: int = DEFAULT_MAX_SCHEMA_DOCS,
     max_examples: int = DEFAULT_MAX_EXAMPLES,
     max_doc_content_chars: int = DEFAULT_DOC_CONTENT_CHARS,
@@ -784,6 +850,7 @@ def build_two_tier_planner_prompt_debug(
 
     schema_docs_list = schema_docs or []
     examples_list = examples or []
+    query_ctx_block = _build_query_context_block(query_understanding_summary)
 
     cur_docs = max_schema_docs
     cur_examples = max_examples
@@ -816,6 +883,7 @@ def build_two_tier_planner_prompt_debug(
             user_message,
             docs_block=docs_block,
             examples_block=ex_block,
+            query_context_block=query_ctx_block,
         )
 
     def _debug(prompt_text: str) -> dict[str, Any]:

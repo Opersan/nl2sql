@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, timedelta
+from difflib import get_close_matches
 from typing import Any
 
 from app.core.logging import get_logger
@@ -72,9 +73,13 @@ _FILTER_OP_ALIASES: dict[str, str] = {
     "ISNULL": "IS_NULL",
     "NULL": "IS_NULL",
     "IS NOT NULL": "IS_NOT_NULL",
+    "IS_NOT": "IS_NOT_NULL",
+    "IS NOT": "IS_NOT_NULL",
     "ISNOTNULL": "IS_NOT_NULL",
     "NOT_NULL": "IS_NOT_NULL",
     "NOTNULL": "IS_NOT_NULL",
+    # Bare "IS" — LLM uses to mean "column exists / is not null"
+    "IS": "IS_NOT_NULL",
     # LIKE variants
     "ILIKE": "LIKE",
     "LIKE_UPPER": "LIKE",
@@ -596,6 +601,16 @@ def canonicalize_columns(
     if table_meta_map is None:
         table_meta_map = {}
 
+    def _fuzzy_resolve(col: str, meta: TableMetadata) -> str | None:
+        """Return the closest column name within edit-distance ≈ 2, or None."""
+        col_upper = col.upper()
+        names = meta.column_names()
+        matches = get_close_matches(col_upper, [n.upper() for n in names], n=1, cutoff=0.8)
+        if matches:
+            idx = next(i for i, n in enumerate(names) if n.upper() == matches[0])
+            return names[idx]
+        return None
+
     def _resolve(col: str, table_name: str | None = None) -> str:
         """Resolve a column name, optionally scoped to a specific table."""
         if table_name:
@@ -619,7 +634,23 @@ def canonicalize_columns(
 
         # Fallback to primary table
         canonical = table_meta.resolve_column_name(col)  # type: ignore[union-attr]
-        return canonical or col
+        if canonical:
+            return canonical
+
+        # Fuzzy fallback — handle LLM hallucinated column names (e.g. AGENCY_ID → AGENT_ID)
+        if table_name:
+            meta = table_meta_map.get(table_name.upper())
+            if meta:
+                fuzzy = _fuzzy_resolve(col, meta)
+                if fuzzy:
+                    logger.info("Fuzzy column match: %r -> %r (table=%s)", col, fuzzy, table_name)
+                    return fuzzy
+        fuzzy = _fuzzy_resolve(col, table_meta)  # type: ignore[arg-type]
+        if fuzzy:
+            logger.info("Fuzzy column match: %r -> %r", col, fuzzy)
+            return fuzzy
+
+        return col
 
     mutations: dict[str, Any] = {}
 

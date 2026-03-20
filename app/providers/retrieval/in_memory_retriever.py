@@ -14,11 +14,12 @@ query tokens hint at cross-table concepts (e.g. "departman bazında
 
 Scoring and filtering
 =====================
-Every table in the catalog is scored against the query.  Only tables
-with ``score > 0`` are returned, capped at *top_k*.  When **no** table
-scores above zero the retriever returns the first *top_k* tables from
-the catalog (ordered by definition order) so that the LLM still receives
-some context — but it never silently returns the entire catalog.
+Every table in the catalog is scored against the query.  Tables must meet
+a ``minimum_score`` threshold to be included.  When provided, a
+``QueryUnderstanding`` object is used to:
+- boost tables matching the detected module
+- suppress tables from unrelated modules
+- control FK expansion based on detected entity scope.
 
 This implementation is intentionally simple.  It will be superseded by
 BM25 or vector-similarity retrieval in later phases, but the
@@ -29,21 +30,60 @@ remain stable.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from app.domain.catalog_models import CatalogSnapshot, TableMetadata
 from app.providers.catalog.base import CatalogProvider
 from app.providers.retrieval.base import SchemaRetriever
+from app.core.logging import get_logger
 from app.utils.turkish import casefold_tr
+
+if TYPE_CHECKING:
+    from app.services.query_understanding import QueryUnderstanding
+
+logger = get_logger(__name__)
 
 # Pre-compiled pattern for punctuation removal during tokenization.
 _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
 
+# Minimum token length to be considered for scoring (filters noise like "da", "ki", "ve")
+_MIN_TOKEN_LEN: int = 3
+
+# Minimum retrieval score for a table to be included
+_MIN_RETRIEVAL_SCORE: int = 3
+
+# Turkish stop-words / suffixes that should never drive table scoring
+_STOP_TOKENS: frozenset[str] = frozenset({
+    "ve", "ile", "icin", "bir", "bu", "su", "da", "de", "mi", "mu",
+    "ne", "ki", "var", "yok", "hem", "ya", "ama", "tum", "tüm",
+    "getir", "goster", "listele", "ver", "bul", "say", "hesapla",
+    "olan", "daki", "deki", "olan", "giren", "cikan",
+})
+
+# Module → table-name patterns for entity-aware scoring
+_MODULE_TABLE_PATTERNS: dict[str, list[str]] = {
+    "HR": ["xxbt_pdks", "per_", "employee", "person", "hr_"],
+    "PO": ["po_", "mtl_system_items", "purchase"],
+}
+
 
 def _tokenize(text: str) -> list[str]:
-    """Lowercase, strip punctuation, split and drop empty tokens."""
+    """Lowercase, strip punctuation, split and drop short/stop tokens."""
     folded = casefold_tr(text)
     cleaned = _PUNCT_RE.sub(" ", folded)
-    return [t for t in cleaned.split() if t]
+    return [
+        t for t in cleaned.split()
+        if t and len(t) >= _MIN_TOKEN_LEN and t not in _STOP_TOKENS
+    ]
+
+
+def _table_module(table: TableMetadata) -> str | None:
+    """Infer a module label from a table name using naming conventions."""
+    name_lower = table.name.lower()
+    for module, patterns in _MODULE_TABLE_PATTERNS.items():
+        if any(p in name_lower for p in patterns):
+            return module
+    return None
 
 
 class InMemoryRetriever(SchemaRetriever):
@@ -57,33 +97,74 @@ class InMemoryRetriever(SchemaRetriever):
         user_query: str,
         *,
         top_k: int = 5,
+        query_understanding: "QueryUnderstanding | None" = None,
     ) -> CatalogSnapshot:
         snapshot = await self._provider.get_snapshot()
 
+        # Detect modules from query understanding
+        qu_modules: set[str] = set()
+        if query_understanding is not None:
+            qu_modules = set(query_understanding.inferred_modules)
+
         # Score every table
-        scored = [
-            (self._score(table, user_query), table)
-            for table in snapshot.tables
-        ]
+        scored: list[tuple[int, TableMetadata]] = []
+        for table in snapshot.tables:
+            raw_score = self._score(table, user_query)
+
+            # Module-aware boost / suppress
+            tbl_module = _table_module(table)
+            if qu_modules and tbl_module:
+                if tbl_module in qu_modules:
+                    raw_score = int(raw_score * 1.5) + 5  # boost matching module
+                elif not (query_understanding and query_understanding.multi_entity_flag):
+                    # Suppress tables from unrelated modules (unless cross-domain)
+                    raw_score = max(0, raw_score // 3)
+
+            scored.append((raw_score, table))
+
         scored.sort(key=lambda pair: pair[0], reverse=True)
 
-        # Only keep tables with score > 0, capped at top_k
-        selected = [table for score, table in scored[:top_k] if score > 0]
+        # Apply minimum score threshold (not just > 0)
+        selected = [
+            table for score, table in scored[:top_k]
+            if score >= _MIN_RETRIEVAL_SCORE
+        ]
 
         if not selected:
-            # Fallback: no match at all → return first top_k tables (never the
-            # full catalog) so the LLM gets *some* schema context.
+            # Fallback: no match at all → return first top_k tables
             fallback = snapshot.tables[:top_k]
             return CatalogSnapshot(
                 tables=fallback,
                 relationships=self._filter_relationships(snapshot, fallback),
             )
 
+        # Log rejected candidates for traceability
+        rejected = [
+            (score, table.name) for score, table in scored
+            if 0 < score < _MIN_RETRIEVAL_SCORE
+        ]
+        if rejected:
+            logger.debug(
+                "[retriever] Rejected %d table(s) below threshold %d: %s",
+                len(rejected),
+                _MIN_RETRIEVAL_SCORE,
+                [(name, sc) for sc, name in rejected],
+            )
+
         # --- Relation-aware expansion (Sprint 5) -------------------------
-        # If the snapshot has relationship metadata, pull in related tables
-        # that scored > 0 or are directly FK-related to top-scored tables.
+        # Controlled: only expand when multi-entity or cross-domain
         if snapshot.relationships:
-            selected = self._expand_related(snapshot, selected, top_k)
+            should_expand = (
+                query_understanding is not None
+                and (
+                    query_understanding.multi_entity_flag
+                    or query_understanding.requires_cross_domain_reasoning
+                    or len(selected) > 1
+                )
+            ) or (query_understanding is None)  # backward compat: expand if no QU
+
+            if should_expand:
+                selected = self._expand_related(snapshot, selected, top_k)
 
         return CatalogSnapshot(
             tables=selected,
@@ -105,7 +186,6 @@ class InMemoryRetriever(SchemaRetriever):
         to_add: list[TableMetadata] = []
         for table in selected:
             for rel in snapshot.get_relationships_for(table.name):
-                # The "other" side of the relationship
                 other = (
                     rel.to_table.upper()
                     if rel.from_table.upper() == table.name.upper()
@@ -137,7 +217,7 @@ class InMemoryRetriever(SchemaRetriever):
     def _score(table: TableMetadata, query: str) -> int:
         """Score a table's relevance to *query* by keyword hits.
 
-        Scoring heuristic (intentionally simple):
+        Scoring heuristic:
         * Table name match: +10
         * Table alias match: +8
         * Table description match: +5

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime
+
 import pytest
 
 from app.core.exceptions import CompilationError
@@ -113,8 +115,8 @@ class TestWhereFilters:
         result = compiler.compile(plan, employee_table)
 
         assert "ISE_GIRIS_TARIHI BETWEEN :p1 AND :p2" in result.sql
-        assert result.params["p1"] == "2020-01-01"
-        assert result.params["p2"] == "2023-12-31"
+        assert result.params["p1"] == datetime.date(2020, 1, 1)
+        assert result.params["p2"] == datetime.date(2023, 12, 31)
 
     @pytest.mark.asyncio
     async def test_in_filter(self, compiler: SQLCompiler, employee_table) -> None:

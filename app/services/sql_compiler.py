@@ -632,6 +632,13 @@ class SQLCompiler:
     ) -> str:
         col = self._resolve(filt.column, table)
 
+        # Coerce bind values (flag→str, bool→int, date) — mirrors multi-table path.
+        canonical_col = table.resolve_column_name(filt.column)
+        if canonical_col is not None:
+            coerced = _coerce_bind_for_column(filt.value, table, canonical_col)
+            if coerced is not filt.value:
+                filt = filt.model_copy(update={"value": coerced})
+
         if filt.op == FilterOp.IS_NULL:
             return f"{col} IS NULL"
 

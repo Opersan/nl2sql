@@ -43,7 +43,7 @@ from __future__ import annotations
 import asyncio
 from functools import lru_cache
 import re
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from app.core.config import settings
 from app.core.exceptions import PlannerError
@@ -67,6 +67,7 @@ from app.services.plan_normalizer import (
 )
 from app.services.query_plan_repair import QueryPlanRepairEngine, RepairResult
 from app.services.semantic_planning import apply_semantic_normalization, _load_registry
+from app.services.query_understanding import QueryUnderstanding, analyze_query
 from app.utils.turkish import casefold_tr
 
 logger = get_logger(__name__)
@@ -140,14 +141,17 @@ class PlannerService:
 
         Steps
         -----
-        1. Fetch catalog context (structured metadata layer).
-        2. Optionally fetch document / example context (document layer).
-        3. Build the planner prompt (hybrid when docs available).
-        4. Call the LLM for a structured ``QueryPlan``.
-        5. Apply post-plan normalization / safety checks.
-        6. Apply structural repair (qualified-column strip, anchor redirect).
-        7. Apply semantic canonicalization (entity root, join paths).
-        8. Canonicalize column names against table metadata.
+        0. Minimal sensitive-intent guard.
+        1. Query understanding pre-pass (deterministic, no LLM).
+        2. Fetch catalog context (entity-aware schema retrieval).
+        3. Column pruning — ask LLM which columns matter.
+        4. Optionally fetch document / example context (hybrid layer).
+        5. Build the planner prompt.
+        6. Call the LLM for a structured ``QueryPlan``.
+        7. Post-plan normalization / safety checks.
+        8. Structural repair (qualified-column strip, anchor redirect).
+        9. Semantic canonicalization (entity root, join paths).
+        10. Canonicalize column names against table metadata.
 
         Raises ``PlannerError`` when the LLM fails or returns unparseable
         output.
@@ -155,6 +159,7 @@ class PlannerService:
         self._set_last_trace({
             "user_message": user_message,
             "policy_guard": {"triggered": False, "reason": None},
+            "query_understanding": None,
             "retrieval": None,
             "prompt": None,
             "llm": {"raw_response_text": None, "parse_error": None},
@@ -165,6 +170,9 @@ class PlannerService:
             "canonicalize": None,
             "final_plan": None,
         })
+        # Keep a local reference so concurrent tasks cannot overwrite it.
+        trace = self.last_trace
+        assert trace is not None
 
         # 0. Minimal sensitive-intent guard (no planner guesswork)
         if self._is_sensitive_or_invalid_request(user_message):
@@ -175,12 +183,12 @@ class PlannerService:
                 needs_clarification=True,
                 clarification_message="Bu talep kapsamında güvenlik veya gizlilik riski var. Lütfen iş amaçlı ve yetkili bir sorgu belirtin.",
             )
-            self._last_trace["policy_guard"] = {
+            trace["policy_guard"] = {
                 "triggered": True,
                 "reason": "sensitive_or_invalid_request",
             }
             # Always set intent_guard so downstream eval can read clarification diagnostics
-            self._last_trace["intent_guard"] = {
+            trace["intent_guard"] = {
                 "requested_filter_signals": [],
                 "planner_filter_coverage": {},
                 "final_filter_coverage": {},
@@ -194,23 +202,36 @@ class PlannerService:
                 "confidence_band": "low",
                 "plan_confidence_band": "low",
             }
-            self._last_trace["final_plan"] = self._snapshot_plan(plan)
+            trace["final_plan"] = self._snapshot_plan(plan)
             return plan
 
-        # 1. Structured schema context
+        # 1. Query understanding pre-pass (deterministic, no LLM)
+        qu = analyze_query(user_message)
+        trace["query_understanding"] = qu.as_trace_dict()
+        logger.info(
+            "Query understanding: modules=%s, entities=%s, confidence=%s",
+            qu.inferred_modules, qu.detected_entities, qu.entity_confidence,
+        )
+
+        # 2. Structured schema context
         # Full snapshot for compact index (all tables, one line each)
         full_snapshot = await self._catalog.get_snapshot()
         # Retrieved snapshot for detail (top-K relevant tables only)
-        context = await self._catalog.get_relevant_context(user_message)
-
-        # 2. Column pruning — ask LLM which columns matter for this query
-        pruned_cols = await self._run_column_prune(user_message, context)
-
-        # 3. Document / example context (hybrid layer)
-        prompt, prompt_trace = await self._build_prompt_with_trace(
-            user_message, full_snapshot, context, pruned_cols
+        context = await self._catalog.get_relevant_context(
+            user_message, query_understanding=qu,
         )
-        self._last_trace["retrieval"] = {
+
+        # 3. Column pruning — ask LLM which columns matter for this query
+        pruned_cols = await self._run_column_prune(user_message, context)
+        pruned_cols = self._harden_pruned_cols(pruned_cols, context, qu)
+
+        # 4. Document / example context (hybrid layer)
+        prompt, prompt_trace = await self._build_prompt_with_trace(
+            user_message, full_snapshot, context, pruned_cols,
+            query_understanding_summary=qu.as_trace_dict(),
+            qu=qu,
+        )
+        trace["retrieval"] = {
             "schema_tables": [table.name for table in context.tables],
             "schema_table_count": len(context.tables),
             "relationship_count": len(context.relationships),
@@ -218,17 +239,17 @@ class PlannerService:
             "schema_docs": prompt_trace.get("schema_docs", []),
             "examples": prompt_trace.get("examples", []),
         }
-        self._last_trace["prompt"] = {
+        trace["prompt"] = {
             key: value
             for key, value in prompt_trace.items()
             if key not in {"schema_docs", "examples", "retrieval_assessment"}
         }
-        self._last_trace["prompt"]["full_prompt_text"] = prompt
+        trace["prompt"]["full_prompt_text"] = prompt
 
         try:
             query_plan = await self._llm.generate_structured(prompt, QueryPlan)
         except Exception as exc:
-            self._last_trace["llm"] = {
+            trace["llm"] = {
                 "raw_response_text": getattr(self._llm, "last_structured_response_text", None),
                 "parse_error": str(exc),
             }
@@ -238,17 +259,17 @@ class PlannerService:
                 detail=str(exc),
             ) from exc
 
-        self._last_trace["llm"] = {
+        trace["llm"] = {
             "raw_response_text": getattr(self._llm, "last_structured_response_text", None),
             "parse_error": getattr(self._llm, "last_structured_parse_error", None),
         }
-        self._last_trace["parsed_plan"] = self._snapshot_plan(query_plan)
+        trace["parsed_plan"] = self._snapshot_plan(query_plan)
         planner_plan_snapshot = query_plan
 
         # Post-plan normalization (limit clamping, clarification cleanup)
         normalize_before = query_plan
         query_plan = self._normalize_plan(query_plan)
-        self._last_trace["normalize"] = {
+        trace["normalize"] = {
             "before": self._snapshot_plan(normalize_before),
             "after": self._snapshot_plan(query_plan),
             "limit_clamped": normalize_before.limit != query_plan.limit,
@@ -262,7 +283,7 @@ class PlannerService:
         repair_before = query_plan
         query_plan, repair_result = self._repair_engine.repair(query_plan, user_message)
         self._last_repair_result = repair_result
-        self._last_trace["repair"] = {
+        trace["repair"] = {
             "before": self._snapshot_plan(repair_before),
             "after": self._snapshot_plan(query_plan),
             "repair_applied": repair_result.repair_applied,
@@ -284,7 +305,7 @@ class PlannerService:
         # Guard: if user clearly asks an aggregate question but plan has no
         # aggregations, return clarification instead of a likely wrong listing.
         query_plan = self._enforce_aggregation_intent_guard(query_plan, user_message)
-        self._last_trace["semantic"] = {
+        trace["semantic"] = {
             "before": self._snapshot_plan(semantic_before),
             "after": self._snapshot_plan(query_plan),
             "semantic_intent": query_plan.semantic_intent,
@@ -295,7 +316,7 @@ class PlannerService:
         # Column canonicalization (alias -> canonical name)
         canonicalize_before = query_plan
         query_plan = self._canonicalize_plan(query_plan, context)
-        self._last_trace["canonicalize"] = {
+        trace["canonicalize"] = {
             "before": self._snapshot_plan(canonicalize_before),
             "after": self._snapshot_plan(query_plan),
             "stats": self._last_canonicalization_stats.as_dict() if self._last_canonicalization_stats else {},
@@ -344,7 +365,7 @@ class PlannerService:
             coverage=guard["final_filter_coverage"],
         )
 
-        self._last_trace["intent_guard"] = {
+        trace["intent_guard"] = {
             "requested_filter_signals": guard["requested_filter_signals"],
             "planner_filter_coverage": guard["planner_filter_coverage"],
             "final_filter_coverage": guard["final_filter_coverage"],
@@ -359,7 +380,7 @@ class PlannerService:
             "plan_confidence_band": plan_band,
         }
 
-        self._last_trace["final_plan"] = self._snapshot_plan(query_plan)
+        trace["final_plan"] = self._snapshot_plan(query_plan)
 
         logger.info(
             "Plan produced -- intent=%s, table=%s, clarification=%s",
@@ -391,6 +412,9 @@ class PlannerService:
         full_snapshot: CatalogSnapshot,
         context: CatalogSnapshot,
         pruned_cols: dict[str, list[str]],
+        *,
+        query_understanding_summary: dict[str, Any] | None = None,
+        qu: QueryUnderstanding | None = None,
     ) -> tuple[str, dict[str, Any]]:
         """Build the two-tier planner prompt with optional docs/examples.
 
@@ -401,7 +425,9 @@ class PlannerService:
         schema_docs = None
         examples = None
         if self._doc_retrieval is not None:
-            doc_result = await self._doc_retrieval.retrieve_context(user_message)
+            doc_result = await self._doc_retrieval.retrieve_context(
+                user_message, query_understanding=qu,
+            )
             schema_docs = doc_result.schema_docs or None
             examples = doc_result.examples or None
 
@@ -412,6 +438,7 @@ class PlannerService:
             pruned_cols,
             schema_docs=schema_docs,
             examples=examples,
+            query_understanding_summary=query_understanding_summary,
             max_prompt_chars=settings.planner_prompt_max_chars,
         )
 
@@ -488,6 +515,63 @@ class PlannerService:
                 "[column-prune] pruning call failed — using all columns (fail-open)"
             )
             return {}
+
+    @staticmethod
+    def _harden_pruned_cols(
+        pruned: dict[str, list[str]],
+        context: CatalogSnapshot,
+        qu: QueryUnderstanding,
+    ) -> dict[str, list[str]]:
+        """Ensure extracted filter dimensions and PK/FK columns survive pruning.
+
+        When LLM-based column pruning accidentally drops a column that the
+        query understanding identified as a filter dimension, re-add it.
+        """
+        if not pruned:
+            return pruned  # pruning disabled or failed → nothing to harden
+
+        # Collect dimension columns from QU extracted_filters
+        qu_filter_dims: set[str] = set()
+        for f in qu.extracted_filters:
+            dim = f.get("dimension", "")
+            if dim:
+                qu_filter_dims.add(dim.upper())
+
+        hardened = dict(pruned)
+        for table in context.tables:
+            tbl_name = table.name
+            if tbl_name not in hardened:
+                continue
+            existing = set(c.upper() for c in hardened[tbl_name])
+            must_add: list[str] = []
+
+            # PK / FK always needed
+            for pk in table.primary_key:
+                if pk.upper() not in existing:
+                    must_add.append(pk)
+            for fk in table.foreign_keys:
+                if fk.column.upper() not in existing:
+                    must_add.append(fk.column)
+
+            # Filter dimension columns from QU
+            for col in table.columns:
+                col_upper = col.name.upper()
+                if col_upper in qu_filter_dims and col_upper not in existing:
+                    must_add.append(col.name)
+                # Also check aliases
+                for alias in col.aliases:
+                    if alias.upper() in qu_filter_dims and col_upper not in existing:
+                        must_add.append(col.name)
+                        break
+
+            if must_add:
+                hardened[tbl_name] = hardened[tbl_name] + must_add
+                logger.debug(
+                    "[column-prune-harden] Re-added %d column(s) to %s: %s",
+                    len(must_add), tbl_name, must_add,
+                )
+
+        return hardened
 
     @staticmethod
     def _snapshot_plan(plan: QueryPlan) -> dict[str, Any]:

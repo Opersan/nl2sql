@@ -22,9 +22,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from app.domain.catalog_models import CatalogSnapshot
 from app.providers.documents.models import ExampleDocument, SchemaDocument
+
+if TYPE_CHECKING:
+    from app.services.query_understanding import QueryUnderstanding
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +45,7 @@ class SchemaRetriever(ABC):
         user_query: str,
         *,
         top_k: int = 5,
+        query_understanding: "QueryUnderstanding | None" = None,
     ) -> CatalogSnapshot:
         """Return the most relevant catalog subset for *user_query*.
 

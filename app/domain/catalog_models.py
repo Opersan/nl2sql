@@ -21,6 +21,17 @@ from pydantic import BaseModel, Field
 from app.utils.turkish import casefold_tr
 
 
+def _id_fold(s: str) -> str:
+    """Case-fold for SQL identifiers — neutralise Turkish I ambiguity.
+
+    ``casefold_tr`` maps uppercase ``I`` → ``ı`` (Turkish dotless-i) which is
+    correct for Turkish prose but breaks SQL identifier matching where ``I``
+    is the ASCII letter.  This helper normalises ``ı`` → ``i`` after folding
+    so that e.g. ``PO_HEADER_ID`` and ``po_header_id`` compare equal.
+    """
+    return casefold_tr(s).replace("ı", "i")
+
+
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
@@ -55,10 +66,10 @@ class ColumnMetadata(BaseModel):
 
     def matches(self, name_or_alias: str) -> bool:
         """Case-insensitive (Turkish-aware) match against name or aliases."""
-        folded = casefold_tr(name_or_alias)
-        if casefold_tr(self.name) == folded:
+        folded = _id_fold(name_or_alias)
+        if _id_fold(self.name) == folded:
             return True
-        return any(casefold_tr(a) == folded for a in self.aliases)
+        return any(_id_fold(a) == folded for a in self.aliases)
 
 
 # ---------------------------------------------------------------------------
@@ -111,10 +122,10 @@ class TableMetadata(BaseModel):
 
     def matches(self, name_or_alias: str) -> bool:
         """Case-insensitive (Turkish-aware) match against name or aliases."""
-        folded = casefold_tr(name_or_alias)
-        if casefold_tr(self.name) == folded:
+        folded = _id_fold(name_or_alias)
+        if _id_fold(self.name) == folded:
             return True
-        return any(casefold_tr(a) == folded for a in self.aliases)
+        return any(_id_fold(a) == folded for a in self.aliases)
 
     def get_column(self, name_or_alias: str) -> ColumnMetadata | None:
         """Resolve a column by name or alias (case-insensitive)."""
@@ -168,36 +179,36 @@ class CatalogSnapshot(BaseModel):
 
     def search_tables(self, query: str) -> list[TableMetadata]:
         """Return tables whose name, alias or description contains *query*."""
-        folded = casefold_tr(query)
+        folded = _id_fold(query)
         results: list[TableMetadata] = []
         for tbl in self.tables:
-            if folded in casefold_tr(tbl.name):
+            if folded in _id_fold(tbl.name):
                 results.append(tbl)
                 continue
-            if any(folded in casefold_tr(a) for a in tbl.aliases):
+            if any(folded in _id_fold(a) for a in tbl.aliases):
                 results.append(tbl)
                 continue
-            if tbl.description and folded in casefold_tr(tbl.description):
+            if tbl.description and folded in _id_fold(tbl.description):
                 results.append(tbl)
         return results
 
     def get_relationships_for(self, table_name: str) -> list[RelationshipMetadata]:
         """Return all relationships involving *table_name* (case-insensitive)."""
-        folded = casefold_tr(table_name)
+        folded = _id_fold(table_name)
         return [
             r for r in self.relationships
-            if casefold_tr(r.from_table) == folded or casefold_tr(r.to_table) == folded
+            if _id_fold(r.from_table) == folded or _id_fold(r.to_table) == folded
         ]
 
     def get_join_path(
         self, from_table: str, to_table: str,
     ) -> RelationshipMetadata | None:
         """Find a direct relationship between two tables."""
-        f = casefold_tr(from_table)
-        t = casefold_tr(to_table)
+        f = _id_fold(from_table)
+        t = _id_fold(to_table)
         for r in self.relationships:
-            rf = casefold_tr(r.from_table)
-            rt = casefold_tr(r.to_table)
+            rf = _id_fold(r.from_table)
+            rt = _id_fold(r.to_table)
             if (rf == f and rt == t) or (rf == t and rt == f):
                 return r
         return None
