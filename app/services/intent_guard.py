@@ -17,18 +17,76 @@ class FilterSignalSpec:
     strength: str
 
 
-_SIGNAL_SPECS: tuple[FilterSignalSpec, ...] = (
-    FilterSignalSpec("status_active", "aktif durumu", "status", ("aktif", "pasif", "çıkış", "isten ayr", "işten ayr"), "strong"),
-    FilterSignalSpec("status_pending", "onay durumu", "status", ("onay bekleyen", "onaysiz", "onaysız", "approved dışı", "approved disi", "bekleyen"), "strong"),
-    FilterSignalSpec("date_window", "zaman aralığı", "date", ("tarih aralığı", "between", "date range"), "strong"),
-    FilterSignalSpec("org_scope", "organizasyon kapsamı", "org", ("lokasyon", "şehir", "sehir", "birim", "departman", "unvan"), "medium"),
+# ---------------------------------------------------------------------------
+# Signal metadata: maps signal_code → (label, dimension, strength)
+# Keywords come from the SemanticFoundationRegistry (entity.filter_signal_keywords)
+# so any new module (AP, AR, GL, INV) registers its own keywords via JSONL data.
+# ---------------------------------------------------------------------------
+
+_SIGNAL_META: dict[str, tuple[str, str, str]] = {
+    "status_active":  ("aktif durumu",           "status", "strong"),
+    "status_pending": ("onay durumu",            "status", "strong"),
+    "status_closed":  ("kapali durumu",           "status", "medium"),
+    "date_window":    ("zaman aralığı",           "date",   "strong"),
+    "org_scope":      ("organizasyon kapsamı",    "org",    "medium"),
+}
+
+# Hard-coded "date_window" keywords are linguistic patterns, not entity-specific.
+_DATE_WINDOW_KEYWORDS: tuple[str, ...] = (
+    "tarih araligi", "between", "date range",
 )
 
-_DIMENSION_COLUMN_HINTS: dict[str, tuple[str, ...]] = {
-    "status": ("status", "authorization_status", "durum", "cikis_tarihi", "quit_date", "bordrolu", "stajyer"),
-    "date": ("date", "tarih", "creation", "effective", "start", "end"),
-    "org": ("location", "lokasyon", "birim", "departman", "organization", "unvan"),
-}
+
+def _build_signal_specs() -> tuple[FilterSignalSpec, ...]:
+    """Build ``FilterSignalSpec`` tuples from the registry's aggregated keywords.
+
+    If the registry is unavailable (e.g. missing data files at startup),
+    falls back to a minimal hardcoded set covering only HR+PO.
+    """
+    try:
+        from app.semantic.registry import get_registry as _get_registry
+        reg = _get_registry()
+        keyword_index = reg.build_signal_keyword_index()
+    except Exception:  # pragma: no cover
+        # Minimal backward-compat fallback
+        keyword_index = {
+            "status_active":  {"aktif", "pasif", "cikis", "isten ayr", "isten cikti"},
+            "status_pending": {"onay bekleyen", "onaysiz", "approved disi", "bekleyen"},
+            "org_scope":      {"lokasyon", "sehir", "birim", "departman", "unvan"},
+        }
+
+    # Always include date_window with its linguistic keywords
+    keyword_index.setdefault("date_window", set()).update(_DATE_WINDOW_KEYWORDS)
+
+    specs: list[FilterSignalSpec] = []
+    for code, meta in _SIGNAL_META.items():
+        label, dimension, strength = meta
+        kws = tuple(sorted(keyword_index.get(code, set())))
+        if kws:
+            specs.append(FilterSignalSpec(code, label, dimension, kws, strength))
+    return tuple(specs)
+
+
+# Module-level singleton — built once at import time (after registry is warm)
+_SIGNAL_SPECS: tuple[FilterSignalSpec, ...] = _build_signal_specs()
+
+
+def _build_dimension_column_hints() -> dict[str, tuple[str, ...]]:
+    """Derive dimension → column hint tuples from the registry."""
+    try:
+        from app.semantic.registry import get_registry as _get_registry
+        return _get_registry().build_dimension_column_index()
+    except Exception:  # pragma: no cover
+        return {
+            "status": ("status", "authorization_status", "durum", "cikis_tarihi",
+                       "quit_date", "bordrolu", "stajyer"),
+            "date":   ("date", "tarih", "creation", "effective", "start", "end"),
+            "org":    ("location", "lokasyon", "birim", "departman",
+                       "organization", "unvan"),
+        }
+
+
+_DIMENSION_COLUMN_HINTS: dict[str, tuple[str, ...]] = _build_dimension_column_hints()
 
 
 def _norm(text: str | None) -> str:

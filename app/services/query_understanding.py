@@ -11,10 +11,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.core.logging import get_logger
 from app.utils.turkish import casefold_tr
+
+if TYPE_CHECKING:
+    from app.semantic.registry import SemanticFoundationRegistry
 
 logger = get_logger(__name__)
 
@@ -51,6 +54,12 @@ class QueryUnderstanding:
     # Confidence
     entity_confidence: str = "low"  # high | medium | low
 
+    # Registry-resolved semantic objects (Phase 3+)
+    resolved_entities: list[str] = field(default_factory=list)  # entity_ids
+    detected_metrics: list[str] = field(default_factory=list)   # metric_ids
+    org_context: dict[str, Any] = field(default_factory=dict)
+    lookup_hints: list[dict[str, str]] = field(default_factory=list)
+
     def primary_module(self) -> str | None:
         """Return the single primary module, or None if ambiguous."""
         if len(self.inferred_modules) == 1:
@@ -62,6 +71,8 @@ class QueryUnderstanding:
             "normalized_question": self.normalized_question,
             "detected_entities": self.detected_entities,
             "inferred_modules": self.inferred_modules,
+            "resolved_entities": self.resolved_entities,
+            "detected_metrics": self.detected_metrics,
             "requested_output_type": self.requested_output_type,
             "extracted_filters": self.extracted_filters,
             "extracted_time_hints": self.extracted_time_hints,
@@ -71,6 +82,7 @@ class QueryUnderstanding:
             "multi_entity_flag": self.multi_entity_flag,
             "requires_cross_domain_reasoning": self.requires_cross_domain_reasoning,
             "entity_confidence": self.entity_confidence,
+            "lookup_hints": self.lookup_hints,
         }
 
 
@@ -101,36 +113,13 @@ def _tokenize(text: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Domain keyword dictionaries  (Turkish + English)
+# Entity detection is now registry-driven (data/semantic/glossary.jsonl)
+#
+# _HR_KEYWORDS, _PO_KEYWORDS, _HR_PHRASES, _PO_PHRASES have been REMOVED.
+# They are superseded by ``SemanticFoundationRegistry.resolve_term()`` and
+# ``resolve_phrases_in_text()`` which cover HR, PO, AP, AR, GL, and INV
+# without requiring code changes to add new modules.
 # ---------------------------------------------------------------------------
-
-_HR_KEYWORDS: set[str] = {
-    "calisan", "calisanlar", "personel", "eleman", "employee", "employees",
-    "departman", "birim", "lokasyon", "organizasyon", "unvan", "sicil",
-    "ise giris", "ise giren", "ise alinan", "isten cikti", "cikis tarihi",
-    "ik", "insan kaynaklari", "pdks", "bordro", "bordrolu", "stajyer",
-    "gorev", "email", "dahili", "yonetici", "masraf merkezi",
-    "aktif calisan", "ad", "soyad",
-}
-
-_PO_KEYWORDS: set[str] = {
-    "siparis", "siparisler", "satin alma", "satinalma", "tedarikci",
-    "po", "purchase", "order", "vendor", "kalem", "dagitim", "sevkiyat",
-    "teslim", "fatura", "item", "urun", "malzeme", "yazici", "bilgisayar",
-    "onay bekleyen", "approved", "closed", "iptal",
-}
-
-# Multi-word phrases checked BEFORE single-token matching.
-_HR_PHRASES: list[str] = [
-    "calisan", "calisanlar", "personel", "ise giris", "ise giren",
-    "ise alinan", "isten cikti", "cikis tarihi", "insan kaynaklari",
-    "aktif calisan", "masraf merkezi",
-]
-
-_PO_PHRASES: list[str] = [
-    "satin alma", "satinalma", "siparis", "siparisler", "tedarikci",
-    "purchase order", "onay bekleyen",
-]
 
 # ---------------------------------------------------------------------------
 # Output type detection
@@ -196,8 +185,19 @@ _STATUS_KEYWORDS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 
-def analyze_query(question: str) -> QueryUnderstanding:
-    """Produce a structured understanding of *question* using rules only."""
+def analyze_query(
+    question: str,
+    *,
+    registry: "SemanticFoundationRegistry | None" = None,
+) -> QueryUnderstanding:
+    """Produce a structured understanding of *question* using rules only.
+
+    Parameters
+    ----------
+    registry:
+        Optional ``SemanticFoundationRegistry`` override.  When omitted the
+        application singleton is used.  Pass a custom registry in tests.
+    """
     normed = _norm(question)
     tokens = _tokenize(question)
     token_set = set(tokens)
@@ -207,39 +207,60 @@ def analyze_query(question: str) -> QueryUnderstanding:
         normalized_question=normed,
     )
 
-    # --- Entity / module detection ---
-    hr_score = 0
-    po_score = 0
+    # --- Entity / module detection via semantic registry ---
+    try:
+        if registry is None:
+            from app.semantic.registry import get_registry as _get_registry
+            reg = _get_registry()
+        else:
+            reg = registry
+        _registry_available = True
+    except Exception as exc:  # pragma: no cover
+        logger.warning("[query-understanding] Registry unavailable: %s", exc)
+        reg = None
+        _registry_available = False
 
-    # Phrase-level matching (stronger signal)
-    for phrase in _HR_PHRASES:
-        if phrase in normed:
-            hr_score += 3
+    entity_scores: dict[str, int] = {}  # entity_id → accumulated score
 
-    for phrase in _PO_PHRASES:
-        if phrase in normed:
-            po_score += 3
+    if _registry_available and reg is not None:
+        # Phrase-level substring matching (stronger signal: +3 each)
+        for entry in reg.resolve_phrases_in_text(normed):
+            canonical = entry.canonical
+            if not canonical.startswith(("filter:", "metric:")):
+                entity_scores[canonical] = entity_scores.get(canonical, 0) + 3
 
-    # Token-level matching
-    for tok in tokens:
-        if tok in _HR_KEYWORDS:
-            hr_score += 1
-        if tok in _PO_KEYWORDS:
-            po_score += 1
+        # Token-level exact matching (+1 each)
+        for tok in tokens:
+            for entry in reg.resolve_term(tok):
+                canonical = entry.canonical
+                if canonical.startswith("metric:"):
+                    metric_id = canonical[len("metric:"):]
+                    if metric_id not in qu.detected_metrics:
+                        qu.detected_metrics.append(metric_id)
+                elif not canonical.startswith("filter:"):
+                    entity_scores[canonical] = entity_scores.get(canonical, 0) + 1
 
-    if hr_score > 0:
-        qu.detected_entities.append("employee")
-        qu.inferred_modules.append("HR")
-    if po_score > 0:
-        qu.detected_entities.append("purchase_order")
-        qu.inferred_modules.append("PO")
+        # Populate QU from scored entities (unique, stable order)
+        for entity_id, _score in sorted(
+            entity_scores.items(), key=lambda kv: kv[1], reverse=True
+        ):
+            entity = reg.get_entity(entity_id)
+            if entity is None:
+                continue
+            if entity.display_name not in qu.detected_entities:
+                qu.detected_entities.append(entity.display_name)
+            if entity.module not in qu.inferred_modules:
+                qu.inferred_modules.append(entity.module)
+            if entity_id not in qu.resolved_entities:
+                qu.resolved_entities.append(entity_id)
 
-    if hr_score > 0 and po_score > 0:
+    # Confidence / multi-entity flags
+    if len(qu.inferred_modules) > 1:
         qu.multi_entity_flag = True
         qu.requires_cross_domain_reasoning = True
         qu.entity_confidence = "medium"
-    elif hr_score > 0 or po_score > 0:
-        dominant = max(hr_score, po_score)
+    elif qu.inferred_modules:
+        dominant = max(entity_scores.values()) if entity_scores else 0
         qu.entity_confidence = "high" if dominant >= 3 else "medium"
     else:
         qu.entity_confidence = "low"

@@ -70,6 +70,12 @@ from app.services.semantic_planning import apply_semantic_normalization, _load_r
 from app.services.query_understanding import QueryUnderstanding, analyze_query
 from app.utils.turkish import casefold_tr
 
+try:
+    from app.semantic.registry import get_registry as _get_semantic_registry
+    _SEMANTIC_REGISTRY = _get_semantic_registry()
+except Exception:  # pragma: no cover
+    _SEMANTIC_REGISTRY = None
+
 logger = get_logger(__name__)
 
 @lru_cache(maxsize=16)

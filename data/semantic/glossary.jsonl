@@ -1,0 +1,102 @@
+{"raw_term": "çalışan", "language": "tr", "normalized": "calisan", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "çalışanlar", "language": "tr", "normalized": "calisanlar", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "personel", "language": "tr", "normalized": "personel", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "eleman", "language": "tr", "normalized": "eleman", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.85, "domain": "HR", "source": "curated"}
+{"raw_term": "çalışanı", "language": "tr", "normalized": "calisani", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "çalışanların", "language": "tr", "normalized": "calisanlarin", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "çalışanları", "language": "tr", "normalized": "calisanlari", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "personeli", "language": "tr", "normalized": "personeli", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "insan kaynakları", "language": "tr", "normalized": "insan kaynaklari", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "işe giriş", "language": "tr", "normalized": "ise giris", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "işe giren", "language": "tr", "normalized": "ise giren", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "işe alınan", "language": "tr", "normalized": "ise alinan", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "işten çıkan", "language": "tr", "normalized": "isten cikan", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "aktif çalışan", "language": "tr", "normalized": "aktif calisan", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "ik", "language": "tr", "normalized": "ik", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.75, "domain": "HR", "source": "curated"}
+{"raw_term": "pdks", "language": "tr", "normalized": "pdks", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "bordro", "language": "tr", "normalized": "bordro", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "bordrolu", "language": "tr", "normalized": "bordrolu", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "stajyer", "language": "tr", "normalized": "stajyer", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "sicil", "language": "tr", "normalized": "sicil", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.85, "domain": "HR", "source": "curated"}
+{"raw_term": "yönetici", "language": "tr", "normalized": "yonetici", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.75, "domain": "HR", "source": "curated"}
+{"raw_term": "masraf merkezi", "language": "tr", "normalized": "masraf merkezi", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.80, "domain": "HR", "source": "curated"}
+{"raw_term": "işçi", "language": "tr", "normalized": "isci", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.80, "domain": "HR", "source": "curated"}
+{"raw_term": "employee", "language": "en", "normalized": "employee", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "employees", "language": "en", "normalized": "employees", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "personnel", "language": "en", "normalized": "personnel", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "staff", "language": "en", "normalized": "staff", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.80, "domain": "HR", "source": "curated"}
+{"raw_term": "hire date", "language": "en", "normalized": "hire date", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.90, "domain": "HR", "source": "curated"}
+{"raw_term": "termination", "language": "en", "normalized": "termination", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.85, "domain": "HR", "source": "curated"}
+{"raw_term": "satın alma", "language": "tr", "normalized": "satin alma", "canonical": "PO_PURCHASING", "match_type": "phrase", "confidence": 0.95, "domain": "PO", "source": "curated"}
+{"raw_term": "satınalma", "language": "tr", "normalized": "satinalma", "canonical": "PO_PURCHASING", "match_type": "phrase", "confidence": 0.95, "domain": "PO", "source": "curated"}
+{"raw_term": "sipariş", "language": "tr", "normalized": "siparis", "canonical": "PO_PURCHASING", "match_type": "phrase", "confidence": 0.90, "domain": "PO", "source": "curated"}
+{"raw_term": "siparişler", "language": "tr", "normalized": "siparisler", "canonical": "PO_PURCHASING", "match_type": "phrase", "confidence": 0.90, "domain": "PO", "source": "curated"}
+{"raw_term": "siparişi", "language": "tr", "normalized": "siparisi", "canonical": "PO_PURCHASING", "match_type": "phrase", "confidence": 0.90, "domain": "PO", "source": "curated"}
+{"raw_term": "tedarikçi", "language": "tr", "normalized": "tedarikci", "canonical": "PO_PURCHASING", "match_type": "phrase", "confidence": 0.90, "domain": "PO", "source": "curated"}
+{"raw_term": "tedarikçiler", "language": "tr", "normalized": "tedarikciler", "canonical": "PO_PURCHASING", "match_type": "phrase", "confidence": 0.90, "domain": "PO", "source": "curated"}
+{"raw_term": "kalem", "language": "tr", "normalized": "kalem", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.75, "domain": "PO", "source": "curated"}
+{"raw_term": "dağıtım", "language": "tr", "normalized": "dagitim", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.75, "domain": "PO", "source": "curated"}
+{"raw_term": "teslim", "language": "tr", "normalized": "teslim", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.70, "domain": "PO", "source": "curated"}
+{"raw_term": "onay bekleyen", "language": "tr", "normalized": "onay bekleyen", "canonical": "PO_PURCHASING", "match_type": "filter_alias", "confidence": 0.90, "domain": "PO", "source": "curated"}
+{"raw_term": "purchase order", "language": "en", "normalized": "purchase order", "canonical": "PO_PURCHASING", "match_type": "phrase", "confidence": 0.98, "domain": "PO", "source": "curated"}
+{"raw_term": "vendor", "language": "en", "normalized": "vendor", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.90, "domain": "PO", "source": "curated"}
+{"raw_term": "purchase", "language": "en", "normalized": "purchase", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.85, "domain": "PO", "source": "curated"}
+{"raw_term": "procurement", "language": "en", "normalized": "procurement", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.85, "domain": "PO", "source": "curated"}
+{"raw_term": "requisition", "language": "en", "normalized": "requisition", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.80, "domain": "PO", "source": "curated"}
+{"raw_term": "fatura", "language": "tr", "normalized": "fatura", "canonical": "AP_INVOICES", "match_type": "phrase", "confidence": 0.80, "domain": "AP", "source": "curated"}
+{"raw_term": "faturalar", "language": "tr", "normalized": "faturalar", "canonical": "AP_INVOICES", "match_type": "phrase", "confidence": 0.80, "domain": "AP", "source": "curated"}
+{"raw_term": "tedarikçi fatura", "language": "tr", "normalized": "tedarikci fatura", "canonical": "AP_INVOICES", "match_type": "phrase", "confidence": 0.95, "domain": "AP", "source": "curated"}
+{"raw_term": "ödeme", "language": "tr", "normalized": "odeme", "canonical": "AP_INVOICES", "match_type": "exact", "confidence": 0.75, "domain": "AP", "source": "curated"}
+{"raw_term": "ödeme emri", "language": "tr", "normalized": "odeme emri", "canonical": "AP_INVOICES", "match_type": "phrase", "confidence": 0.90, "domain": "AP", "source": "curated"}
+{"raw_term": "borç", "language": "tr", "normalized": "borc", "canonical": "AP_INVOICES", "match_type": "exact", "confidence": 0.70, "domain": "AP", "source": "curated"}
+{"raw_term": "invoice", "language": "en", "normalized": "invoice", "canonical": "AP_INVOICES", "match_type": "exact", "confidence": 0.80, "domain": "AP", "source": "curated"}
+{"raw_term": "invoices", "language": "en", "normalized": "invoices", "canonical": "AP_INVOICES", "match_type": "exact", "confidence": 0.80, "domain": "AP", "source": "curated"}
+{"raw_term": "payment", "language": "en", "normalized": "payment", "canonical": "AP_INVOICES", "match_type": "exact", "confidence": 0.75, "domain": "AP", "source": "curated"}
+{"raw_term": "payable", "language": "en", "normalized": "payable", "canonical": "AP_INVOICES", "match_type": "exact", "confidence": 0.90, "domain": "AP", "source": "curated"}
+{"raw_term": "accounts payable", "language": "en", "normalized": "accounts payable", "canonical": "AP_INVOICES", "match_type": "phrase", "confidence": 0.98, "domain": "AP", "source": "curated"}
+{"raw_term": "alacak", "language": "tr", "normalized": "alacak", "canonical": "AR_TRANSACTIONS", "match_type": "exact", "confidence": 0.85, "domain": "AR", "source": "curated"}
+{"raw_term": "alacaklar", "language": "tr", "normalized": "alacaklar", "canonical": "AR_TRANSACTIONS", "match_type": "exact", "confidence": 0.85, "domain": "AR", "source": "curated"}
+{"raw_term": "müşteri", "language": "tr", "normalized": "musteri", "canonical": "AR_TRANSACTIONS", "match_type": "phrase", "confidence": 0.80, "domain": "AR", "source": "curated"}
+{"raw_term": "müşteriler", "language": "tr", "normalized": "musteriler", "canonical": "AR_TRANSACTIONS", "match_type": "phrase", "confidence": 0.80, "domain": "AR", "source": "curated"}
+{"raw_term": "tahsilat", "language": "tr", "normalized": "tahsilat", "canonical": "AR_TRANSACTIONS", "match_type": "exact", "confidence": 0.90, "domain": "AR", "source": "curated"}
+{"raw_term": "satış faturası", "language": "tr", "normalized": "satis faturasi", "canonical": "AR_TRANSACTIONS", "match_type": "phrase", "confidence": 0.95, "domain": "AR", "source": "curated"}
+{"raw_term": "müşteri faturası", "language": "tr", "normalized": "musteri faturasi", "canonical": "AR_TRANSACTIONS", "match_type": "phrase", "confidence": 0.95, "domain": "AR", "source": "curated"}
+{"raw_term": "customer", "language": "en", "normalized": "customer", "canonical": "AR_TRANSACTIONS", "match_type": "exact", "confidence": 0.85, "domain": "AR", "source": "curated"}
+{"raw_term": "receivable", "language": "en", "normalized": "receivable", "canonical": "AR_TRANSACTIONS", "match_type": "exact", "confidence": 0.90, "domain": "AR", "source": "curated"}
+{"raw_term": "accounts receivable", "language": "en", "normalized": "accounts receivable", "canonical": "AR_TRANSACTIONS", "match_type": "phrase", "confidence": 0.98, "domain": "AR", "source": "curated"}
+{"raw_term": "muhasebe", "language": "tr", "normalized": "muhasebe", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "phrase", "confidence": 0.85, "domain": "GL", "source": "curated"}
+{"raw_term": "muhasebe fişi", "language": "tr", "normalized": "muhasebe fisi", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "phrase", "confidence": 0.95, "domain": "GL", "source": "curated"}
+{"raw_term": "yevmiye", "language": "tr", "normalized": "yevmiye", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "exact", "confidence": 0.95, "domain": "GL", "source": "curated"}
+{"raw_term": "aktarım", "language": "tr", "normalized": "aktarim", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "exact", "confidence": 0.80, "domain": "GL", "source": "curated"}
+{"raw_term": "hesap kodu", "language": "tr", "normalized": "hesap kodu", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "phrase", "confidence": 0.90, "domain": "GL", "source": "curated"}
+{"raw_term": "defteri kebir", "language": "tr", "normalized": "defteri kebir", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "phrase", "confidence": 0.95, "domain": "GL", "source": "curated"}
+{"raw_term": "journal", "language": "en", "normalized": "journal", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "exact", "confidence": 0.85, "domain": "GL", "source": "curated"}
+{"raw_term": "journal entry", "language": "en", "normalized": "journal entry", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "phrase", "confidence": 0.95, "domain": "GL", "source": "curated"}
+{"raw_term": "general ledger", "language": "en", "normalized": "general ledger", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "phrase", "confidence": 0.98, "domain": "GL", "source": "curated"}
+{"raw_term": "ledger", "language": "en", "normalized": "ledger", "canonical": "GL_JOURNAL_ENTRIES", "match_type": "exact", "confidence": 0.85, "domain": "GL", "source": "curated"}
+{"raw_term": "stok", "language": "tr", "normalized": "stok", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.90, "domain": "INV", "source": "curated"}
+{"raw_term": "envanter", "language": "tr", "normalized": "envanter", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.95, "domain": "INV", "source": "curated"}
+{"raw_term": "malzeme", "language": "tr", "normalized": "malzeme", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.70, "domain": "INV", "source": "curated"}
+{"raw_term": "malzeme", "language": "tr", "normalized": "malzeme", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.65, "domain": "PO", "source": "curated"}
+{"raw_term": "ürün", "language": "tr", "normalized": "urun", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.70, "domain": "INV", "source": "curated"}
+{"raw_term": "ürün", "language": "tr", "normalized": "urun", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.65, "domain": "PO", "source": "curated"}
+{"raw_term": "depo", "language": "tr", "normalized": "depo", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.85, "domain": "INV", "source": "curated"}
+{"raw_term": "ambar", "language": "tr", "normalized": "ambar", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.85, "domain": "INV", "source": "curated"}
+{"raw_term": "kategori", "language": "tr", "normalized": "kategori", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.70, "domain": "INV", "source": "curated"}
+{"raw_term": "inventory", "language": "en", "normalized": "inventory", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.95, "domain": "INV", "source": "curated"}
+{"raw_term": "stock", "language": "en", "normalized": "stock", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.85, "domain": "INV", "source": "curated"}
+{"raw_term": "item", "language": "en", "normalized": "item", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.65, "domain": "INV", "source": "curated"}
+{"raw_term": "item", "language": "en", "normalized": "item", "canonical": "PO_PURCHASING", "match_type": "exact", "confidence": 0.60, "domain": "PO", "source": "curated"}
+{"raw_term": "warehouse", "language": "en", "normalized": "warehouse", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.90, "domain": "INV", "source": "curated"}
+{"raw_term": "aktif", "language": "tr", "normalized": "aktif", "canonical": "filter:status_active", "match_type": "filter_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}
+{"raw_term": "pasif", "language": "tr", "normalized": "pasif", "canonical": "filter:status_inactive", "match_type": "filter_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}
+{"raw_term": "onaysız", "language": "tr", "normalized": "onaysiz", "canonical": "filter:status_pending", "match_type": "filter_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}
+{"raw_term": "kapalı", "language": "tr", "normalized": "kapali", "canonical": "filter:status_closed", "match_type": "filter_alias", "confidence": 0.85, "domain": "cross", "source": "curated"}
+{"raw_term": "açık", "language": "tr", "normalized": "acik", "canonical": "filter:status_open", "match_type": "filter_alias", "confidence": 0.85, "domain": "cross", "source": "curated"}
+{"raw_term": "iptal", "language": "tr", "normalized": "iptal", "canonical": "filter:status_cancelled", "match_type": "filter_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}
+{"raw_term": "toplam", "language": "tr", "normalized": "toplam", "canonical": "metric:sum_aggregate", "match_type": "metric_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}
+{"raw_term": "sayısı", "language": "tr", "normalized": "sayisi", "canonical": "metric:count_aggregate", "match_type": "metric_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}
+{"raw_term": "ortalama", "language": "tr", "normalized": "ortalama", "canonical": "metric:avg_aggregate", "match_type": "metric_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}
+{"raw_term": "count", "language": "en", "normalized": "count", "canonical": "metric:count_aggregate", "match_type": "metric_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}
+{"raw_term": "sum", "language": "en", "normalized": "sum", "canonical": "metric:sum_aggregate", "match_type": "metric_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}
+{"raw_term": "average", "language": "en", "normalized": "average", "canonical": "metric:avg_aggregate", "match_type": "metric_alias", "confidence": 0.90, "domain": "cross", "source": "curated"}

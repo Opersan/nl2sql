@@ -18,8 +18,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from app.domain.catalog_models import CatalogSnapshot
 from app.domain.semantic_models import BusinessEntitySemantic, SemanticRegistry
+
+if TYPE_CHECKING:
+    from app.semantic.registry import SemanticFoundationRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -221,12 +228,165 @@ def validate_registry_against_catalog(
 def assert_registry_valid(
     registry: SemanticRegistry,
     snapshot: CatalogSnapshot,
+    *,
+    foundation_registry: SemanticFoundationRegistry | None = None,
 ) -> None:
     """Raise :exc:`RegistryValidationError` if *registry* has catalog inconsistencies.
+
+    When *foundation_registry* is provided, also validates the JSONL-based
+    semantic foundation (entities, relationships, metrics, flexfields, glossary)
+    against the catalog snapshot.
 
     This is the strict-mode entry point.  For fail-open startup logging use
     :func:`validate_registry_against_catalog` directly.
     """
     issues = validate_registry_against_catalog(registry, snapshot)
+    if foundation_registry is not None:
+        issues += validate_semantic_foundation_against_catalog(
+            foundation_registry, snapshot
+        )
     if issues:
         raise RegistryValidationError(issues)
+
+
+# ---------------------------------------------------------------------------
+# Foundation (JSONL) validator
+# ---------------------------------------------------------------------------
+
+def validate_semantic_foundation_against_catalog(
+    foundation_registry: SemanticFoundationRegistry,
+    snapshot: CatalogSnapshot,
+) -> list[RegistryIssue]:
+    """Validate the new JSONL-based semantic foundation against *snapshot*.
+
+    Checks performed
+    ~~~~~~~~~~~~~~~~
+    1. Each ``SemanticEntity`` — ``root_table`` and every ``default_tables``
+       entry must exist in the catalog.
+    2. Each ``RelationshipEdge`` with ``approved_for_planner=True`` —
+       ``source_table`` and ``target_table`` must exist; every join key's
+       source/target column must exist in the respective table.
+    3. Each ``MetricDefinition`` with ``table`` set — table must exist in
+       catalog; if ``column`` is also set (and not ``"*"``), column must
+       exist in that table.
+    4. Each ``FlexfieldDefinition`` — ``table`` must exist; ``segment_column``
+       must exist in that table.
+    5. Glossary cross-reference — every ``canonical`` value that looks like an
+       entity ID (no ``":"`` separator) must resolve to a known entity.
+
+    Returns a (possibly empty) list of :class:`RegistryIssue` objects.
+    """
+    issues: list[RegistryIssue] = []
+
+    # -----------------------------------------------------------------------
+    # 1. SemanticEntity table existence
+    # -----------------------------------------------------------------------
+    for entity in foundation_registry.get_all_entities():
+        eid = entity.entity_id
+        for tbl in [entity.root_table, *entity.default_tables]:
+            if not _table_exists(tbl, snapshot):
+                issues.append(RegistryIssue(
+                    entity_id=eid,
+                    location="foundation:entity.default_tables",
+                    detail=f"table '{tbl}' not found in catalog",
+                ))
+
+    # -----------------------------------------------------------------------
+    # 2. RelationshipEdge column existence (approved edges only)
+    # -----------------------------------------------------------------------
+    for edge in foundation_registry.get_all_relationships():
+        if not edge.approved_for_planner:
+            continue
+        eid = f"{edge.source_entity}→{edge.target_entity}"
+        for side, tbl in (("source", edge.source_table), ("target", edge.target_table)):
+            if not _table_exists(tbl, snapshot):
+                issues.append(RegistryIssue(
+                    entity_id=eid,
+                    location=f"foundation:edge:{edge.edge_id}",
+                    detail=f"{side} table '{tbl}' not found in catalog",
+                ))
+        for jk_idx, jk in enumerate(edge.join_keys):
+            loc = f"foundation:edge:{edge.edge_id}.join_keys[{jk_idx}]"
+            if not _skip_col(jk.source_column) and not _column_in_table(
+                jk.source_column, edge.source_table, snapshot
+            ):
+                issues.append(RegistryIssue(
+                    entity_id=eid,
+                    location=loc,
+                    detail=(
+                        f"source column '{jk.source_column}' not found "
+                        f"in table '{edge.source_table}'"
+                    ),
+                ))
+            if not _skip_col(jk.target_column) and not _column_in_table(
+                jk.target_column, edge.target_table, snapshot
+            ):
+                issues.append(RegistryIssue(
+                    entity_id=eid,
+                    location=loc,
+                    detail=(
+                        f"target column '{jk.target_column}' not found "
+                        f"in table '{edge.target_table}'"
+                    ),
+                ))
+
+    # -----------------------------------------------------------------------
+    # 3. MetricDefinition table + column existence
+    # -----------------------------------------------------------------------
+    for metric in foundation_registry.get_all_metrics():
+        if not metric.table:
+            continue
+        if not _table_exists(metric.table, snapshot):
+            issues.append(RegistryIssue(
+                entity_id=metric.metric_id,
+                location="foundation:metric.table",
+                detail=f"table '{metric.table}' not found in catalog",
+            ))
+        elif metric.column and not _skip_col(metric.column):
+            if not _column_in_table(metric.column, metric.table, snapshot):
+                issues.append(RegistryIssue(
+                    entity_id=metric.metric_id,
+                    location="foundation:metric.column",
+                    detail=(
+                        f"column '{metric.column}' not found in table '{metric.table}'"
+                    ),
+                ))
+
+    # -----------------------------------------------------------------------
+    # 4. FlexfieldDefinition table + segment_column existence
+    # -----------------------------------------------------------------------
+    for ff in foundation_registry.get_all_flexfields():
+        if not _table_exists(ff.table, snapshot):
+            issues.append(RegistryIssue(
+                entity_id=ff.flexfield_id,
+                location="foundation:flexfield.table",
+                detail=f"table '{ff.table}' not found in catalog",
+            ))
+        elif not _skip_col(ff.segment_column) and not _column_in_table(
+            ff.segment_column, ff.table, snapshot
+        ):
+            issues.append(RegistryIssue(
+                entity_id=ff.flexfield_id,
+                location="foundation:flexfield.segment_column",
+                detail=(
+                    f"column '{ff.segment_column}' not found in table '{ff.table}'"
+                ),
+            ))
+
+    # -----------------------------------------------------------------------
+    # 5. Glossary → entity cross-reference
+    # -----------------------------------------------------------------------
+    known_entity_ids = {e.entity_id for e in foundation_registry.get_all_entities()}
+    for entry in foundation_registry.get_all_glossary_entries():
+        canonical = entry.canonical
+        if ":" in canonical:
+            # "filter:{code}" or "metric:{id}" — not an entity_id, skip
+            continue
+        if canonical not in known_entity_ids:
+            issues.append(RegistryIssue(
+                entity_id=canonical,
+                location=f"foundation:glossary.canonical (term='{entry.raw_term}')",
+                detail=f"canonical entity_id '{canonical}' not found in entities.jsonl",
+            ))
+
+    return issues

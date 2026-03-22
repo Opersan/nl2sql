@@ -1,5 +1,10 @@
 {
   "version": "1.0",
+  "_migration_status": {
+    "note": "Phase 6 partial migration. Entity keyword matching has moved to data/semantic/glossary.jsonl. Entity table definitions, join paths, and relationship edges have been migrated to data/semantic/entities.jsonl and data/semantic/relationships.jsonl. The entities section below is retained as the authoritative source for intent_rules and intent_defaults until semantic_planning.py is updated to load them from a separate intent_config layer. At that point, this file will be reduced to policy_rules + column_aliases only.",
+    "migrated_to_foundation": ["entity_table_definitions", "entity_keywords", "join_paths_as_relationships"],
+    "still_owned_here": ["intent_rules", "intent_defaults", "policy_rules", "column_aliases"]
+  },
   "policy_rules": {
     "sensitive_intent_patterns": [
       "kredi kart",

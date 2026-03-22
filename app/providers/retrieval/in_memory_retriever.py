@@ -39,6 +39,7 @@ from app.core.logging import get_logger
 from app.utils.turkish import casefold_tr
 
 if TYPE_CHECKING:
+    from app.semantic.registry import SemanticFoundationRegistry
     from app.services.query_understanding import QueryUnderstanding
 
 logger = get_logger(__name__)
@@ -60,7 +61,10 @@ _STOP_TOKENS: frozenset[str] = frozenset({
     "olan", "daki", "deki", "olan", "giren", "cikan",
 })
 
-# Module → table-name patterns for entity-aware scoring
+# Module → table-name patterns for entity-aware scoring.
+# DEMOTED to weak fallback: only used when no entity seeds are found via the
+# SemanticFoundationRegistry.  New modules (AP, AR, GL, INV) are handled
+# entirely by the registry; this dict covers only the legacy HR/PO patterns.
 _MODULE_TABLE_PATTERNS: dict[str, list[str]] = {
     "HR": ["xxbt_pdks", "per_", "employee", "person", "hr_"],
     "PO": ["po_", "mtl_system_items", "purchase"],
@@ -87,10 +91,24 @@ def _table_module(table: TableMetadata) -> str | None:
 
 
 class InMemoryRetriever(SchemaRetriever):
-    """Keyword-based retriever backed by a ``CatalogProvider``."""
+    """Keyword-based retriever backed by a ``CatalogProvider``.
 
-    def __init__(self, catalog_provider: CatalogProvider) -> None:
+    When a ``SemanticFoundationRegistry`` is injected and the incoming
+    ``QueryUnderstanding`` has non-empty ``resolved_entities``, the retriever
+    uses *entity-first seeding*: candidate tables are pre-seeded from the
+    entity’s ``default_tables`` and then expanded via approved relationship
+    edges.  The classic keyword score is used only for ranking within the
+    candidate set and as a fallback when no entity seeds exist.
+    """
+
+    def __init__(
+        self,
+        catalog_provider: CatalogProvider,
+        *,
+        semantic_registry: "SemanticFoundationRegistry | None" = None,
+    ) -> None:
         self._provider = catalog_provider
+        self._semantic_registry = semantic_registry
 
     async def retrieve(
         self,
@@ -101,24 +119,69 @@ class InMemoryRetriever(SchemaRetriever):
     ) -> CatalogSnapshot:
         snapshot = await self._provider.get_snapshot()
 
-        # Detect modules from query understanding
+        # ------------------------------------------------------------------
+        # Entity-first seeding (Phase 4)
+        # ------------------------------------------------------------------
+        # When resolved_entities is non-empty and a registry is available,
+        # pre-seed candidate tables from entity.default_tables and expand
+        # only via approved relationship edges.  The keyword scorer is then
+        # applied only within the candidate set.
+        entity_seeded_names: set[str] = set()
+        reg = self._semantic_registry
+        if (
+            reg is None
+            and query_understanding is not None
+            and getattr(query_understanding, "resolved_entities", [])
+        ):
+            try:
+                from app.semantic.registry import get_registry as _get_registry
+                reg = _get_registry()
+            except Exception:  # pragma: no cover
+                reg = None
+
+        resolved_entities = getattr(query_understanding, "resolved_entities", []) if query_understanding else []
+
+        if reg is not None and resolved_entities:
+            for entity_id in resolved_entities:
+                entity = reg.get_entity(entity_id)
+                if entity is None:
+                    continue
+                for tbl_name in entity.default_tables:
+                    entity_seeded_names.add(tbl_name.upper())
+                # Graph expansion: approved edges only
+                for edge in reg.get_relationships_for_entity(entity_id, approved_only=True):
+                    entity_seeded_names.add(edge.target_table.upper())
+                    entity_seeded_names.add(edge.source_table.upper())
+
+        all_table_map = {t.name.upper(): t for t in snapshot.tables}
+
+        # ------------------------------------------------------------------
+        # Scoring
+        # ------------------------------------------------------------------
         qu_modules: set[str] = set()
         if query_understanding is not None:
             qu_modules = set(query_understanding.inferred_modules)
 
-        # Score every table
         scored: list[tuple[int, TableMetadata]] = []
         for table in snapshot.tables:
             raw_score = self._score(table, user_query)
 
-            # Module-aware boost / suppress
-            tbl_module = _table_module(table)
-            if qu_modules and tbl_module:
-                if tbl_module in qu_modules:
-                    raw_score = int(raw_score * 1.5) + 5  # boost matching module
-                elif not (query_understanding and query_understanding.multi_entity_flag):
-                    # Suppress tables from unrelated modules (unless cross-domain)
-                    raw_score = max(0, raw_score // 3)
+            if entity_seeded_names:
+                # Entity-seed boost: tables in the seeded set get a strong boost
+                if table.name.upper() in entity_seeded_names:
+                    raw_score = int(raw_score * 1.5) + 10
+                else:
+                    # Suppress non-seeded tables (they survive only if they score
+                    # very highly on their own keyword match)
+                    raw_score = raw_score // 4
+            else:
+                # Fallback: module-pattern-based boost/suppress (legacy HR/PO)
+                tbl_module = _table_module(table)
+                if qu_modules and tbl_module:
+                    if tbl_module in qu_modules:
+                        raw_score = int(raw_score * 1.5) + 5
+                    elif not (query_understanding and query_understanding.multi_entity_flag):
+                        raw_score = max(0, raw_score // 3)
 
             scored.append((raw_score, table))
 
