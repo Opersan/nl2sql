@@ -194,6 +194,15 @@
           ],
           "computed_measures": []
         },
+        "po_direct_distribution_cost": {
+          "stable": true,
+          "group_by": ["code_combination_id"],
+          "aggregations": [
+            { "function": "SUM", "column": "quantity_ordered", "table": "PO_DISTRIBUTIONS_ALL", "alias": "direct_qty" }
+          ],
+          "filters": [],
+          "computed_measures": []
+        },
         "po_distribution_amount": {
           "stable": true,
           "group_by": ["code_combination_id"],

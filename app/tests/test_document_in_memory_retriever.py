@@ -28,11 +28,11 @@ class TestTokenize:
     def test_punctuation_removed(self) -> None:
         tokens = _tokenize("employee'ler? (aktif)")
         # Apostrophe, question mark, parens stripped; words split
-        assert tokens == ["XXBT_PDKS_PER_DETAILS_V", "ler", "aktif"]
+        assert tokens == ["employee", "ler", "aktif"]
 
     def test_punctuation_handling_detailed(self) -> None:
         tokens = _tokenize("tablo: employee, department!")
-        assert tokens == ["tablo", "XXBT_PDKS_PER_DETAILS_V", "department"]
+        assert tokens == ["tablo", "employee", "department"]
 
     def test_turkish_aware_lowercase(self) -> None:
         """Turkish İ → i (not ı) casefold."""
@@ -51,7 +51,7 @@ class TestTokenize:
 
     def test_mixed_case_normalized(self) -> None:
         tokens = _tokenize("Employee DEPARTMENT")
-        assert tokens == ["XXBT_PDKS_PER_DETAILS_V", "department"]
+        assert tokens == ["employee", "department"]
 
     def test_numbers_preserved(self) -> None:
         tokens = _tokenize("tablo123 test456")
@@ -359,7 +359,7 @@ class TestEdgeCases:
 
 class TestContainsToken:
     def test_exact_match(self) -> None:
-        assert _contains_token("XXBT_PDKS_PER_DETAILS_V", "employee tablosu") is True
+        assert _contains_token("employee", "employee tablosu") is True
 
     def test_substring_of_field(self) -> None:
         # "employ" is a substring of "XXBT_PDKS_PER_DETAILS_V" → True
@@ -369,7 +369,7 @@ class TestContainsToken:
         assert _contains_token("salary", "employee tablosu") is False
 
     def test_empty_text(self) -> None:
-        assert _contains_token("XXBT_PDKS_PER_DETAILS_V", "") is False
+        assert _contains_token("employee", "") is False
 
 
 class TestContainsSubstring:

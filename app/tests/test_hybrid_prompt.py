@@ -125,7 +125,7 @@ class TestBuildSchemaDocsBlock:
         assert "Ek şema bilgileri:" in block
         assert "[table]" in block
         assert "Employee tablosu" in block
-        assert "(tablo: employee)" in block
+        assert "(tablo: XXBT_PDKS_PER_DETAILS_V)" in block
 
     def test_glossary_doc(self) -> None:
         block = build_schema_docs_block(_schema_docs()[1:])

@@ -223,7 +223,7 @@ class TestCSVLoader:
         bundle = await loader.load(tmp_path)
 
         assert len(bundle.tables) == 1
-        assert bundle.tables[0].name == "XXBT_PDKS_PER_DETAILS_V"
+        assert bundle.tables[0].name == "employee"
         assert bundle.tables[0].aliases == ["emp", "personnel"]
         assert len(bundle.tables[0].columns) == 2
         assert bundle.tables[0].columns[0].nullable is False
@@ -389,7 +389,7 @@ class TestNormalizedCSVLoader:
         bundle = await loader.load(tmp_path)
 
         assert len(bundle.tables) == 2
-        emp = next(t for t in bundle.tables if t.name == "XXBT_PDKS_PER_DETAILS_V")
+        emp = next(t for t in bundle.tables if t.name == "employee")
         assert emp.object_type == "TABLE"
         assert emp.module == "HR"
         assert emp.synonyms == ["calisan"]
@@ -422,7 +422,7 @@ class TestNormalizedCSVLoader:
 
         assert len(bundle.relationships) == 1
         rel = bundle.relationships[0]
-        assert rel.from_table == "XXBT_PDKS_PER_DETAILS_V"
+        assert rel.from_table == "employee"
         assert rel.constraint_name == "EMP_DEPT_FK"
         assert rel.description == "Departman FK"
 
@@ -470,7 +470,7 @@ class TestNormalizedCSVLoader:
         bundle = await loader.load(tmp_path)
 
         assert len(bundle.tables) == 1
-        assert bundle.tables[0].name == "XXBT_PDKS_PER_DETAILS_V"
+        assert bundle.tables[0].name == "employee"
         assert len(bundle.tables[0].columns) == 1
 
 

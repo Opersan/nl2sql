@@ -193,6 +193,7 @@ class QueryPlanRepairEngine:
         result = RepairResult()
 
         plan = self._normalize_syntax(plan, result)
+        plan = self._resolve_filter_aliases(plan, result)
         plan = self._enforce_semantics(plan, result)
         plan = self._apply_clarification_policy(plan, result)
 
@@ -203,6 +204,35 @@ class QueryPlanRepairEngine:
                 ", ".join(a.repair_type for a in result.actions),
             )
         return plan, result
+
+    def _resolve_filter_aliases(self, plan: QueryPlan, result: RepairResult) -> QueryPlan:
+        """Pass J – remap aliased filter column names to canonical names via registry."""
+        registry = _load_registry()
+        global_aliases: dict[str, str] = getattr(registry.column_aliases, "global_aliases", {})
+        if not global_aliases:
+            return plan
+
+        new_filters = list(plan.filters)
+        changed = False
+        for i, spec in enumerate(plan.filters):
+            col_key = spec.column.lower()
+            canonical = global_aliases.get(col_key)
+            if canonical and canonical != spec.column:
+                result.record(
+                    RepairAction(
+                        repair_type="J_filter_column_repair",
+                        description=f"Resolved filter column alias: {spec.column} → {canonical}",
+                        field_path=f"filters[{i}].column",
+                        original_value=spec.column,
+                        repaired_value=canonical,
+                    )
+                )
+                new_filters[i] = spec.model_copy(update={"column": canonical})
+                changed = True
+
+        if changed:
+            return plan.model_copy(update={"filters": new_filters})
+        return plan
 
     def _normalize_syntax(self, plan: QueryPlan, result: RepairResult) -> QueryPlan:
         mutations: dict[str, Any] = {}
@@ -412,6 +442,17 @@ class QueryPlanRepairEngine:
                             repaired_value=[(j.left_table, j.right_table) for j in joins],
                         )
                     )
+                    # Pass I: separately flag when joins were entirely absent before repair
+                    if not list(plan.joins):
+                        result.record(
+                            RepairAction(
+                                repair_type="I_missing_join_path_fix",
+                                description="Injected missing join path required by semantic intent",
+                                field_path="joins",
+                                original_value=[],
+                                repaired_value=[(j.left_table, j.right_table) for j in joins],
+                            )
+                        )
 
             defaults = entity.intent_defaults.get(semantic_intent)
             if defaults is not None:
@@ -506,6 +547,33 @@ class QueryPlanRepairEngine:
                             new_aggs.append(a)
                     if a_changed:
                         updates["aggregations"] = new_aggs
+
+            # Pass H: anchor plan.table to the intent's sole aggregation target table
+            # when the intent has NO join path (direct single-table aggregation) and
+            # all aggregations consistently reference one non-root child table.
+            current_table = updates.get("table", plan.table)
+            defaults_h = entity.intent_defaults.get(semantic_intent) if semantic_intent else None
+            if defaults_h and defaults_h.aggregations and current_table and not join_path_id:
+                agg_tables = {a.table for a in defaults_h.aggregations if a.table}
+                if len(agg_tables) == 1:
+                    agg_anchor = next(iter(agg_tables))
+                    if (
+                        agg_anchor.upper() != entity.root_table.upper()
+                        and current_table.upper() == entity.root_table.upper()
+                    ):
+                        updates["table"] = agg_anchor
+                        result.record(
+                            RepairAction(
+                                repair_type="H_wrong_root_table_fix",
+                                description=(
+                                    f"Fixed root table for intent '{semantic_intent}': "
+                                    f"{current_table} → {agg_anchor}"
+                                ),
+                                field_path="table",
+                                original_value=current_table,
+                                repaired_value=agg_anchor,
+                            )
+                        )
 
         if updates:
             return plan.model_copy(update=updates)

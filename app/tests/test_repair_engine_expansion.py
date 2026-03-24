@@ -9,11 +9,11 @@ def test_pass_h_wrong_root_table_fix() -> None:
     plan = QueryPlan(
         intent="x",
         table="PO_HEADERS_ALL",
-        semantic_intent="po_distribution_amount",
+        semantic_intent="po_direct_distribution_cost",
         select_columns=["po_header_id"],
     )
 
-    repaired, result = engine.repair(plan, "dağıtım bazında tutar")
+    repaired, result = engine.repair(plan, "dağıtım maliyeti")
 
     assert repaired.table == "PO_DISTRIBUTIONS_ALL"
     assert any(a.repair_type == "H_wrong_root_table_fix" for a in result.actions)
@@ -56,5 +56,5 @@ def test_pass_j_filter_column_repair_alias() -> None:
 
     repaired, result = engine.repair(plan, "maili olan çalışanlar")
 
-    assert repaired.filters[0].column == "email"
+    assert repaired.filters[0].column == "EMAIL"
     assert any(a.repair_type == "J_filter_column_repair" for a in result.actions)

@@ -43,9 +43,11 @@ def test_registry_semantic_join_path_enforced(engine: QueryPlanRepairEngine) -> 
 
 
 def test_filter_column_not_fuzzy_repaired(engine: QueryPlanRepairEngine) -> None:
+    # "MAIL" is an exact entry in global_aliases → remapped to "EMAIL" by Pass J.
+    # This test was originally written before Pass J; exact alias lookup is NOT fuzzy.
     p = _plan(table="XXBT_PDKS_PER_DETAILS_V", filters=[FilterSpec(column="MAIL", op=FilterOp.IS_NOT_NULL)])
     repaired, _ = engine.repair(p, "maili olan çalışanlar")
-    assert repaired.filters[0].column == "MAIL"
+    assert repaired.filters[0].column == "EMAIL"
 
 
 def test_no_message_based_cross_domain_reroute(engine: QueryPlanRepairEngine) -> None:

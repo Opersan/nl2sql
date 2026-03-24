@@ -1,4 +1,4 @@
-{"raw_term": "çalışan", "language": "tr", "normalized": "calisan", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "çalışan", "language": "tr", "normalized": "calisan", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.95, "domain": "HR", "source": "curated"}
 {"raw_term": "çalışanlar", "language": "tr", "normalized": "calisanlar", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.95, "domain": "HR", "source": "curated"}
 {"raw_term": "personel", "language": "tr", "normalized": "personel", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.95, "domain": "HR", "source": "curated"}
 {"raw_term": "eleman", "language": "tr", "normalized": "eleman", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.85, "domain": "HR", "source": "curated"}

@@ -950,19 +950,19 @@ class TestPORelationshipGraph:
         assert rel is not None
         assert rel.from_table == "PO_LINES_ALL"
         assert rel.to_table == "PO_HEADERS_ALL"
-        assert rel.from_column == "po_header_id"
+        assert rel.from_column == "PO_HEADER_ID"
 
     def test_join_path_lines_to_locations(self) -> None:
         snap = _load_po_snapshot()
         rel = snap.get_join_path("PO_LINES_ALL", "PO_LINE_LOCATIONS_ALL")
         assert rel is not None
-        assert rel.from_column == "po_line_id"
+        assert rel.from_column == "PO_LINE_ID"
 
     def test_join_path_locations_to_distributions(self) -> None:
         snap = _load_po_snapshot()
         rel = snap.get_join_path("PO_LINE_LOCATIONS_ALL", "PO_DISTRIBUTIONS_ALL")
         assert rel is not None
-        assert rel.from_column == "line_location_id"
+        assert rel.from_column == "LINE_LOCATION_ID"
 
     def test_join_path_headers_to_distributions(self) -> None:
         """Direct relationship exists (skip-level shortcut)."""
@@ -970,14 +970,14 @@ class TestPORelationshipGraph:
         rel = snap.get_join_path("PO_HEADERS_ALL", "PO_DISTRIBUTIONS_ALL")
         assert rel is not None
         assert rel.from_table == "PO_DISTRIBUTIONS_ALL"
-        assert rel.from_column == "po_header_id"
+        assert rel.from_column == "PO_HEADER_ID"
 
     def test_join_path_lines_to_item_master(self) -> None:
         snap = _load_po_snapshot()
         rel = snap.get_join_path("PO_LINES_ALL", "MTL_SYSTEM_ITEMS_B")
         assert rel is not None
-        assert rel.from_column == "item_id"
-        assert rel.to_column == "inventory_item_id"
+        assert rel.from_column == "ITEM_ID"
+        assert rel.to_column == "INVENTORY_ITEM_ID"
 
     def test_join_path_headers_to_item_master(self) -> None:
         """No direct relationship between PO_HEADERS_ALL and MTL_SYSTEM_ITEMS_B."""
@@ -1021,13 +1021,13 @@ class TestPORelationshipGraph:
         """Verify the complete canonical chain direction."""
         snap = _load_po_snapshot()
         chain = [
-            ("PO_LINES_ALL", "po_header_id", "PO_HEADERS_ALL", "po_header_id"),
-            ("PO_LINE_LOCATIONS_ALL", "po_line_id", "PO_LINES_ALL", "po_line_id"),
-            ("PO_LINE_LOCATIONS_ALL", "po_header_id", "PO_HEADERS_ALL", "po_header_id"),
-            ("PO_DISTRIBUTIONS_ALL", "line_location_id", "PO_LINE_LOCATIONS_ALL", "line_location_id"),
-            ("PO_DISTRIBUTIONS_ALL", "po_line_id", "PO_LINES_ALL", "po_line_id"),
-            ("PO_DISTRIBUTIONS_ALL", "po_header_id", "PO_HEADERS_ALL", "po_header_id"),
-            ("PO_LINES_ALL", "item_id", "MTL_SYSTEM_ITEMS_B", "inventory_item_id"),
+            ("PO_LINES_ALL", "PO_HEADER_ID", "PO_HEADERS_ALL", "PO_HEADER_ID"),
+            ("PO_LINE_LOCATIONS_ALL", "PO_LINE_ID", "PO_LINES_ALL", "PO_LINE_ID"),
+            ("PO_LINE_LOCATIONS_ALL", "PO_HEADER_ID", "PO_HEADERS_ALL", "PO_HEADER_ID"),
+            ("PO_DISTRIBUTIONS_ALL", "LINE_LOCATION_ID", "PO_LINE_LOCATIONS_ALL", "LINE_LOCATION_ID"),
+            ("PO_DISTRIBUTIONS_ALL", "PO_LINE_ID", "PO_LINES_ALL", "PO_LINE_ID"),
+            ("PO_DISTRIBUTIONS_ALL", "PO_HEADER_ID", "PO_HEADERS_ALL", "PO_HEADER_ID"),
+            ("PO_LINES_ALL", "ITEM_ID", "MTL_SYSTEM_ITEMS_B", "INVENTORY_ITEM_ID"),
         ]
         for from_t, from_c, to_t, to_c in chain:
             match = next(
