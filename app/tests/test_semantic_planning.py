@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from app.domain.catalog_models import CatalogSnapshot, ColumnMetadata, ColumnType, TableMetadata
-from app.domain.query_plan import AggregateFn, AggregationSpec, QueryPlan
+from app.domain.query_plan import AggregateFn, AggregationSpec, FilterOp, FilterSpec, QueryPlan
 from app.services.semantic_planning import apply_semantic_normalization
+from app.services.query_understanding import QueryUnderstanding
 
 
 def _snapshot() -> CatalogSnapshot:
@@ -149,3 +152,87 @@ def test_distribution_intent_recovers_from_clarification() -> None:
     assert out.join_path_id == "po.header_lines_shipments_distributions"
     assert out.group_by == ["code_combination_id"]
     assert len(out.aggregations) == 2
+
+
+def test_wrong_entity_correction_prefers_query_understanding_and_retrieval_root() -> None:
+    plan = QueryPlan(
+        intent="Açık satınalma siparişlerini listele",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        select_columns=["SICIL_NO"],
+    )
+
+    out = apply_semantic_normalization(
+        plan,
+        "Açık satınalma siparişlerini listele",
+        _snapshot(),
+        query_understanding=QueryUnderstanding(
+            original_question="Açık satınalma siparişlerini listele",
+            normalized_question="acik satinalma siparislerini listele",
+            inferred_modules=["PO"],
+            resolved_entities=["PO_PURCHASING"],
+            requested_output_type="list",
+            entity_confidence="high",
+        ),
+        retrieval_diagnostics=SimpleNamespace(
+            root_table_name="PO_HEADERS_ALL",
+            dominant_domain_match=True,
+        ),
+    )
+
+    assert out.table == "PO_HEADERS_ALL"
+    assert out.root_entity == "PO_PURCHASING"
+    assert apply_semantic_normalization.last_diagnostics["override_applied"] is True
+    assert "query_understanding_alignment" in apply_semantic_normalization.last_diagnostics["decision_reasons"]
+    assert "retrieval_domain_alignment" in apply_semantic_normalization.last_diagnostics["decision_reasons"]
+
+
+def test_filter_ownership_preserved_when_root_table_changes() -> None:
+    plan = QueryPlan(
+        intent="Teslim bekleyen satırları getir",
+        table="PO_LINE_LOCATIONS_ALL",
+        filters=[FilterSpec(column="line_location_id", op=FilterOp.GT, value=1000)],
+    )
+
+    out = apply_semantic_normalization(
+        plan,
+        "Teslim bekleyen satırları getir",
+        _snapshot(),
+        query_understanding=QueryUnderstanding(
+            original_question="Teslim bekleyen satırları getir",
+            normalized_question="teslim bekleyen satirlari getir",
+            inferred_modules=["PO"],
+            resolved_entities=["PO_PURCHASING"],
+            requested_output_type="list",
+            entity_confidence="high",
+        ),
+        retrieval_diagnostics=SimpleNamespace(root_table_name="PO_HEADERS_ALL"),
+    )
+
+    assert out.table == "PO_HEADERS_ALL"
+    assert any(filter_spec.table == "PO_LINE_LOCATIONS_ALL" for filter_spec in out.filters)
+    assert apply_semantic_normalization.last_diagnostics["protected_filter_preserved"] is True
+
+
+def test_override_suppressed_for_low_confidence_child_table_plan() -> None:
+    plan = QueryPlan(
+        intent="sipariş kaydı",
+        table="PO_LINES_ALL",
+        select_columns=["po_line_id"],
+    )
+
+    out = apply_semantic_normalization(
+        plan,
+        "sipariş kaydı",
+        _snapshot(),
+        query_understanding=QueryUnderstanding(
+            original_question="sipariş kaydı",
+            normalized_question="siparis kaydi",
+            inferred_modules=["PO"],
+            requested_output_type="list",
+            entity_confidence="medium",
+        ),
+    )
+
+    assert out.table == "PO_LINES_ALL"
+    assert apply_semantic_normalization.last_diagnostics["override_applied"] is False
+    assert "override_suppressed_due_to_low_confidence" in apply_semantic_normalization.last_diagnostics["decision_reasons"]

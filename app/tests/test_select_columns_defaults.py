@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.exceptions import CompilationError
-from app.domain.catalog_models import ColumnMetadata, ColumnType, TableMetadata
+from app.domain.catalog_models import CatalogSnapshot, ColumnMetadata, ColumnType, TableMetadata
 from app.domain.query_plan import (
     AggregateFn,
     AggregationSpec,
@@ -186,6 +186,40 @@ class TestApplySelectColumnsRule:
         assert result.needs_clarification is False
         assert result.clarification_message is None
         assert result.select_columns == ["po_header_id"]
+
+    def test_stable_defaults_suppressed_when_list_request_conflicts_with_agg_default(self) -> None:
+        reg = _agg_registry()
+        plan = QueryPlan(intent="po detay listesi", table="PO_HEADERS_ALL", select_columns=[])
+        result = apply_semantic_normalization(
+            plan,
+            "po detay listesi",
+            CatalogSnapshot(),
+            registry=reg,
+            query_understanding=type("QU", (), {"requested_output_type": "list", "extracted_filters": []})(),
+        )
+        assert result.aggregations == []
+        assert result.select_columns == []
+
+
+class TestSemanticRescueSafety:
+    def test_stable_rescue_requires_more_than_low_confidence(self) -> None:
+        reg = _listing_registry("po_open_orders", ["po_header_id"])
+        plan = QueryPlan(
+            intent="po",
+            table="PO_LINES_ALL",
+            needs_clarification=True,
+            clarification_message="Hangi kayıt?",
+            select_columns=[],
+        )
+        result = apply_semantic_normalization(
+            plan,
+            "po",
+            CatalogSnapshot(),
+            registry=reg,
+            query_understanding=type("QU", (), {"requested_output_type": "list", "extracted_filters": []})(),
+        )
+        assert result.needs_clarification is True
+        assert result.select_columns == []
 
 
 # ---------------------------------------------------------------------------

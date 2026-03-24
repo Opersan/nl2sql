@@ -22,6 +22,7 @@ in the query token — handles Turkish agglutinative suffixes):
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 from app.providers.documents.models import (
@@ -95,6 +96,23 @@ class InMemoryDocumentRetriever(DocumentRetriever):
 
     def __init__(self, corpus: DocumentCorpus) -> None:
         self._corpus = corpus
+        self._task_state: dict[int, dict[str, object] | None] = {}
+        self._fallback_state: dict[str, object] | None = None
+
+    @property
+    def last_retrieval_diagnostics(self) -> dict[str, object] | None:
+        task = asyncio.current_task()
+        if task is not None and id(task) in self._task_state:
+            return self._task_state[id(task)]
+        return self._fallback_state
+
+    def _set_last_retrieval_diagnostics(self, payload: dict[str, object] | None) -> None:
+        self._fallback_state = payload
+        task = asyncio.current_task()
+        if task is not None:
+            self._task_state[id(task)] = payload
+            if len(self._task_state) > 2048:
+                self._task_state.clear()
 
     # ------------------------------------------------------------------
     # Public API
@@ -126,6 +144,11 @@ class InMemoryDocumentRetriever(DocumentRetriever):
         ]
         scored_examples.sort(key=lambda p: p[0], reverse=True)
         selected_examples = [e for s, e in scored_examples[:top_k_examples] if s > 0]
+
+        self._set_last_retrieval_diagnostics({
+            "schema_doc_scores": {doc.doc_id: score for score, doc in scored_docs},
+            "example_scores": {example.doc_id: score for score, example in scored_examples},
+        })
 
         return DocumentRetrievalResult(
             schema_docs=selected_docs,

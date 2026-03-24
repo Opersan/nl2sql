@@ -35,6 +35,8 @@ from app.domain.query_plan import (
 
 logger = get_logger(__name__)
 
+_PLAN_LIST_FIELD_ALIASES: tuple[str, ...] = ("column", "name", "field", "value")
+
 
 # -----------------------------------------------------------------------
 # FilterOp alias map — LLM may produce any of these instead of the
@@ -185,6 +187,50 @@ def _normalize_date_value(value: object) -> object:
             return resolved
     return value
 
+
+def _coerce_column_token(item: object) -> object:
+    """Coerce known column-token drift into a plain string when safe."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        for key in _PLAN_LIST_FIELD_ALIASES:
+            candidate = item.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return item
+
+
+def _normalize_relative_delta_value(value: object, op: object) -> object:
+    """Resolve known structured relative-date values into ISO dates when safe."""
+    if not isinstance(value, dict):
+        return value
+    if str(value.get("type", "")).strip().lower() != "date_delta":
+        return value
+
+    units = value.get("units")
+    unit = str(value.get("unit", "")).strip().lower()
+    if not isinstance(units, int) or units < 0:
+        return value
+
+    if unit in {"day", "days", "gun", "gün"}:
+        delta = timedelta(days=units)
+    elif unit in {"week", "weeks", "hafta"}:
+        delta = timedelta(weeks=units)
+    elif unit in {"month", "months", "ay"}:
+        delta = timedelta(days=30 * units)
+    elif unit in {"year", "years", "yil", "yıl"}:
+        delta = timedelta(days=365 * units)
+    else:
+        return value
+
+    op_token = op.value if isinstance(op, FilterOp) else str(op)
+    today = date.today()
+    if op_token in {">=", ">"}:
+        return (today - delta).isoformat()
+    if op_token in {"<=", "<"}:
+        return (today + delta).isoformat()
+    return value
+
 # -----------------------------------------------------------------------
 # AggregateFn / SortDirection alias maps
 # -----------------------------------------------------------------------
@@ -288,14 +334,21 @@ def normalize_raw_plan(
         if isinstance(items, list):
             new_items: list[str] = []
             for item in items:
-                if isinstance(item, str):
-                    stripped = item.strip()
-                    if stripped != item:
+                coerced = _coerce_column_token(item)
+                if isinstance(coerced, str):
+                    stripped = coerced.strip()
+                    if stripped != coerced:
                         stats.whitespace_trimmed += 1
                     new_items.append(stripped)
                 else:
-                    new_items.append(item)
+                    new_items.append(coerced)
             out[key] = new_items
+
+    if out.get("clarification_message") and "needs_clarification" not in out:
+        out["needs_clarification"] = True
+
+    if out.get("needs_clarification") is True and not out.get("intent"):
+        out["intent"] = "clarification_required"
 
     # --- 2. Normalise FilterOp in filters ---
     filters = out.get("filters")
@@ -356,6 +409,11 @@ def normalize_raw_plan(
                     val = f.get("value")
                     if isinstance(val, str):
                         norm_val = _normalize_date_value(val)
+                        if norm_val is not val:
+                            f["value"] = norm_val
+                            stats.whitespace_trimmed += 1
+                    elif isinstance(val, dict):
+                        norm_val = _normalize_relative_delta_value(val, f.get("op"))
                         if norm_val is not val:
                             f["value"] = norm_val
                             stats.whitespace_trimmed += 1

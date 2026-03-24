@@ -8,6 +8,7 @@ from app.domain.catalog_models import (
     CatalogSnapshot,
     ColumnMetadata,
     ColumnType,
+    ForeignKeyMetadata,
     TableMetadata,
 )
 from app.providers.catalog.in_memory import InMemoryCatalogProvider
@@ -205,6 +206,113 @@ class TestSchemaRetrievalService:
 
         assert isinstance(snapshot, CatalogSnapshot)
         assert len(snapshot.tables) >= 1
+
+
+class TestRetrievalDiagnostics:
+    @pytest.mark.asyncio
+    async def test_same_domain_bias_suppresses_cross_domain_table(self) -> None:
+        from unittest.mock import AsyncMock
+
+        provider = AsyncMock()
+        provider.get_snapshot = AsyncMock(
+            return_value=CatalogSnapshot(
+                tables=[
+                    TableMetadata(
+                        name="XXBT_PDKS_PER_DETAILS_V",
+                        aliases=["employee"],
+                        columns=[ColumnMetadata(name="REG_NO", data_type=ColumnType.VARCHAR)],
+                    ),
+                    TableMetadata(
+                        name="PO_HEADERS_ALL",
+                        aliases=["purchase"],
+                        columns=[ColumnMetadata(name="SEGMENT1", data_type=ColumnType.VARCHAR)],
+                    ),
+                ]
+            )
+        )
+        retriever = InMemoryRetriever(provider)
+
+        from app.services.query_understanding import QueryUnderstanding
+
+        snapshot = await retriever.retrieve(
+            "employee purchase listesi",
+            top_k=2,
+            query_understanding=QueryUnderstanding(
+                original_question="employee purchase listesi",
+                normalized_question="employee purchase listesi",
+                inferred_modules=["HR"],
+            ),
+        )
+
+        assert [table.name for table in snapshot.tables] == ["XXBT_PDKS_PER_DETAILS_V"]
+        diagnostics = retriever.last_retrieval_diagnostics
+        assert diagnostics is not None
+        assert diagnostics["dominant_domain_match"] is True
+        assert diagnostics["noisy_context_count"] == 0
+        assert diagnostics["kept_candidates_reason"]["XXBT_PDKS_PER_DETAILS_V"] == "same_domain_boost"
+        assert "PO_HEADERS_ALL:cross_domain_suppressed" in diagnostics["dropped_candidates"]
+
+
+class TestFocusPruning:
+    def test_focus_pruning_preserves_explicit_secondary_columns_and_caps_noise(self) -> None:
+        from app.services.planning_context_service import PlanningContextAssemblyService
+        from app.services.query_understanding import QueryUnderstanding
+
+        snapshot = CatalogSnapshot(
+            tables=[
+                TableMetadata(
+                    name="XXBT_PDKS_PER_DETAILS_V",
+                    columns=[
+                        ColumnMetadata(name="PERSON_ID", data_type=ColumnType.NUMBER),
+                        ColumnMetadata(name="AD", data_type=ColumnType.VARCHAR),
+                    ],
+                    primary_key=["PERSON_ID"],
+                ),
+                TableMetadata(
+                    name="PO_HEADERS_ALL",
+                    columns=[
+                        ColumnMetadata(name="PO_HEADER_ID", data_type=ColumnType.NUMBER),
+                        ColumnMetadata(name="PERSON_ID", data_type=ColumnType.NUMBER),
+                        ColumnMetadata(name="STATUS", data_type=ColumnType.VARCHAR),
+                        ColumnMetadata(name="SECRET_NOTE", data_type=ColumnType.VARCHAR, restricted=True),
+                        ColumnMetadata(name="COL1", data_type=ColumnType.VARCHAR),
+                        ColumnMetadata(name="COL2", data_type=ColumnType.VARCHAR),
+                        ColumnMetadata(name="COL3", data_type=ColumnType.VARCHAR),
+                        ColumnMetadata(name="COL4", data_type=ColumnType.VARCHAR),
+                        ColumnMetadata(name="COL5", data_type=ColumnType.VARCHAR),
+                        ColumnMetadata(name="COL6", data_type=ColumnType.VARCHAR),
+                    ],
+                    primary_key=["PO_HEADER_ID"],
+                    foreign_keys=[
+                        ForeignKeyMetadata(
+                            column="PERSON_ID",
+                            referenced_table="XXBT_PDKS_PER_DETAILS_V",
+                            referenced_column="PERSON_ID",
+                        )
+                    ],
+                ),
+            ]
+        )
+
+        pruned = PlanningContextAssemblyService.apply_focus_pruning(
+            {
+                "XXBT_PDKS_PER_DETAILS_V": ["AD"],
+                "PO_HEADERS_ALL": ["STATUS", "SECRET_NOTE", "COL1", "COL2", "COL3", "COL4", "COL5", "COL6"],
+            },
+            snapshot,
+            QueryUnderstanding(
+                original_question="çalışan statüsü",
+                normalized_question="calisan statusu",
+            ),
+            root_table_name="XXBT_PDKS_PER_DETAILS_V",
+        )
+
+        assert pruned["XXBT_PDKS_PER_DETAILS_V"] == ["AD"]
+        assert "STATUS" in pruned["PO_HEADERS_ALL"]
+        assert "PO_HEADER_ID" in pruned["PO_HEADERS_ALL"]
+        assert "PERSON_ID" in pruned["PO_HEADERS_ALL"]
+        assert "SECRET_NOTE" not in pruned["PO_HEADERS_ALL"]
+        assert len(pruned["PO_HEADERS_ALL"]) <= 8
 
     @pytest.mark.asyncio
     async def test_retrieve_with_custom_top_k(

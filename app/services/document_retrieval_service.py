@@ -10,6 +10,7 @@ the hybrid architecture.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from app.core.config import settings
@@ -35,6 +36,23 @@ class DocumentRetrievalService:
 
     def __init__(self, retriever: DocumentRetriever) -> None:
         self._retriever = retriever
+        self._task_state: dict[int, dict[str, object] | None] = {}
+        self._fallback_state: dict[str, object] | None = None
+
+    @property
+    def last_retrieval_diagnostics(self) -> dict[str, object] | None:
+        task = asyncio.current_task()
+        if task is not None and id(task) in self._task_state:
+            return self._task_state[id(task)]
+        return self._fallback_state
+
+    def _set_last_retrieval_diagnostics(self, payload: dict[str, object] | None) -> None:
+        self._fallback_state = payload
+        task = asyncio.current_task()
+        if task is not None:
+            self._task_state[id(task)] = payload
+            if len(self._task_state) > 2048:
+                self._task_state.clear()
 
     async def retrieve_context(
         self,
@@ -43,6 +61,7 @@ class DocumentRetrievalService:
         top_k_docs: int | None = None,
         top_k_examples: int | None = None,
         query_understanding: "QueryUnderstanding | None" = None,
+        retrieved_tables: list[str] | None = None,
     ) -> DocumentRetrievalResult:
         """Return document context relevant to *user_query*.
 
@@ -84,7 +103,16 @@ class DocumentRetrievalService:
         if qu_modules and not (query_understanding and query_understanding.multi_entity_flag):
             result = self._filter_by_module(result, qu_modules)
 
-        result = self._semantic_rerank(user_query, result, k_docs=k_docs)
+        rerank_result, diagnostics = self._rerank_documents(
+            user_query,
+            result,
+            k_docs=k_docs,
+            k_examples=k_examples,
+            query_understanding=query_understanding,
+            retrieved_tables=retrieved_tables or [],
+        )
+        result = rerank_result
+        self._set_last_retrieval_diagnostics(diagnostics)
 
         logger.info(
             "Retrieved %d doc(s) + %d example(s) for query: %.60s",
@@ -224,3 +252,122 @@ class DocumentRetrievalService:
             schema_docs=ordered_docs,
             examples=ordered_examples,
         )
+
+    @staticmethod
+    def _infer_item_module(table_name: str | None, modules: set[str]) -> str | None:
+        if table_name:
+            tn = casefold_tr(table_name)
+            for module, patterns in _MODULE_TABLE_PATTERNS.items():
+                if any(pattern in tn for pattern in patterns):
+                    return module
+        for module in modules:
+            return module
+        return None
+
+    @classmethod
+    def _rerank_documents(
+        cls,
+        user_query: str,
+        result: DocumentRetrievalResult,
+        *,
+        k_docs: int,
+        k_examples: int,
+        query_understanding: "QueryUnderstanding | None",
+        retrieved_tables: list[str],
+    ) -> tuple[DocumentRetrievalResult, dict[str, object]]:
+        base_diag = getattr(result, "diagnostics", None)
+        _ = base_diag
+        folded = casefold_tr(user_query)
+        primary_module = query_understanding.primary_module() if query_understanding is not None else None
+        retrieved_table_set = {table.upper() for table in retrieved_tables}
+        root_table_name = retrieved_tables[0].upper() if retrieved_tables else None
+
+        kept_candidates_reason: dict[str, str] = {}
+        dropped_candidates: list[str] = []
+        noisy_context_count = 0
+
+        def _doc_priority(doc: SchemaDocument) -> tuple[int, int, int, int]:
+            nonlocal noisy_context_count
+            module = doc.module or cls._infer_item_module(doc.table_name, {casefold_tr(tag).upper() for tag in doc.tags})
+            table_name = (doc.table_name or "").upper()
+            same_table = int(bool(table_name and table_name in retrieved_table_set))
+            root_match = int(bool(root_table_name and table_name == root_table_name))
+            module_match = int(bool(primary_module and module == primary_module))
+            cross_domain = int(bool(primary_module and module and module != primary_module))
+            doc_type_rank = 1 if doc.doc_type.value in {"table", "column", "relationship"} else 0
+            if cross_domain and not same_table:
+                dropped_candidates.append(f"{doc.doc_id}:cross_domain_doc")
+                return (-1, -1, -1, -1)
+            reason_bits = []
+            if root_match:
+                reason_bits.append("root_table_doc")
+            if same_table:
+                reason_bits.append("retrieved_table_match")
+            if module_match:
+                reason_bits.append("same_domain_doc")
+            kept_candidates_reason[doc.doc_id] = ",".join(reason_bits) or "keyword_doc"
+            if cross_domain:
+                noisy_context_count += 1
+            return (root_match, same_table, module_match, doc_type_rank - cross_domain)
+
+        def _example_priority(example: ExampleDocument) -> tuple[int, int, int, int]:
+            nonlocal noisy_context_count
+            table_set = {table.upper() for table in example.tables}
+            example_modules = {
+                inferred
+                for table in example.tables
+                for inferred in [cls._infer_item_module(table, set())]
+                if inferred is not None
+            }
+            root_match = int(bool(root_table_name and root_table_name in table_set))
+            table_overlap = len(table_set & retrieved_table_set)
+            module_match = int(bool(primary_module and primary_module in example_modules))
+            cross_domain = int(bool(primary_module and example_modules and primary_module not in example_modules and not table_overlap))
+            canonical_shape = int(any(tag in {"join", "multi_table", "aggregation"} for tag in map(casefold_tr, example.tags)))
+            if cross_domain:
+                dropped_candidates.append(f"{example.doc_id}:cross_domain_example")
+                return (-1, -1, -1, -1)
+            reason_bits = []
+            if root_match:
+                reason_bits.append("root_table_example")
+            if table_overlap:
+                reason_bits.append("retrieved_table_overlap")
+            if module_match:
+                reason_bits.append("same_domain_example")
+            if canonical_shape:
+                reason_bits.append("canonical_shape")
+            kept_candidates_reason[example.doc_id] = ",".join(reason_bits) or "keyword_example"
+            if primary_module and example_modules and primary_module not in example_modules:
+                noisy_context_count += 1
+            return (root_match, table_overlap, module_match, canonical_shape)
+
+        scored_docs: list[tuple[tuple[int, int, int, int], SchemaDocument]] = []
+        for doc in result.schema_docs:
+            priority = _doc_priority(doc)
+            if priority[0] >= 0:
+                scored_docs.append((priority, doc))
+        scored_docs.sort(key=lambda item: item[0], reverse=True)
+
+        scored_examples: list[tuple[tuple[int, int, int, int], ExampleDocument]] = []
+        for example in result.examples:
+            priority = _example_priority(example)
+            if priority[0] >= 0:
+                scored_examples.append((priority, example))
+        scored_examples.sort(key=lambda item: item[0], reverse=True)
+
+        docs = [doc for _, doc in scored_docs]
+        examples = [example for _, example in scored_examples]
+
+        reranked = DocumentRetrievalResult(
+            schema_docs=docs[:k_docs],
+            examples=examples[:k_examples],
+        )
+
+        if primary_module == "PO":
+            reranked = cls._semantic_rerank(user_query, reranked, k_docs=k_docs)
+
+        return reranked, {
+            "noisy_context_count": noisy_context_count,
+            "dropped_candidates": dropped_candidates,
+            "kept_candidates_reason": kept_candidates_reason,
+        }

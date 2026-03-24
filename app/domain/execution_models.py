@@ -89,6 +89,16 @@ class ErrorPhase(str, Enum):
     EXECUTION = "execution"
 
 
+class ExecutionPolicyDecision(BaseModel):
+    """Deterministic pre-execution policy/guard decision."""
+
+    pre_execution_risk_flags: list[str] = Field(default_factory=list)
+    blocking_risk_flags: list[str] = Field(default_factory=list)
+    execution_guard_reason: str | None = None
+    execution_skipped_reason: str | None = None
+    should_execute: bool = True
+
+
 # ---------------------------------------------------------------------------
 # Validation models
 # ---------------------------------------------------------------------------

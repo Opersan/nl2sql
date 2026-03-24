@@ -1,0 +1,255 @@
+"""Conservative validation-aware repair service.
+
+Runs only after an initial validation failure and only attempts a narrow set of
+safe column-level repairs. The goal is to recover plans with obvious alias /
+shape drift without inventing schema.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+from app.domain.catalog_models import TableMetadata
+from app.domain.execution_models import ValidationResult
+from app.domain.query_plan import QueryPlan
+from app.services.catalog_service import CatalogService
+from app.services.query_plan_repair import RepairAction, RepairResult
+from app.services.semantic_planning import _load_registry
+from app.utils.turkish import casefold_tr
+
+
+def _alias_fold(text: str) -> str:
+    return casefold_tr(text).replace("ı", "i")
+
+
+def _compact_key(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", _alias_fold(text))
+
+
+class ValidationRepairService:
+    """Attempt one-shot, validation-driven QueryPlan repairs."""
+
+    def __init__(self, catalog: CatalogService) -> None:
+        self._catalog = catalog
+
+    async def repair(
+        self,
+        plan: QueryPlan,
+        validation: ValidationResult,
+    ) -> tuple[QueryPlan, RepairResult, dict[str, Any]]:
+        trace: dict[str, Any] = {
+            "attempted": False,
+            "repaired": False,
+            "reasons": [],
+            "skipped_reason_codes": [],
+        }
+        result = RepairResult()
+
+        if validation.resolved_table is None:
+            trace["skipped_reason_codes"].append("repair_skipped_low_confidence")
+            return plan, result, trace
+
+        invalid_errors = [issue for issue in validation.errors if issue.code == "invalid_column"]
+        if not invalid_errors or len(invalid_errors) != len(validation.errors):
+            trace["skipped_reason_codes"].append("repair_skipped_low_confidence")
+            return plan, result, trace
+
+        trace["attempted"] = True
+        all_tables: dict[str, TableMetadata] = {validation.resolved_table.name.upper(): validation.resolved_table}
+        all_tables.update({name.upper(): table for name, table in validation.resolved_tables.items()})
+
+        repaired = plan
+        repaired = self._repair_select_columns(repaired, validation.resolved_table, all_tables, result, trace)
+        repaired = self._repair_filters(repaired, validation.resolved_table, all_tables, result, trace)
+        repaired = self._repair_aggregations(repaired, validation.resolved_table, all_tables, result, trace)
+        repaired = self._repair_group_by(repaired, validation.resolved_table, all_tables, result, trace)
+        repaired = self._repair_order_by(repaired, validation.resolved_table, all_tables, result, trace)
+
+        if not result.repair_applied:
+            trace["skipped_reason_codes"].append("repair_skipped_low_confidence")
+        trace["repaired"] = result.repair_applied
+        return repaired, result, trace
+
+    def _registry_alias_maps(self) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+        registry = _load_registry()
+        global_aliases = {
+            _alias_fold(alias): canonical
+            for alias, canonical in registry.column_aliases.global_aliases.items()
+        }
+        table_scoped = {
+            (table_name or "").strip().upper(): {
+                _alias_fold(alias): canonical
+                for alias, canonical in aliases.items()
+            }
+            for table_name, aliases in registry.column_aliases.table_scoped.items()
+        }
+        return global_aliases, table_scoped
+
+    def _candidate_for(
+        self,
+        raw_name: str,
+        *,
+        preferred_table: TableMetadata,
+        all_tables: dict[str, TableMetadata],
+        table_hint: str | None = None,
+    ) -> tuple[str | None, str | None, str | None]:
+        raw = raw_name.strip()
+        folded = _alias_fold(raw)
+        compact = _compact_key(raw)
+        global_aliases, table_scoped_aliases = self._registry_alias_maps()
+
+        def _maps_for(meta: TableMetadata) -> tuple[str | None, str | None]:
+            scoped = table_scoped_aliases.get(meta.name.upper(), {})
+            if folded in scoped:
+                return scoped[folded], "known_synonym_repaired"
+            if folded in global_aliases:
+                return global_aliases[folded], "known_synonym_repaired"
+
+            exact = meta.resolve_column_name(raw)
+            if exact is not None and exact != raw:
+                return exact, "alias_to_canonical"
+
+            compact_matches: set[str] = set()
+            for column in meta.columns:
+                if _compact_key(column.name) == compact:
+                    compact_matches.add(column.name)
+                for alias in column.aliases:
+                    if _compact_key(alias) == compact:
+                        compact_matches.add(column.name)
+            if len(compact_matches) == 1:
+                return next(iter(compact_matches)), "alias_to_canonical"
+            return None, None
+
+        if table_hint:
+            hinted = all_tables.get(table_hint.upper())
+            if hinted is None:
+                return None, None, None
+            column, reason = _maps_for(hinted)
+            if column is None:
+                return None, None, None
+            return column, hinted.name, reason
+
+        column, reason = _maps_for(preferred_table)
+        if column is not None:
+            return column, preferred_table.name, reason
+
+        candidates: list[tuple[str, str, str]] = []
+        for meta in all_tables.values():
+            if meta is preferred_table:
+                continue
+            resolved, match_reason = _maps_for(meta)
+            if resolved is not None and match_reason is not None:
+                candidates.append((meta.name, resolved, match_reason))
+        if len(candidates) == 1:
+            table_name, resolved, reason = candidates[0]
+            return resolved, table_name, reason
+        return None, None, None
+
+    def _repair_select_columns(self, plan: QueryPlan, primary_table: TableMetadata, all_tables: dict[str, TableMetadata], result: RepairResult, trace: dict[str, Any]) -> QueryPlan:
+        updated = list(plan.select_columns)
+        changed = False
+        for index, column in enumerate(plan.select_columns):
+            resolved, _table_name, reason = self._candidate_for(column, preferred_table=primary_table, all_tables=all_tables)
+            if resolved is None or resolved == column:
+                continue
+            updated[index] = resolved
+            changed = True
+            trace["reasons"].append(reason)
+            result.record(RepairAction(repair_type=str(reason), description=f"Repaired select column: {column} -> {resolved}", field_path=f"select_columns[{index}]", original_value=column, repaired_value=resolved))
+        return plan.model_copy(update={"select_columns": updated}) if changed else plan
+
+    def _repair_group_by(self, plan: QueryPlan, primary_table: TableMetadata, all_tables: dict[str, TableMetadata], result: RepairResult, trace: dict[str, Any]) -> QueryPlan:
+        updated = list(plan.group_by)
+        changed = False
+        for index, column in enumerate(plan.group_by):
+            resolved, _table_name, reason = self._candidate_for(column, preferred_table=primary_table, all_tables=all_tables)
+            if resolved is None or resolved == column:
+                continue
+            updated[index] = resolved
+            changed = True
+            trace["reasons"].append(reason)
+            result.record(RepairAction(repair_type=str(reason), description=f"Repaired group_by column: {column} -> {resolved}", field_path=f"group_by[{index}]", original_value=column, repaired_value=resolved))
+        return plan.model_copy(update={"group_by": updated}) if changed else plan
+
+    def _repair_filters(self, plan: QueryPlan, primary_table: TableMetadata, all_tables: dict[str, TableMetadata], result: RepairResult, trace: dict[str, Any]) -> QueryPlan:
+        updated = list(plan.filters)
+        changed = False
+        for index, spec in enumerate(plan.filters):
+            resolved, resolved_table, reason = self._candidate_for(spec.column, preferred_table=primary_table, all_tables=all_tables, table_hint=spec.table)
+            if resolved is None or resolved == spec.column:
+                continue
+            new_table = spec.table
+            if spec.table is None and resolved_table and resolved_table.upper() != primary_table.name.upper():
+                new_table = resolved_table
+            updated[index] = spec.model_copy(update={"column": resolved, "table": new_table})
+            changed = True
+            trace["reasons"].append(reason)
+            result.record(RepairAction(repair_type=str(reason), description=f"Repaired filter column: {spec.column} -> {resolved}", field_path=f"filters[{index}].column", original_value=spec.column, repaired_value=resolved))
+        return plan.model_copy(update={"filters": updated}) if changed else plan
+
+    def _repair_aggregations(self, plan: QueryPlan, primary_table: TableMetadata, all_tables: dict[str, TableMetadata], result: RepairResult, trace: dict[str, Any]) -> QueryPlan:
+        updated = list(plan.aggregations)
+        changed = False
+        for index, spec in enumerate(plan.aggregations):
+            resolved, resolved_table, reason = self._candidate_for(spec.column, preferred_table=primary_table, all_tables=all_tables, table_hint=spec.table)
+            if resolved is None or resolved == spec.column:
+                continue
+            new_table = spec.table
+            if spec.table is None and resolved_table and resolved_table.upper() != primary_table.name.upper():
+                new_table = resolved_table
+            updated[index] = spec.model_copy(update={"column": resolved, "table": new_table})
+            changed = True
+            trace["reasons"].append(reason)
+            result.record(RepairAction(repair_type=str(reason), description=f"Repaired aggregation column: {spec.column} -> {resolved}", field_path=f"aggregations[{index}].column", original_value=spec.column, repaired_value=resolved))
+        return plan.model_copy(update={"aggregations": updated}) if changed else plan
+
+    def _repair_order_by(self, plan: QueryPlan, primary_table: TableMetadata, all_tables: dict[str, TableMetadata], result: RepairResult, trace: dict[str, Any]) -> QueryPlan:
+        updated = []
+        changed = False
+        aggregate_aliases = {_compact_key(agg.effective_alias()): agg.effective_alias() for agg in plan.aggregations}
+        select_aliases = {_compact_key(column): column for column in plan.select_columns}
+
+        for index, spec in enumerate(plan.order_by):
+            alias_match = aggregate_aliases.get(_compact_key(spec.column))
+            if alias_match is not None:
+                if alias_match != spec.column:
+                    changed = True
+                    trace["reasons"].append("invalid_sort_column_mapped")
+                    result.record(RepairAction(repair_type="invalid_sort_column_mapped", description=f"Mapped ORDER BY to aggregate alias: {spec.column} -> {alias_match}", field_path=f"order_by[{index}].column", original_value=spec.column, repaired_value=alias_match))
+                    updated.append(spec.model_copy(update={"column": alias_match}))
+                else:
+                    updated.append(spec)
+                continue
+
+            selected = select_aliases.get(_compact_key(spec.column))
+            if selected is not None:
+                mapped = selected
+                if mapped != spec.column:
+                    changed = True
+                    trace["reasons"].append("invalid_sort_column_mapped")
+                    result.record(RepairAction(repair_type="invalid_sort_column_mapped", description=f"Mapped ORDER BY to selected column: {spec.column} -> {mapped}", field_path=f"order_by[{index}]", original_value=spec.column, repaired_value=mapped))
+                    updated.append(spec.model_copy(update={"column": mapped}))
+                else:
+                    updated.append(spec)
+                continue
+
+            resolved, resolved_table, _reason = self._candidate_for(spec.column, preferred_table=primary_table, all_tables=all_tables, table_hint=spec.table)
+            if resolved is not None:
+                new_table = spec.table
+                if spec.table is None and resolved_table and resolved_table.upper() != primary_table.name.upper():
+                    new_table = resolved_table
+                if resolved != spec.column or new_table != spec.table:
+                    changed = True
+                    trace["reasons"].append("invalid_sort_column_mapped")
+                    result.record(RepairAction(repair_type="invalid_sort_column_mapped", description=f"Mapped ORDER BY column: {spec.column} -> {resolved}", field_path=f"order_by[{index}]", original_value=spec.column, repaired_value=resolved))
+                    updated.append(spec.model_copy(update={"column": resolved, "table": new_table}))
+                else:
+                    updated.append(spec)
+                continue
+
+            changed = True
+            trace["reasons"].append("invalid_sort_column_dropped")
+            result.record(RepairAction(repair_type="invalid_sort_column_dropped", description=f"Dropped invalid ORDER BY column: {spec.column}", field_path=f"order_by[{index}]", original_value=spec.column, repaired_value=None))
+
+        return plan.model_copy(update={"order_by": updated}) if changed else plan

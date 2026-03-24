@@ -233,6 +233,59 @@ class TestValidationFailure:
         assert result.validation.ok is False
         assert result.compiled_query is None
 
+    @pytest.mark.asyncio
+    async def test_invalid_order_by_can_be_dropped_and_revalidated(self, orchestrator: Orchestrator) -> None:
+        plan = QueryPlan(
+            intent="Çalışanları getir",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["reg_no", "first_name"],
+            order_by=[OrderSpec(column="nonexistent_alias", direction=SortDirection.ASC)],
+        )
+
+        result = await orchestrator.run_plan(plan)
+        trace = orchestrator.last_trace or {}
+
+        assert result.validation.ok is True
+        assert result.failed_phase is None
+        assert result.compiled_query is not None
+        assert "ORDER BY" not in result.compiled_query.sql
+        assert trace.get("validation_repair", {}).get("revalidated") is True
+        assert "invalid_sort_column_dropped" in trace.get("validation_repair", {}).get("reason_codes", [])
+
+    @pytest.mark.asyncio
+    async def test_invalid_filter_naming_mismatch_repaired_and_executes(self, orchestrator: Orchestrator) -> None:
+        plan = QueryPlan(
+            intent="Adı bilinen çalışanları getir",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["reg_no", "first_name"],
+            filters=[FilterSpec(column="firstName", op=FilterOp.IS_NOT_NULL)],
+        )
+
+        result = await orchestrator.run_plan(plan)
+        trace = orchestrator.last_trace or {}
+
+        assert result.validation.ok is True
+        assert result.failed_phase is None
+        assert result.compiled_query is not None
+        assert "AD" in result.compiled_query.sql
+        assert "alias_to_canonical" in trace.get("validation_repair", {}).get("reason_codes", [])
+
+    @pytest.mark.asyncio
+    async def test_unknown_select_column_not_unsafely_repaired(self, orchestrator: Orchestrator) -> None:
+        plan = QueryPlan(
+            intent="bad select",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["totally_unknown_column"],
+        )
+
+        result = await orchestrator.run_plan(plan)
+        trace = orchestrator.last_trace or {}
+
+        assert result.validation.ok is False
+        assert result.failed_phase == ErrorPhase.VALIDATION
+        assert trace.get("validation_repair", {}).get("repaired") is False
+
+
 
 # ---------------------------------------------------------------------------
 # Aggregate smoke test

@@ -15,12 +15,17 @@ Architecture
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from app.core.logging import get_logger
 from app.domain.catalog_models import CatalogSnapshot, RelationshipMetadata
 from app.providers.catalog.base import CatalogProvider
 from app.providers.embedding.base import EmbeddingProvider
 from app.providers.retrieval.base import SchemaRetriever
 from app.services.catalog_embedding_indexer import CatalogEmbeddingIndexer
+
+if TYPE_CHECKING:
+    from app.services.query_understanding import QueryUnderstanding
 
 logger = get_logger(__name__)
 
@@ -43,6 +48,7 @@ class EmbeddingRetriever(SchemaRetriever):
         user_query: str,
         *,
         top_k: int = 5,
+        query_understanding: "QueryUnderstanding | None" = None,
     ) -> CatalogSnapshot:
         snapshot = await self._catalog.get_snapshot()
         ready = await self._indexer.ensure_built()

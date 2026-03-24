@@ -46,6 +46,7 @@ from app.services.narrator_service import NarratorService
 from app.services.planner_service import PlannerService
 from app.services.session_service import SessionService
 from app.services.sql_compiler import SQLCompiler
+from app.services.validation_repair_service import ValidationRepairService
 from app.services.execution_risk import assess_pre_execution_risk, bind_summary, sql_fingerprint
 from app.services.validation_service import ValidationService
 
@@ -66,10 +67,15 @@ class Orchestrator:
         validation_service: ValidationService,
         compiler: SQLCompiler,
         executor: ExecutorProvider,
+        validation_repair_service: ValidationRepairService | None = None,
     ) -> None:
         self._validator = validation_service
         self._compiler = compiler
         self._executor = executor
+        catalog = getattr(validation_service, "_catalog", None)
+        self._validation_repair = validation_repair_service or (
+            ValidationRepairService(catalog) if catalog is not None else None
+        )
         self._last_trace: dict[str, Any] | None = None
         self._last_trace_by_task: dict[int, dict[str, Any] | None] = {}
 
@@ -107,6 +113,7 @@ class Orchestrator:
             "current_stage_at_failure": None,
             "root_cause_stage": None,
             "validation": None,
+            "validation_repair": None,
             "compile": None,
             "execute": None,
         })
@@ -123,6 +130,49 @@ class Orchestrator:
             "resolved_tables": sorted(validation.resolved_tables.keys()),
             "latency_ms": validation_ms,
         }
+
+        if not validation.ok and self._validation_repair is not None:
+            repaired_plan, repair_result, repair_trace = await self._validation_repair.repair(plan, validation)
+            self._last_trace["validation_repair"] = {
+                "attempted": repair_trace.get("attempted", False),
+                "repaired": repair_trace.get("repaired", False),
+                "reason_codes": list(dict.fromkeys(repair_trace.get("reasons", []))),
+                "skipped_reason_codes": list(dict.fromkeys(repair_trace.get("skipped_reason_codes", []))),
+                "repair_actions": [
+                    {
+                        "repair_type": action.repair_type,
+                        "description": action.description,
+                        "field_path": action.field_path,
+                        "original_value": action.original_value,
+                        "repaired_value": action.repaired_value,
+                    }
+                    for action in repair_result.actions
+                ],
+                "before": plan.model_dump(mode="json"),
+                "after": repaired_plan.model_dump(mode="json"),
+            }
+            if repair_result.repair_applied:
+                revalidation_started = time.perf_counter()
+                revalidation = await self._validator.validate(repaired_plan)
+                self._last_trace["validation_repair"].update({
+                    "revalidated": True,
+                    "revalidate_ok": revalidation.ok,
+                    "revalidate_latency_ms": int((time.perf_counter() - revalidation_started) * 1000),
+                    "revalidate_errors": [issue.model_dump(mode="json") for issue in revalidation.errors],
+                })
+                if revalidation.ok:
+                    plan = repaired_plan
+                    validation = revalidation
+                    self._last_trace["input_plan"] = plan.model_dump(mode="json")
+                    self._last_trace["validation"] = {
+                        "ok": validation.ok,
+                        "errors": [issue.model_dump(mode="json") for issue in validation.errors],
+                        "warnings": [issue.model_dump(mode="json") for issue in validation.warnings],
+                        "resolved_table": validation.resolved_table.name if validation.resolved_table else None,
+                        "resolved_tables": sorted(validation.resolved_tables.keys()),
+                        "latency_ms": validation_ms,
+                    }
+
         if validation.ok:
             self._last_trace["last_completed_stage"] = "validation"
         else:
@@ -183,25 +233,25 @@ class Orchestrator:
 
         precheck = assess_pre_execution_risk(plan, table)
         self._last_trace["pre_execution"] = {
-            "pre_execution_risk_flags": precheck["pre_execution_risk_flags"],
-            "execution_guard_reason": precheck["execution_guard_reason"],
-            "execution_skipped_reason": precheck["execution_skipped_reason"],
-            "why_not_executed": precheck["execution_skipped_reason"],
-            "should_execute": precheck["should_execute"],
+            "pre_execution_risk_flags": list(precheck.pre_execution_risk_flags),
+            "execution_guard_reason": precheck.execution_guard_reason,
+            "execution_skipped_reason": precheck.execution_skipped_reason,
+            "why_not_executed": precheck.execution_skipped_reason,
+            "should_execute": precheck.should_execute,
             "executed_sql_fingerprint": sql_fingerprint(compiled.sql),
             "bind_summary": bind_summary(compiled),
         }
 
-        if not precheck["should_execute"]:
-            reason = str(precheck["execution_skipped_reason"] or "pre_execution_blocked")
+        if not precheck.should_execute:
+            reason = str(precheck.execution_skipped_reason or "pre_execution_blocked")
             self._last_trace["execute"] = {
                 "status": "skipped",
                 "row_count": 0,
                 "columns": [],
                 "error_message": reason,
-                "execution_guard_reason": precheck["execution_guard_reason"],
+                "execution_guard_reason": precheck.execution_guard_reason,
                 "execution_skipped_reason": reason,
-                "pre_execution_risk_flags": precheck["pre_execution_risk_flags"],
+                "pre_execution_risk_flags": list(precheck.pre_execution_risk_flags),
                 "why_not_executed": reason,
                 "executed_sql_fingerprint": sql_fingerprint(compiled.sql),
                 "bind_summary": bind_summary(compiled),
@@ -242,9 +292,9 @@ class Orchestrator:
             "execution_time_ms": execution.execution_time_ms,
             "executed_sql_fingerprint": sql_fingerprint(compiled.sql),
             "bind_summary": bind_summary(compiled),
-            "execution_guard_reason": precheck["execution_guard_reason"],
-            "execution_skipped_reason": precheck["execution_skipped_reason"],
-            "pre_execution_risk_flags": precheck["pre_execution_risk_flags"],
+            "execution_guard_reason": precheck.execution_guard_reason,
+            "execution_skipped_reason": precheck.execution_skipped_reason,
+            "pre_execution_risk_flags": list(precheck.pre_execution_risk_flags),
             "latency_ms": int((time.perf_counter() - execute_started) * 1000),
         }
         if execution.status == ExecutionStatus.ERROR:

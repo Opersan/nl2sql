@@ -282,6 +282,18 @@ class TestWhitespaceNormalization:
         result = normalize_raw_plan(raw, stats=stats)
         assert result["filters"][0]["op"] == "="
 
+    def test_select_columns_object_list_flattened(self) -> None:
+        raw = {
+            "intent": "test",
+            "table": "XXBT_PDKS_PER_DETAILS_V",
+            "select_columns": [
+                {"column": "reg_no", "table": "XXBT_PDKS_PER_DETAILS_V"},
+                {"name": "first_name"},
+            ],
+        }
+        result = normalize_raw_plan(raw)
+        assert result["select_columns"] == ["reg_no", "first_name"]
+
 
 class TestTableNameUppercasing:
     """Table name should be uppercased."""
@@ -378,6 +390,25 @@ class TestNormalizedPlanParses:
         assert plan.aggregations[0].function == AggregateFn.AVG
         assert plan.order_by[0].direction == SortDirection.DESC
         assert plan.filters[0].op == FilterOp.IS_NOT_NULL
+
+    def test_structured_date_delta_value_parses(self) -> None:
+        raw = {
+            "intent": "Son 30 gunde girilenler",
+            "table": "XXBT_PDKS_PER_DETAILS_V",
+            "select_columns": ["reg_no"],
+            "filters": [
+                {
+                    "column": "start_date",
+                    "op": ">=",
+                    "value": {"type": "date_delta", "units": 30, "unit": "day"},
+                }
+            ],
+        }
+        normalised = normalize_raw_plan(raw)
+        plan = QueryPlan.model_validate(normalised)
+
+        assert plan.filters[0].op == FilterOp.GTE
+        assert isinstance(plan.filters[0].value, str)
 
 
 # -----------------------------------------------------------------------

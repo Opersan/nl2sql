@@ -70,6 +70,12 @@ class CatalogService:
             )
         return await self.get_snapshot()
 
+    @property
+    def last_retrieval_diagnostics(self) -> dict[str, object] | None:
+        if self._retrieval is None:
+            return None
+        return self._retrieval.last_retrieval_diagnostics
+
     async def resolve_table(self, name_or_alias: str) -> TableMetadata | None:
         """Resolve a table by canonical name or alias (case-insensitive)."""
         return await self._provider.get_table(name_or_alias)

@@ -33,6 +33,11 @@ class SchemaRetrievalService:
 
     def __init__(self, retriever: SchemaRetriever) -> None:
         self._retriever = retriever
+        self._last_retrieval_diagnostics: dict[str, object] | None = None
+
+    @property
+    def last_retrieval_diagnostics(self) -> dict[str, object] | None:
+        return self._last_retrieval_diagnostics
 
     async def retrieve_context(
         self,
@@ -60,6 +65,11 @@ class SchemaRetrievalService:
         k = top_k if top_k is not None else settings.retrieval_top_k
         snapshot = await self._retriever.retrieve(
             user_query, top_k=k, query_understanding=query_understanding,
+        )
+        self._last_retrieval_diagnostics = getattr(
+            self._retriever,
+            "last_retrieval_diagnostics",
+            None,
         )
 
         logger.info(

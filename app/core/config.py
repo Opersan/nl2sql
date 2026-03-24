@@ -6,6 +6,14 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings
 
+from app.core.data_paths import (
+    DEFAULT_CATALOG_INDEX_PATH,
+    DEFAULT_CATALOG_SOURCE_PATH,
+    DEFAULT_DOCUMENT_SOURCE_PATH,
+    DEFAULT_EXAMPLE_INDEX_PATH,
+    DEFAULT_SEMANTIC_INDEX_PATH,
+)
+
 # Centralised version – imported by schemas.py, main.py, etc.
 APP_VERSION: str = "0.3.0"
 
@@ -22,7 +30,7 @@ class Settings(BaseSettings):
     llm_provider: Literal["mock", "openai_compatible"] = "mock"
     openai_base_url: str = "http://10.50.110.11:8100/v1"
     openai_api_key: str = "EMPTY"
-    openai_model: str = "Sehyo/Qwen3.5-122B-A10B-NVFP4"
+    openai_model: str = "Qwen/Qwen3.5-122B-A10B-FP8"
 
     # API response
     enable_sql_in_api_response: bool = True
@@ -31,7 +39,7 @@ class Settings(BaseSettings):
     # --- Sprint 3: Metadata ingestion ---
     # Default: use the bundled sample JSON catalog so the API and eval share
     # a single file-backed source of truth out of the box.
-    metadata_source_path: str = "data/sample_metadata.json"
+    metadata_source_path: str = DEFAULT_CATALOG_SOURCE_PATH.as_posix()
     metadata_source_type: Literal["json", "csv", "none"] = "json"
 
     # --- Sprint 3: Schema retrieval ---
@@ -52,13 +60,15 @@ class Settings(BaseSettings):
     embedding_api_key: str = "EMPTY"
     embedding_model: str = ""
     embedding_batch_size: int = 32
-    catalog_index_cache_path: str = "data/catalog_index.npz"
+    catalog_index_cache_path: str = DEFAULT_CATALOG_INDEX_PATH.as_posix()
+    semantic_index_cache_path: str = DEFAULT_SEMANTIC_INDEX_PATH.as_posix()
+    example_index_cache_path: str = DEFAULT_EXAMPLE_INDEX_PATH.as_posix()
 
     # --- Sprint 3: Document / example retrieval ---
     # Default: wire the bundled JSONL corpus so the planner prompt is
     # enriched with schema docs and few-shot examples.
     enable_document_retrieval: bool = True
-    document_corpus_path: str = "data/sample_schema_documents.jsonl"
+    document_corpus_path: str = DEFAULT_DOCUMENT_SOURCE_PATH.as_posix()
     document_loader_strict: bool = True
     retrieval_top_k_examples: int = 2
 

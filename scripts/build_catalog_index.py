@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.api.deps import _build_catalog_provider
 from app.core.config import settings
+from app.core.data_paths import resolve_catalog_index_path
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -65,13 +66,15 @@ async def _run(cache_path: Path | None, dry_run: bool) -> int:
     from app.services.catalog_embedding_indexer import CatalogEmbeddingIndexer
 
     emb_provider = _build_embedding_provider()
-    effective_cache = cache_path or (
-        Path(settings.catalog_index_cache_path)
-        if not Path(settings.catalog_index_cache_path).is_absolute()
-        else Path(settings.catalog_index_cache_path)
-    )
-    if not effective_cache.is_absolute():
-        effective_cache = Path(__file__).resolve().parents[1] / effective_cache
+    if cache_path is not None:
+        effective_cache = cache_path
+        if not effective_cache.is_absolute():
+            effective_cache = Path(__file__).resolve().parents[1] / effective_cache
+    else:
+        effective_cache, _used_legacy = resolve_catalog_index_path(
+            settings.catalog_index_cache_path,
+            allow_legacy_fallback=False,
+        )
 
     indexer = CatalogEmbeddingIndexer(catalog_provider, emb_provider, effective_cache)
     ok = await indexer.ensure_built()

@@ -119,6 +119,32 @@ class TestWhereFilters:
         assert result.params["p2"] == datetime.date(2023, 12, 31)
 
     @pytest.mark.asyncio
+    async def test_turkish_style_date_literal_is_coerced_to_date_bind(self, compiler: SQLCompiler, employee_table) -> None:
+        plan = QueryPlan(
+            intent="turkish date",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["reg_no", "start_date"],
+            filters=[FilterSpec(column="start_date", op=FilterOp.GTE, value="01/02/2024")],
+        )
+
+        result = compiler.compile(plan, employee_table)
+
+        assert result.params["p1"] == datetime.date(2024, 2, 1)
+
+    @pytest.mark.asyncio
+    async def test_relative_date_sentinel_is_coerced_to_date_bind(self, compiler: SQLCompiler, employee_table) -> None:
+        plan = QueryPlan(
+            intent="relative sentinel",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["reg_no", "start_date"],
+            filters=[FilterSpec(column="start_date", op=FilterOp.GTE, value="__RELATIVE_DATE_LAST_30_DAYS__")],
+        )
+
+        result = compiler.compile(plan, employee_table)
+
+        assert isinstance(result.params["p1"], datetime.date)
+
+    @pytest.mark.asyncio
     async def test_in_filter(self, compiler: SQLCompiler, employee_table) -> None:
         plan = QueryPlan(
             intent="multiple units",

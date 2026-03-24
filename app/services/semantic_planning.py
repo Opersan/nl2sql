@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from functools import lru_cache
-import json
 from pathlib import Path
+import re
+from typing import Any
 
 from app.domain.catalog_models import CatalogSnapshot
 from app.domain.query_plan import (
@@ -24,29 +26,23 @@ from app.domain.semantic_models import (
     SemanticRegistry,
 )
 from app.core.logging import get_logger
+from app.semantic.repository import build_runtime_semantic_registry, load_semantic_repository
 from app.utils.turkish import casefold_tr
 
 logger = get_logger(__name__)
 
 _REGISTRY_PATH = Path(__file__).resolve().parents[2] / "data" / "semantic_registry.json"
+_SEMANTIC_DIR = Path(__file__).resolve().parents[2] / "data" / "semantic"
+_TOKEN_RE = re.compile(r"[^\w\s]", re.UNICODE)
 
 @lru_cache(maxsize=1)
 def _load_registry() -> SemanticRegistry:
-    """Load and cache the semantic registry from the default JSON metadata file."""
-    try:
-        payload = json.loads(_REGISTRY_PATH.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        logger.warning("Semantic registry file not found: %s", _REGISTRY_PATH)
-        return SemanticRegistry()
-    except Exception as exc:
-        logger.warning("Semantic registry load failed (%s): %s", _REGISTRY_PATH, exc)
-        return SemanticRegistry()
-
-    try:
-        return SemanticRegistry.model_validate(payload)
-    except Exception as exc:
-        logger.warning("Semantic registry validation failed (%s): %s", _REGISTRY_PATH, exc)
-        return SemanticRegistry()
+    """Load and cache the planner registry projection from the canonical repository."""
+    repository = load_semantic_repository(
+        semantic_dir=_SEMANTIC_DIR,
+        legacy_registry_path=_REGISTRY_PATH,
+    )
+    return build_runtime_semantic_registry(repository)
 
 
 def _match_entity(
@@ -54,15 +50,418 @@ def _match_entity(
     plan: QueryPlan,
     registry: SemanticRegistry,
 ) -> BusinessEntitySemantic | None:
-    """Return the first registry entity that matches by table membership or keyword."""
-    folded = casefold_tr(user_message)
+    """Return the strongest registry entity match by keywords, then table membership."""
+    folded = casefold_tr(" ".join(part for part in [user_message, plan.intent] if part))
+    referenced_columns = {
+        casefold_tr(column)
+        for column in [
+            *plan.select_columns,
+            *plan.group_by,
+            *(flt.column for flt in plan.filters),
+            *(agg.column for agg in plan.aggregations),
+            *(order.column for order in plan.order_by),
+        ]
+        if column
+    }
+    best_match: BusinessEntitySemantic | None = None
+    best_score: tuple[int, int, int, int] = (0, 0, 0, 0)
+
     for entity in registry.entities:
         entity_tables = {entity.root_table, *entity.child_tables}
-        if any(t in entity_tables for t in plan.all_tables):
-            return entity
-        if any(k in folded for k in entity.keywords):
-            return entity
+        keyword_hits = sum(1 for keyword in entity.keywords if keyword and keyword in folded)
+        entity_columns = {
+            casefold_tr(column)
+            for column in [
+                *entity.dimensions.values(),
+                *entity.measures.values(),
+                *entity.status_semantics.values(),
+                *entity.time_semantics.values(),
+            ]
+            if column
+        }
+
+        column_hits = 0
+        if referenced_columns and entity_columns:
+            column_hits = len(referenced_columns & entity_columns)
+
+        table_strength = 0
+        if plan.table == entity.root_table:
+            table_strength = 3
+        elif entity.root_table in plan.all_tables:
+            table_strength = 2
+        elif any(table in entity_tables for table in plan.all_tables):
+            table_strength = 1
+
+        score = (1 if keyword_hits > 0 else 0, keyword_hits, column_hits, table_strength)
+        if score > best_score:
+            best_match = entity
+            best_score = score
+
+    return best_match
+
+
+def _entity_tables(entity: BusinessEntitySemantic) -> set[str]:
+    return {entity.root_table.upper(), *(table.upper() for table in entity.child_tables)}
+
+
+def _tokenize(text: str) -> set[str]:
+    folded = casefold_tr(text or "")
+    cleaned = _TOKEN_RE.sub(" ", folded)
+    return {token for token in cleaned.split() if len(token) >= 2}
+
+
+def _semantic_columns(entity: BusinessEntitySemantic) -> set[str]:
+    return {
+        casefold_tr(column)
+        for column in [
+            *entity.dimensions.values(),
+            *entity.measures.values(),
+            *entity.status_semantics.values(),
+            *entity.time_semantics.values(),
+        ]
+        if column
+    }
+
+
+def _context_tables(context: Any) -> list[Any]:
+    return list(getattr(context, "tables", []) or [])
+
+
+def _context_get_table(context: Any, table_name: str) -> Any | None:
+    getter = getattr(context, "get_table", None)
+    if callable(getter):
+        return getter(table_name)
     return None
+
+
+def _score_filter_ownership(
+    plan: QueryPlan,
+    entity: BusinessEntitySemantic,
+    context: Any,
+) -> tuple[int, int]:
+    owned = 0
+    conflicts = 0
+    entity_tables = _entity_tables(entity)
+
+    for flt in plan.filters:
+        if flt.table:
+            if flt.table.upper() in entity_tables:
+                owned += 1
+            else:
+                conflicts += 1
+            continue
+
+        owner_candidates = []
+        for table_name in entity_tables:
+            table = _context_get_table(context, table_name)
+            if table is not None and table.has_column(flt.column):
+                owner_candidates.append(table_name)
+        if owner_candidates:
+            owned += 1
+        else:
+            conflicts += 1
+
+    return owned, conflicts
+
+
+def _score_query_understanding_filters(
+    entity: BusinessEntitySemantic,
+    query_understanding: Any | None,
+    context: Any,
+) -> int:
+    if query_understanding is None:
+        return 0
+
+    entity_tables = _entity_tables(entity)
+    semantic_columns = _semantic_columns(entity)
+    score = 0
+    for extracted_filter in getattr(query_understanding, "extracted_filters", []):
+        dim = casefold_tr(str(extracted_filter.get("dimension", "")))
+        column_hint = casefold_tr(str(extracted_filter.get("column_hint", "")))
+        value = casefold_tr(str(extracted_filter.get("value", "")))
+
+        if column_hint and column_hint in semantic_columns:
+            score += 3
+            continue
+        if dim and any(dim in key for key in semantic_columns):
+            score += 2
+            continue
+        if column_hint:
+            for table_name in entity_tables:
+                table = _context_get_table(context, table_name)
+                if table is not None and table.has_column(column_hint):
+                    score += 2
+                    break
+        elif value and value in " ".join(entity.keywords).lower():
+            score += 1
+    return score
+
+
+def _score_document_agreement(
+    entity: BusinessEntitySemantic,
+    schema_docs: list[Any] | None,
+    examples: list[Any] | None,
+) -> int:
+    entity_tables = _entity_tables(entity)
+    score = 0
+    for doc in schema_docs or []:
+        table_name = str(getattr(doc, "table_name", "") or "").upper()
+        if table_name == entity.root_table.upper():
+            score += 3
+        elif table_name and table_name in entity_tables:
+            score += 1
+    for example in examples or []:
+        tables = {str(table).upper() for table in getattr(example, "tables", [])}
+        if entity.root_table.upper() in tables:
+            score += 2
+        elif tables & entity_tables:
+            score += 1
+    return score
+
+
+def _score_entity_candidates(
+    plan: QueryPlan,
+    user_message: str,
+    context: CatalogSnapshot,
+    registry: SemanticRegistry,
+    *,
+    query_understanding: Any | None = None,
+    retrieval_diagnostics: Any | None = None,
+    schema_docs: list[Any] | None = None,
+    examples: list[Any] | None = None,
+) -> list[dict[str, Any]]:
+    folded = casefold_tr(" ".join(part for part in [user_message, plan.intent] if part))
+    tokens = _tokenize(folded)
+    referenced_columns = {
+        casefold_tr(column)
+        for column in [
+            *plan.select_columns,
+            *plan.group_by,
+            *(flt.column for flt in plan.filters),
+            *(agg.column for agg in plan.aggregations),
+            *(order.column for order in plan.order_by),
+        ]
+        if column
+    }
+    retrieved_tables = {table.name.upper() for table in _context_tables(context)}
+    retrieval_root = str(getattr(retrieval_diagnostics, "root_table_name", "") or "").upper()
+    resolved_entities = set(getattr(query_understanding, "resolved_entities", []) or [])
+
+    scored: list[dict[str, Any]] = []
+    for entity in registry.entities:
+        entity_tables = _entity_tables(entity)
+        reasons: list[str] = []
+        breakdown: dict[str, int] = defaultdict(int)
+
+        keyword_hits = sum(1 for keyword in entity.keywords if keyword and casefold_tr(keyword) in folded)
+        if keyword_hits:
+            breakdown["lexical"] += keyword_hits * 5
+            reasons.append("entity_alias_match")
+
+        semantic_columns = _semantic_columns(entity)
+        column_hits = len(referenced_columns & semantic_columns)
+        if column_hits:
+            breakdown["columns"] += column_hits * 3
+
+        if plan.table and plan.table.upper() == entity.root_table.upper():
+            breakdown["selected_table"] += 7
+        elif plan.table and plan.table.upper() in entity_tables:
+            breakdown["selected_table"] += 4
+
+        join_hits = sum(1 for table_name in plan.all_tables if table_name.upper() in entity_tables)
+        if join_hits:
+            breakdown["joined_tables"] += join_hits
+
+        if entity.entity_id in resolved_entities:
+            breakdown["query_understanding"] += 10
+            reasons.append("query_understanding_alignment")
+
+        query_filter_score = _score_query_understanding_filters(entity, query_understanding, context)
+        if query_filter_score:
+            breakdown["query_filters"] += query_filter_score
+
+        if retrieval_root and retrieval_root == entity.root_table.upper():
+            breakdown["retrieval"] += 8
+            reasons.append("retrieval_domain_alignment")
+        elif entity.root_table.upper() in retrieved_tables:
+            breakdown["retrieval"] += 3
+
+        doc_score = _score_document_agreement(entity, schema_docs, examples)
+        if doc_score:
+            breakdown["documents"] += doc_score
+
+        owned_filters, conflicting_filters = _score_filter_ownership(plan, entity, context)
+        if owned_filters:
+            breakdown["filter_ownership"] += owned_filters * 4
+        if conflicting_filters:
+            breakdown["filter_conflict"] -= conflicting_filters * 5
+            reasons.append("column_ownership_conflict")
+
+        total = sum(breakdown.values())
+        scored.append(
+            {
+                "entity": entity,
+                "total": total,
+                "reasons": reasons,
+                "breakdown": dict(breakdown),
+                "owned_filters": owned_filters,
+                "conflicting_filters": conflicting_filters,
+            }
+        )
+
+    scored.sort(
+        key=lambda item: (
+            int(item["total"]),
+            int(item["owned_filters"]),
+            -int(item["conflicting_filters"]),
+        ),
+        reverse=True,
+    )
+    return scored
+
+
+def _confidence_for_scores(scored_entities: list[dict[str, Any]]) -> str:
+    if not scored_entities:
+        return "low"
+    best = int(scored_entities[0]["total"])
+    runner_up = int(scored_entities[1]["total"]) if len(scored_entities) > 1 else 0
+    margin = best - runner_up
+    if best >= 18 and margin >= 5:
+        return "high"
+    if best >= 10 and margin >= 3:
+        return "medium"
+    return "low"
+
+
+def _effective_signal_table(filter_spec: FilterSpec, plan: QueryPlan, entity: BusinessEntitySemantic, context: CatalogSnapshot) -> str | None:
+    if filter_spec.table:
+        return filter_spec.table
+
+    if plan.table:
+        plan_table = _context_get_table(context, plan.table)
+        if plan_table is not None and plan_table.has_column(filter_spec.column):
+            return plan.table
+
+    for table_name in _entity_tables(entity):
+        table = _context_get_table(context, table_name)
+        if table is not None and table.has_column(filter_spec.column):
+            return table_name
+    return None
+
+
+def _preserve_filter_ownership(
+    plan: QueryPlan,
+    *,
+    original_table: str | None,
+    entity: BusinessEntitySemantic,
+    context: Any,
+) -> tuple[list[FilterSpec], bool]:
+    if not plan.filters or not original_table or original_table.upper() == entity.root_table.upper():
+        return list(plan.filters), False
+
+    preserved = False
+    original_meta = _context_get_table(context, original_table)
+    root_meta = _context_get_table(context, entity.root_table)
+    updated_filters: list[FilterSpec] = []
+
+    for flt in plan.filters:
+        if flt.table is not None or original_meta is None or not original_meta.has_column(flt.column):
+            updated_filters.append(flt)
+            continue
+        root_has_column = root_meta is not None and root_meta.has_column(flt.column)
+        if not root_has_column and original_table.upper() in _entity_tables(entity):
+            updated_filters.append(flt.model_copy(update={"table": original_table}))
+            preserved = True
+        else:
+            updated_filters.append(flt)
+
+    return updated_filters, preserved
+
+
+def _filter_signal_key(signal: dict[str, Any]) -> str:
+    dimension = casefold_tr(str(signal.get("dimension", "") or ""))
+    value = casefold_tr(str(signal.get("value", "") or ""))
+    column_hint = casefold_tr(str(signal.get("column_hint", "") or ""))
+    return "|".join([dimension, value, column_hint])
+
+
+def _filter_matches_signal(filter_spec: FilterSpec, signal: dict[str, Any]) -> bool:
+    dimension = casefold_tr(str(signal.get("dimension", "") or ""))
+    value = casefold_tr(str(signal.get("value", "") or ""))
+    column_hint = casefold_tr(str(signal.get("column_hint", "") or ""))
+    column = casefold_tr(filter_spec.column)
+    filter_value = casefold_tr(str(filter_spec.value)) if filter_spec.value is not None else ""
+
+    if column_hint and column_hint == column:
+        return True
+    if value and filter_value and value == filter_value:
+        return True
+    if dimension and dimension in column:
+        return True
+    return False
+
+
+def _filter_coverage_keys(plan: QueryPlan, query_understanding: Any | None) -> set[str]:
+    if query_understanding is None:
+        return set()
+    coverage: set[str] = set()
+    for signal in getattr(query_understanding, "extracted_filters", []):
+        if any(_filter_matches_signal(filter_spec, signal) for filter_spec in plan.filters):
+            coverage.add(_filter_signal_key(signal))
+    return coverage
+
+
+def _merge_filters(
+    base_filters: list[FilterSpec],
+    extra_filters: list[FilterSpec],
+) -> list[FilterSpec]:
+    merged: list[FilterSpec] = []
+    seen: set[tuple[str | None, str, str, str]] = set()
+    for filter_spec in [*base_filters, *extra_filters]:
+        key = (
+            filter_spec.table,
+            filter_spec.column,
+            filter_spec.op.value,
+            str(filter_spec.value),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(filter_spec)
+    return merged
+
+
+def _safe_apply_intent_defaults(
+    entity: BusinessEntitySemantic,
+    semantic_intent: str,
+    updates: dict[str, object],
+    *,
+    plan: QueryPlan,
+    confidence: str,
+    query_understanding: Any | None,
+    diagnostics: dict[str, Any],
+) -> bool:
+    intent_def = entity.intent_defaults.get(semantic_intent)
+    if intent_def is None:
+        return False
+
+    if confidence == "low":
+        diagnostics.setdefault("decision_reasons", []).append("override_suppressed_due_to_low_confidence")
+        return False
+
+    requested_output = getattr(query_understanding, "requested_output_type", None)
+    if requested_output == "aggregation" and not intent_def.aggregations and not plan.aggregations:
+        diagnostics.setdefault("decision_reasons", []).append("override_suppressed_due_to_low_confidence")
+        return False
+    if requested_output == "list" and intent_def.aggregations and not plan.aggregations and not plan.needs_clarification:
+        diagnostics.setdefault("decision_reasons", []).append("override_suppressed_due_to_low_confidence")
+        return False
+
+    before_filters = list(plan.filters)
+    _apply_intent_defaults(entity, semantic_intent, updates, plan)
+    if updates.get("filters"):
+        updates["filters"] = _merge_filters(before_filters, list(updates["filters"]))
+    return True
 
 
 def _infer_entity_intent(user_message: str, entity: BusinessEntitySemantic) -> str:
@@ -172,6 +571,10 @@ def apply_semantic_normalization(
     _context: CatalogSnapshot,
     *,
     registry: SemanticRegistry | None = None,
+    query_understanding: Any | None = None,
+    retrieval_diagnostics: Any | None = None,
+    schema_docs: list[Any] | None = None,
+    examples: list[Any] | None = None,
 ) -> QueryPlan:
     """Canonicalize planner output against the semantic registry.
 
@@ -188,9 +591,45 @@ def apply_semantic_normalization(
     """
     reg = registry if registry is not None else _load_registry()
 
-    entity = _match_entity(user_message, plan, reg)
-    if entity is None:
+    scored_entities = _score_entity_candidates(
+        plan,
+        user_message,
+        _context,
+        reg,
+        query_understanding=query_understanding,
+        retrieval_diagnostics=retrieval_diagnostics,
+        schema_docs=schema_docs,
+        examples=examples,
+    )
+    if not scored_entities or int(scored_entities[0]["total"]) <= 0:
         return plan
+
+    entity = scored_entities[0]["entity"]
+    confidence = _confidence_for_scores(scored_entities)
+    runner_up = scored_entities[1] if len(scored_entities) > 1 else None
+    diagnostics: dict[str, Any] = {
+        "selected_entity_id": entity.entity_id,
+        "selected_root_table": entity.root_table,
+        "confidence": confidence,
+        "decision_reasons": list(dict.fromkeys(scored_entities[0]["reasons"])),
+        "score_breakdown": {
+            item["entity"].entity_id: item["breakdown"]
+            for item in scored_entities[:3]
+        },
+        "runner_up_entity_id": runner_up["entity"].entity_id if runner_up is not None else None,
+        "runner_up_score": int(runner_up["total"]) if runner_up is not None else 0,
+        "selected_entity_score": int(scored_entities[0]["total"]),
+        "override_applied": False,
+        "stable_intent_defaults_applied": False,
+        "protected_filter_preserved": False,
+        "filter_coverage_before": sorted(_filter_coverage_keys(plan, query_understanding)),
+    }
+    has_external_signals = any([
+        query_understanding is not None,
+        retrieval_diagnostics is not None,
+        bool(schema_docs),
+        bool(examples),
+    ])
 
     semantic_intent = _infer_entity_intent(user_message, entity)
     join_path_id = reg.intent_join_paths.get(semantic_intent)
@@ -201,12 +640,56 @@ def apply_semantic_normalization(
         "semantic_intent": semantic_intent,
     }
 
+    original_table = plan.table
+    current_entity_score = 0
+    if plan.table:
+        for item in scored_entities:
+            candidate = item["entity"]
+            if plan.table.upper() in _entity_tables(candidate):
+                current_entity_score = int(item["total"])
+                break
+
+    should_anchor = False
+    if not has_external_signals:
+        should_anchor = plan.table != entity.root_table
+    elif plan.table is None:
+        should_anchor = confidence != "low"
+    elif plan.table.upper() == entity.root_table.upper():
+        should_anchor = False
+    elif plan.table.upper() not in _entity_tables(entity):
+        should_anchor = confidence in {"medium", "high"}
+    elif (
+        plan.table.upper() in _entity_tables(entity)
+        and plan.table.upper() != entity.root_table.upper()
+        and confidence == "high"
+        and (
+            entity.entity_id in set(getattr(query_understanding, "resolved_entities", []) or [])
+            or str(getattr(retrieval_diagnostics, "root_table_name", "") or "").upper() == entity.root_table.upper()
+            or bool(join_path_id)
+        )
+    ):
+        should_anchor = True
+    elif confidence == "high" and int(scored_entities[0]["total"]) >= current_entity_score + 5:
+        should_anchor = True
+    elif confidence == "medium" and retrieval_diagnostics is not None and str(getattr(retrieval_diagnostics, "root_table_name", "") or "").upper() == entity.root_table.upper():
+        should_anchor = True
+    else:
+        diagnostics.setdefault("decision_reasons", []).append("override_suppressed_due_to_low_confidence")
+
     # Apply registry intent defaults. For clarification plans, only apply stable
     # defaults (semantic rescue); non-stable defaults must not override an
     # intentional clarification produced by the planner.
     intent_def = entity.intent_defaults.get(semantic_intent)
     if intent_def is not None and (not plan.needs_clarification or intent_def.stable):
-        _apply_intent_defaults(entity, semantic_intent, updates, plan)
+        diagnostics["stable_intent_defaults_applied"] = _safe_apply_intent_defaults(
+            entity,
+            semantic_intent,
+            updates,
+            plan=plan,
+            confidence=(confidence if has_external_signals else "high"),
+            query_understanding=query_understanding,
+            diagnostics=diagnostics,
+        )
 
     # When registry imposes aggregations, discard stale LLM select_columns:
     # SELECT shape is fully determined by group_by + aggregations.
@@ -216,12 +699,43 @@ def apply_semantic_normalization(
         updates.pop("select_columns")
 
     # Anchor base table to semantic root.
-    if plan.table != entity.root_table:
+    if should_anchor and plan.table != entity.root_table:
         updates["table"] = entity.root_table
+        diagnostics["override_applied"] = True
+
+    candidate_plan = plan.model_copy(update=updates)
+    preserved_filters, preserved = _preserve_filter_ownership(
+        candidate_plan,
+        original_table=original_table,
+        entity=entity,
+        context=_context,
+    )
+    if preserved:
+        updates["filters"] = preserved_filters
+        diagnostics["protected_filter_preserved"] = True
+        diagnostics.setdefault("decision_reasons", []).append("protected_filter_preserved")
+
+    candidate_plan = plan.model_copy(update=updates)
+    before_coverage = set(diagnostics["filter_coverage_before"])
+    after_coverage = _filter_coverage_keys(candidate_plan, query_understanding)
+    if before_coverage and len(after_coverage) < len(before_coverage):
+        updates["filters"] = _merge_filters(list(candidate_plan.filters), list(plan.filters))
+        candidate_plan = plan.model_copy(update=updates)
+        after_coverage = _filter_coverage_keys(candidate_plan, query_understanding)
+        if len(after_coverage) >= len(before_coverage):
+            diagnostics["protected_filter_preserved"] = True
+            diagnostics.setdefault("decision_reasons", []).append("protected_filter_preserved")
 
     if join_path_id:
         updates["join_path_id"] = join_path_id
         updates["joins"] = _joins_from_path(path)
+
+    candidate_plan = plan.model_copy(update=updates)
+    diagnostics["filter_coverage_after"] = sorted(_filter_coverage_keys(candidate_plan, query_understanding))
+    diagnostics["filter_loss_risk"] = bool(
+        diagnostics["filter_coverage_before"]
+        and len(diagnostics["filter_coverage_after"]) < len(diagnostics["filter_coverage_before"])
+    )
 
     # Observability fields derived from the *final* canonical plan shape.
     final_group_by: list[str] = list(updates.get("group_by", plan.group_by))  # type: ignore[arg-type]
@@ -231,7 +745,10 @@ def apply_semantic_normalization(
     if final_aggs:
         updates["measures"] = [a.alias or f"{a.function.value}_{a.column}" for a in final_aggs]
 
-    return plan.model_copy(update=updates)
+    final_plan = plan.model_copy(update=updates)
+    object.__setattr__(final_plan, "_semantic_diagnostics", diagnostics)
+    apply_semantic_normalization.last_diagnostics = diagnostics
+    return final_plan
 
 
 # ---------------------------------------------------------------------------

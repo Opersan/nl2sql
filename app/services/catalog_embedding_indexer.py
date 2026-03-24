@@ -4,6 +4,13 @@ Builds and caches a table-level embedding index so the EmbeddingRetriever
 can perform fast cosine-similarity lookup without calling the embedding
 server on every request.
 
+Boundary
+--------
+This index is intentionally limited to the technical catalog layer.
+It embeds only table-level structured metadata from ``CatalogSnapshot``.
+Semantic repository records and example/document corpus entries belong to
+separate retrieval artefacts and must not be mixed into this cache.
+
 Cache strategy
 --------------
 * Index is stored as a compressed NumPy archive (``.npz``) alongside a

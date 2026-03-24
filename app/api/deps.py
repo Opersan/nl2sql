@@ -5,6 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.core.config import settings
+from app.core.data_paths import (
+    resolve_catalog_index_path,
+    resolve_catalog_source_path,
+    resolve_document_source_path,
+)
 from app.core.logging import get_logger
 from app.providers.catalog.base import CatalogProvider
 from app.providers.catalog.in_memory import InMemoryCatalogProvider, catalog_fingerprint
@@ -54,12 +59,14 @@ def _build_catalog_provider() -> CatalogProvider:
     3. All other cases (``"none"``, ``"csv"`` etc.) → ``InMemoryCatalogProvider``.
     """
     if settings.metadata_source_type == "json" and settings.metadata_source_path:
-        path = Path(settings.metadata_source_path)
-        if not path.is_absolute():
-            # Resolve relative to the repository root (two levels up from this file).
-            path = Path(__file__).resolve().parents[2] / path
+        path, used_legacy = resolve_catalog_source_path(settings.metadata_source_path)
         if path.exists():
             from app.providers.catalog.json_file_catalog import JsonFileCatalogProvider
+            if used_legacy:
+                logger.warning(
+                    "[catalog] new catalog source path not found; using legacy path %s",
+                    path,
+                )
             return JsonFileCatalogProvider(path)
         logger.warning(
             "[catalog] metadata_source_type='json' but file not found: %s "
@@ -112,7 +119,7 @@ async def build_document_retrieval() -> DocumentRetrievalService | None:
         )
         return None
 
-    corpus_path = Path(settings.document_corpus_path)
+    corpus_path, used_legacy = resolve_document_source_path(settings.document_corpus_path)
     if not corpus_path.exists():
         logger.warning(
             "[doc-retrieval] corpus file not found: %s (strict=%s) "
@@ -134,6 +141,11 @@ async def build_document_retrieval() -> DocumentRetrievalService | None:
         corpus_path,
         strict,
     )
+    if used_legacy:
+        logger.warning(
+            "[doc-retrieval] new example/doc source path not found; using legacy path %s",
+            corpus_path,
+        )
 
     try:
         loader = JSONLDocumentLoader(strict=strict)
@@ -322,7 +334,13 @@ def _build_embedding_provider():
 def _build_catalog_indexer(catalog_provider, embedding_provider):
     """Build the catalog embedding indexer."""
     from app.services.catalog_embedding_indexer import CatalogEmbeddingIndexer
-    cache_path = Path(settings.catalog_index_cache_path)
-    if not cache_path.is_absolute():
-        cache_path = Path(__file__).resolve().parents[2] / cache_path
+    cache_path, used_legacy = resolve_catalog_index_path(
+        settings.catalog_index_cache_path,
+        allow_legacy_fallback=True,
+    )
+    if used_legacy:
+        logger.warning(
+            "[catalog-index] new catalog index path not found; using legacy cache %s",
+            cache_path,
+        )
     return CatalogEmbeddingIndexer(catalog_provider, embedding_provider, cache_path)

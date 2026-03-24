@@ -52,6 +52,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core.config import settings  # noqa: E402
+from app.core.data_paths import (
+    resolve_catalog_source_path,
+    resolve_document_source_path,
+)  # noqa: E402
 from app.domain.catalog_models import CatalogSnapshot  # noqa: E402
 from app.providers.catalog.base import CatalogProvider  # noqa: E402
 from app.providers.documents.jsonl_loader import JSONLDocumentLoader  # noqa: E402
@@ -75,8 +79,8 @@ from app.services.schema_retrieval_service import SchemaRetrievalService  # noqa
 DATA_DIR = PROJECT_ROOT / "data"
 RESULTS_DIR = PROJECT_ROOT / "results"
 
-METADATA_PATH = DATA_DIR / "sample_metadata.json"
-CORPUS_PATH = DATA_DIR / "sample_schema_documents.jsonl"
+METADATA_PATH, _ = resolve_catalog_source_path(settings.metadata_source_path)
+CORPUS_PATH, _ = resolve_document_source_path(settings.document_corpus_path)
 EVAL_CSV_PATH = DATA_DIR / "sample_eval_questions.csv"
 
 # ---------------------------------------------------------------------------

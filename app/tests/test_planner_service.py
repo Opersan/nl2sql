@@ -228,6 +228,33 @@ class TestAliasHandling:
         assert trace["canonicalize"]["after"] is not None
         assert trace["final_plan"] is not None
 
+    @pytest.mark.asyncio
+    async def test_last_trace_includes_parse_taxonomy_metadata(self, planner: PlannerService) -> None:
+        planner_plan = QueryPlan(
+            intent="Aktif çalışanları listele",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["SICIL_NO"],
+        )
+
+        async def _fake_generate(_prompt: str):
+            from app.services.planning_models import PlanGenerationResult
+
+            return PlanGenerationResult(
+                plan=planner_plan,
+                raw_response_text="{...}",
+                parse_error=None,
+                parse_error_taxonomy="missing_required_field",
+                salvage_applied=True,
+            )
+
+        planner._plan_generation_service.generate = _fake_generate  # type: ignore[method-assign]
+
+        await planner.plan("Aktif çalışanları listele")
+        trace = planner.last_trace or {}
+
+        assert trace["llm"]["parse_error_taxonomy"] == "missing_required_field"
+        assert trace["llm"]["salvage_applied"] is True
+
 
 # ---------------------------------------------------------------------------
 # Plan normalization

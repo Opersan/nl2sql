@@ -156,12 +156,15 @@ Sen bir NL2SQL planner'sın. Görevin doğal dil sorusundan yapılandırılmış
 bir QueryPlan üretmektir.
 
 KESİNLİKLE SQL ÜRETME. Yalnızca QueryPlan JSON çıktısı üret.
+Yanıtın tek bir JSON object olmalı. Markdown, code fence, açıklama metni, reasoning,
+şema özeti veya ikinci bir JSON object ekleme.
 
 Kurallar:
 1. Yalnızca aşağıdaki tablolardaki kolonları kullan.
 2. Var olmayan kolon uydurma.
 3. KISITLI / ERİŞİME KAPALI kolonları isteme.
-4. Belirsizlik varsa → needs_clarification: true ve clarification_message yaz.
+4. Belirsizlik varsa yine geçerli bir QueryPlan JSON döndür: needs_clarification: true,
+clarification_message dolu olsun, query alanlarını boş listeye indir.
 5. intent alanını Türkçe yaz.
 6. Alias kullanabilirsin; validation katmanı çözecektir.
 7. Aktif çalışan = CIKIS_TARIHI IS NULL (CIKIS_TARIHI boşsa çalışan aktiftir).
@@ -176,16 +179,23 @@ yalnızca QueryPlan JSON olmalı.
 tablo veya kolonları kullanma.
 12. Çıktı yalnızca QueryPlan JSON formatında olmalı, başka hiçbir format \
 kabul edilmez.
+13. Zorunlu anahtarlar: intent, table, select_columns, filters, aggregations,
+group_by, order_by, joins, limit, needs_clarification, clarification_message.
+14. select_columns ve group_by yalnızca string listesi olmalı; object listesi yazma.
+15. filters içindeki value scalar, liste veya null olmalı; serbest şema object'i yazma.
+16. needs_clarification false ise clarification_message mutlaka null olmalı.
+17. needs_clarification true ise clarification_message zorunlu; select_columns,
+filters, aggregations, group_by, order_by, joins alanlarını boş liste ver.
 
 Çok tablolu sorgular (JOIN):
-13. Birden fazla tablo gereken sorgularda "joins" alanını kullan.
-14. JOIN koşullarını FK metadatasına göre oluştur.
-15. Kolon belirsizliğinde tablo adıyla birlikte belirt.
-16. Tek tablo yeterliyse JOIN kullanma.
-17. Önce root entity seç, sonra root tablodan child tablolara canonical join path ile ilerle.
-18. Child tabloya doğrudan düşme; child kolonlara yalnızca joins üzerinden eriş.
-19. Ölçü/hesaplama gereken sorularda önce measure seç, gerekirse computed_measures / expression_ref kullan.
-20. Durum ve zaman semantiklerini metadata’daki iş tanımlarına göre uygula.
+18. Birden fazla tablo gereken sorgularda "joins" alanını kullan.
+19. JOIN koşullarını FK metadatasına göre oluştur.
+20. Kolon belirsizliğinde tablo adıyla birlikte belirt.
+21. Tek tablo yeterliyse JOIN kullanma.
+22. Önce root entity seç, sonra root tablodan child tablolara canonical join path ile ilerle.
+23. Child tabloya doğrudan düşme; child kolonlara yalnızca joins üzerinden eriş.
+24. Ölçü/hesaplama gereken sorularda önce measure seç, gerekirse computed_measures / expression_ref kullan.
+25. Durum ve zaman semantiklerini metadata’daki iş tanımlarına göre uygula.
 
 Çıktı formatı (JSON):
 {{
@@ -207,6 +217,21 @@ kabul edilmez.
   "limit": 100,
   "needs_clarification": false,
   "clarification_message": null
+}}
+
+Belirsizlik örneği:
+{{
+    "intent": "clarification_required",
+    "table": "<ROOT_TABLE_OR_NULL>",
+    "select_columns": [],
+    "filters": [],
+    "aggregations": [],
+    "group_by": [],
+    "order_by": [],
+    "joins": [],
+    "limit": 100,
+    "needs_clarification": true,
+    "clarification_message": "Hangi tarih aralığını istediğinizi netleştirir misiniz?"
 }}
 
 Örnek dönüşümler:
@@ -696,6 +721,10 @@ def build_compact_catalog_index(snapshot: CatalogSnapshot) -> str:
 def build_detail_section(
     tables: list[TableMetadata],
     pruned_cols: dict[str, list[str]],
+    *,
+    root_table_name: str | None = None,
+    secondary_table_max_columns: int = 8,
+    include_secondary_details: bool = True,
 ) -> str:
     """Full column detail for retrieved tables, filtered to pruned columns.
 
@@ -715,10 +744,22 @@ def build_detail_section(
         return ""
     parts: list[str] = ["Seçilen tablo detayları:"]
     for table in tables:
+        if not include_secondary_details and root_table_name and table.name != root_table_name:
+            continue
+
         wanted = set(pruned_cols.get(table.name, []))
         if not wanted:
             # No pruning for this table — include all columns
-            parts.append(_format_table(table))
+            if root_table_name and table.name != root_table_name:
+                secondary_columns = [
+                    column
+                    for column in table.columns
+                    if not column.restricted
+                ][:secondary_table_max_columns]
+                filtered_table = table.model_copy(update={"columns": secondary_columns})
+                parts.append(_format_table(filtered_table))
+            else:
+                parts.append(_format_table(table))
             continue
 
         # Always keep PK + FK columns
@@ -731,6 +772,11 @@ def build_detail_section(
             for c in table.columns
             if c.name in wanted or c.name in must_include
         ]
+        if root_table_name and table.name != root_table_name:
+            filtered_columns = [
+                column for column in filtered_columns
+                if not column.restricted or column.name in wanted
+            ][:secondary_table_max_columns]
         filtered_table = table.model_copy(update={"columns": filtered_columns})
         parts.append(_format_table(filtered_table))
 
@@ -754,6 +800,20 @@ def _join_sections_two_tier(
         sections.append(docs_block)
     if examples_block:
         sections.append(examples_block)
+    sections.append(f"Kullanıcı sorusu: {user_message}")
+    return "\n\n".join(s for s in sections if s)
+
+
+def _build_two_tier_essential_tail(
+    compact_index: str,
+    detail_section: str,
+    user_message: str,
+    *,
+    query_context_block: str = "",
+) -> str:
+    sections = [compact_index, detail_section]
+    if query_context_block:
+        sections.append(query_context_block)
     sections.append(f"Kullanıcı sorusu: {user_message}")
     return "\n\n".join(s for s in sections if s)
 
@@ -829,6 +889,7 @@ def build_two_tier_planner_prompt_debug(
     schema_docs=None,
     examples=None,
     query_understanding_summary: dict[str, Any] | None = None,
+    root_table_name: str | None = None,
     max_schema_docs: int = DEFAULT_MAX_SCHEMA_DOCS,
     max_examples: int = DEFAULT_MAX_EXAMPLES,
     max_doc_content_chars: int = DEFAULT_DOC_CONTENT_CHARS,
@@ -844,9 +905,6 @@ def build_two_tier_planner_prompt_debug(
     Returns (prompt_text, debug_dict).
     """
     compact_index = build_compact_catalog_index(full_snapshot)
-    detail_section = build_detail_section(
-        retrieved_snapshot.tables, pruned_cols
-    )
 
     schema_docs_list = schema_docs or []
     examples_list = examples or []
@@ -856,9 +914,18 @@ def build_two_tier_planner_prompt_debug(
     cur_examples = max_examples
     cur_explanation_chars = max_explanation_chars
     cur_content_chars = max_doc_content_chars
+    cur_secondary_table_columns = 8
+    include_secondary_details = True
     reduction_steps: list[str] = []
 
     def _build() -> str:
+        detail_section = build_detail_section(
+            retrieved_snapshot.tables,
+            pruned_cols,
+            root_table_name=root_table_name,
+            secondary_table_max_columns=cur_secondary_table_columns,
+            include_secondary_details=include_secondary_details,
+        )
         docs_block = (
             build_schema_docs_block(
                 schema_docs_list,
@@ -943,6 +1010,13 @@ def build_two_tier_planner_prompt_debug(
         return prompt, _debug(prompt)
 
     # Step 3 – aggressively trim explanations
+    cur_secondary_table_columns = 4
+    reduction_steps.append("compact_secondary_tables")
+    prompt = _build()
+    if len(prompt) <= max_prompt_chars:
+        return prompt, _debug(prompt)
+
+    # Step 4 – aggressively trim explanations
     cur_explanation_chars = _AGGRESSIVE_EXPLANATION_CHARS
     if cur_examples == 0 and examples_list:
         cur_examples = 1
@@ -951,7 +1025,7 @@ def build_two_tier_planner_prompt_debug(
     if len(prompt) <= max_prompt_chars:
         return prompt, _debug(prompt)
 
-    # Step 4 – aggressively trim doc content
+    # Step 5 – aggressively trim doc content
     cur_content_chars = _AGGRESSIVE_DOC_CONTENT_CHARS
     if cur_docs == 0 and schema_docs_list:
         cur_docs = 1
@@ -960,9 +1034,48 @@ def build_two_tier_planner_prompt_debug(
     if len(prompt) <= max_prompt_chars:
         return prompt, _debug(prompt)
 
-    # Step 5 – drop optional sections
+    # Step 6 – drop secondary detail before core root detail
+    include_secondary_details = False
+    reduction_steps.append("drop_secondary_table_details")
+    prompt = _build()
+    if len(prompt) <= max_prompt_chars:
+        return prompt, _debug(prompt)
+
+    # Step 7 – drop optional sections
     cur_examples = 0
     cur_docs = 0
     reduction_steps.append("drop_optional_sections")
     prompt = _build()
-    return prompt, _debug(prompt)
+    if len(prompt) <= max_prompt_chars:
+        return prompt, _debug(prompt)
+
+    # Step 8 – trim system prompt head; raise if compact index + root detail don't fit
+    detail_section = build_detail_section(
+        retrieved_snapshot.tables,
+        pruned_cols,
+        root_table_name=root_table_name,
+        secondary_table_max_columns=cur_secondary_table_columns,
+        include_secondary_details=include_secondary_details,
+    )
+    essential_tail = _build_two_tier_essential_tail(
+        compact_index,
+        detail_section,
+        user_message,
+        query_context_block=query_ctx_block,
+    )
+    essential_len = len(essential_tail)
+    if max_prompt_chars < essential_len:
+        raise ValueError(
+            f"planner_prompt_max_chars ({max_prompt_chars}) is below the "
+            f"minimum required ({essential_len}) for the selected two-tier "
+            f"catalog context and user question. Increase the budget or "
+            f"reduce retained root-table detail."
+        )
+
+    remaining = max_prompt_chars - essential_len - 2
+    reduction_steps.append("trim_system_prompt_head")
+    if remaining > 0:
+        head = _PLANNER_SYSTEM[:remaining]
+        prompt = head + "\n\n" + essential_tail
+        return prompt, _debug(prompt)
+    return essential_tail, _debug(essential_tail)

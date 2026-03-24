@@ -29,6 +29,7 @@ remain stable.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import TYPE_CHECKING
 
@@ -52,6 +53,10 @@ _MIN_TOKEN_LEN: int = 3
 
 # Minimum retrieval score for a table to be included
 _MIN_RETRIEVAL_SCORE: int = 3
+_ROOT_TABLE_BOOST: int = 14
+_ENTITY_SEED_BOOST: int = 10
+_MATCHING_MODULE_BOOST: int = 8
+_MISMATCH_MODULE_DIVISOR: int = 6
 
 # Turkish stop-words / suffixes that should never drive table scoring
 _STOP_TOKENS: frozenset[str] = frozenset({
@@ -109,6 +114,23 @@ class InMemoryRetriever(SchemaRetriever):
     ) -> None:
         self._provider = catalog_provider
         self._semantic_registry = semantic_registry
+        self._task_state: dict[int, dict[str, object] | None] = {}
+        self._fallback_state: dict[str, object] | None = None
+
+    @property
+    def last_retrieval_diagnostics(self) -> dict[str, object] | None:
+        task = asyncio.current_task()
+        if task is not None and id(task) in self._task_state:
+            return self._task_state[id(task)]
+        return self._fallback_state
+
+    def _set_last_retrieval_diagnostics(self, payload: dict[str, object] | None) -> None:
+        self._fallback_state = payload
+        task = asyncio.current_task()
+        if task is not None:
+            self._task_state[id(task)] = payload
+            if len(self._task_state) > 2048:
+                self._task_state.clear()
 
     async def retrieve(
         self,
@@ -140,12 +162,17 @@ class InMemoryRetriever(SchemaRetriever):
                 reg = None
 
         resolved_entities = getattr(query_understanding, "resolved_entities", []) if query_understanding else []
+        primary_module = query_understanding.primary_module() if query_understanding is not None else None
+        multi_entity = bool(query_understanding and query_understanding.multi_entity_flag)
+        root_table_name: str | None = None
 
         if reg is not None and resolved_entities:
             for entity_id in resolved_entities:
                 entity = reg.get_entity(entity_id)
                 if entity is None:
                     continue
+                if root_table_name is None:
+                    root_table_name = entity.root_table.upper()
                 for tbl_name in entity.default_tables:
                     entity_seeded_names.add(tbl_name.upper())
                 # Graph expansion: approved edges only
@@ -153,49 +180,75 @@ class InMemoryRetriever(SchemaRetriever):
                     entity_seeded_names.add(edge.target_table.upper())
                     entity_seeded_names.add(edge.source_table.upper())
 
-        all_table_map = {t.name.upper(): t for t in snapshot.tables}
+        if root_table_name is None and entity_seeded_names:
+            root_table_name = next(iter(entity_seeded_names), None)
+
+        candidate_records: list[dict[str, object]] = []
 
         # ------------------------------------------------------------------
         # Scoring
         # ------------------------------------------------------------------
-        qu_modules: set[str] = set()
-        if query_understanding is not None:
-            qu_modules = set(query_understanding.inferred_modules)
-
-        scored: list[tuple[int, TableMetadata]] = []
         for table in snapshot.tables:
             raw_score = self._score(table, user_query)
+            adjusted_score = raw_score
+            table_module = _table_module(table)
+            reasons: list[str] = []
 
             if entity_seeded_names:
                 # Entity-seed boost: tables in the seeded set get a strong boost
                 if table.name.upper() in entity_seeded_names:
-                    raw_score = int(raw_score * 1.5) + 10
+                    adjusted_score = int(adjusted_score * 2.0) + _ENTITY_SEED_BOOST
+                    reasons.append("entity_seed")
                 else:
                     # Suppress non-seeded tables (they survive only if they score
                     # very highly on their own keyword match)
-                    raw_score = raw_score // 4
+                    adjusted_score = adjusted_score // 4
+                    reasons.append("non_seed_suppressed")
             else:
                 # Fallback: module-pattern-based boost/suppress (legacy HR/PO)
-                tbl_module = _table_module(table)
-                if qu_modules and tbl_module:
-                    if tbl_module in qu_modules:
-                        raw_score = int(raw_score * 1.5) + 5
-                    elif not (query_understanding and query_understanding.multi_entity_flag):
-                        raw_score = max(0, raw_score // 3)
+                if primary_module and table_module:
+                    if table_module == primary_module and adjusted_score > 0:
+                        adjusted_score = int(adjusted_score * 2.0) + _MATCHING_MODULE_BOOST
+                        reasons.append("same_domain_boost")
+                    elif not multi_entity:
+                        adjusted_score = max(0, adjusted_score // _MISMATCH_MODULE_DIVISOR)
+                        reasons.append("cross_domain_suppressed")
 
-            scored.append((raw_score, table))
+            if root_table_name is not None and table.name.upper() == root_table_name:
+                adjusted_score += _ROOT_TABLE_BOOST
+                reasons.append("root_table")
 
-        scored.sort(key=lambda pair: pair[0], reverse=True)
+            if raw_score > 0 and not reasons:
+                reasons.append("keyword_match")
+
+            candidate_records.append({
+                "table": table,
+                "raw_score": raw_score,
+                "score": adjusted_score,
+                "module": table_module,
+                "reason": ",".join(reasons) or "no_signal",
+            })
+
+        candidate_records.sort(key=lambda record: int(record["score"]), reverse=True)
 
         # Apply minimum score threshold (not just > 0)
-        selected = [
-            table for score, table in scored[:top_k]
-            if score >= _MIN_RETRIEVAL_SCORE
+        selected_records = [
+            record for record in candidate_records[:top_k]
+            if int(record["score"]) >= _MIN_RETRIEVAL_SCORE
         ]
+        selected = [record["table"] for record in selected_records]
 
         if not selected:
             # Fallback: no match at all → return first top_k tables
             fallback = snapshot.tables[:top_k]
+            self._set_last_retrieval_diagnostics({
+                "dominant_domain_match": None,
+                "root_table_name": root_table_name,
+                "root_table_confidence": "low",
+                "noisy_context_count": 0,
+                "dropped_candidates": [f"{record['table'].name}:below_threshold" for record in candidate_records[top_k:]],
+                "kept_candidates_reason": {table.name: "fallback" for table in fallback},
+            })
             return CatalogSnapshot(
                 tables=fallback,
                 relationships=self._filter_relationships(snapshot, fallback),
@@ -203,8 +256,8 @@ class InMemoryRetriever(SchemaRetriever):
 
         # Log rejected candidates for traceability
         rejected = [
-            (score, table.name) for score, table in scored
-            if 0 < score < _MIN_RETRIEVAL_SCORE
+            (int(record["score"]), record["table"].name) for record in candidate_records
+            if 0 < int(record["score"]) < _MIN_RETRIEVAL_SCORE
         ]
         if rejected:
             logger.debug(
@@ -227,7 +280,58 @@ class InMemoryRetriever(SchemaRetriever):
             ) or (query_understanding is None)  # backward compat: expand if no QU
 
             if should_expand:
-                selected = self._expand_related(snapshot, selected, top_k)
+                selected = self._expand_related(
+                    snapshot,
+                    selected,
+                    top_k,
+                    primary_module=primary_module,
+                    entity_seeded_names=entity_seeded_names,
+                )
+
+        selected_names = {table.name for table in selected}
+        kept_candidates_reason = {
+            record["table"].name: str(record["reason"])
+            for record in candidate_records
+            if record["table"].name in selected_names
+        }
+        expanded_tables = [table.name for table in selected if table.name not in kept_candidates_reason]
+        for table_name in expanded_tables:
+            kept_candidates_reason[table_name] = "relation_expansion"
+
+        noisy_context_count = 0
+        if primary_module:
+            noisy_context_count = sum(
+                1
+                for table in selected
+                if _table_module(table) is not None and _table_module(table) != primary_module
+            )
+
+        dominant_domain_match: bool | None = None
+        if primary_module:
+            same_domain = sum(1 for table in selected if _table_module(table) == primary_module)
+            dominant_domain_match = same_domain >= max(1, len(selected) - noisy_context_count)
+
+        root_table_confidence = "low"
+        if root_table_name and selected and selected[0].name.upper() == root_table_name:
+            root_table_confidence = "high"
+        elif root_table_name and any(table.name.upper() == root_table_name for table in selected):
+            root_table_confidence = "medium"
+
+        dropped_candidates = []
+        for record in candidate_records:
+            table = record["table"]
+            if table.name in selected_names:
+                continue
+            dropped_candidates.append(f"{table.name}:{record['reason']}")
+
+        self._set_last_retrieval_diagnostics({
+            "dominant_domain_match": dominant_domain_match,
+            "root_table_name": root_table_name,
+            "root_table_confidence": root_table_confidence,
+            "noisy_context_count": noisy_context_count,
+            "dropped_candidates": dropped_candidates,
+            "kept_candidates_reason": kept_candidates_reason,
+        })
 
         return CatalogSnapshot(
             tables=selected,
@@ -241,10 +345,14 @@ class InMemoryRetriever(SchemaRetriever):
         snapshot: CatalogSnapshot,
         selected: list[TableMetadata],
         top_k: int,
+        *,
+        primary_module: str | None = None,
+        entity_seeded_names: set[str] | None = None,
     ) -> list[TableMetadata]:
         """Add FK-related tables that aren't already selected (up to top_k)."""
         selected_names = {t.name.upper() for t in selected}
         all_tables = {t.name.upper(): t for t in snapshot.tables}
+        entity_seeded_names = entity_seeded_names or set()
 
         to_add: list[TableMetadata] = []
         for table in selected:
@@ -255,7 +363,11 @@ class InMemoryRetriever(SchemaRetriever):
                     else rel.from_table.upper()
                 )
                 if other not in selected_names and other in all_tables:
-                    to_add.append(all_tables[other])
+                    candidate = all_tables[other]
+                    candidate_module = _table_module(candidate)
+                    if primary_module and candidate_module and candidate_module != primary_module and other not in entity_seeded_names:
+                        continue
+                    to_add.append(candidate)
                     selected_names.add(other)
 
         result = selected + to_add

@@ -12,6 +12,8 @@ from app.domain.catalog_models import (
     RelationshipMetadata,
     TableMetadata,
 )
+from app.providers.retrieval.embedding_retriever import EmbeddingRetriever
+from app.providers.retrieval.hybrid_retriever import HybridRetriever
 from app.providers.retrieval.in_memory_retriever import (
     InMemoryRetriever,
     _MIN_RETRIEVAL_SCORE,
@@ -231,3 +233,59 @@ class TestControlledFKExpansion:
         table_names = [t.name for t in snap.tables]
         # Should not pull PO_LINES via FK when it's a purely HR query
         assert "XXBT_PDKS_PER_DETAILS_V" in table_names
+
+
+class TestHybridAndSemanticRetrieverCompatibility:
+    """Hybrid and semantic retrievers must accept query_understanding."""
+
+    @pytest.mark.asyncio
+    async def test_hybrid_retriever_forwards_query_understanding(self) -> None:
+        qu = analyze_query("Aktif çalışanları listele")
+        snapshot = CatalogSnapshot(tables=[_hr_table()], relationships=[])
+
+        keyword = AsyncMock()
+        keyword.retrieve = AsyncMock(return_value=snapshot)
+        semantic = AsyncMock()
+        semantic.retrieve = AsyncMock(return_value=snapshot)
+
+        retriever = HybridRetriever(keyword=keyword, semantic=semantic)
+
+        result = await retriever.retrieve(
+            "Aktif çalışanları listele",
+            top_k=3,
+            query_understanding=qu,
+        )
+
+        assert [t.name for t in result.tables] == ["XXBT_PDKS_PER_DETAILS_V"]
+        keyword.retrieve.assert_awaited_once_with(
+            "Aktif çalışanları listele",
+            top_k=6,
+            query_understanding=qu,
+        )
+        semantic.retrieve.assert_awaited_once_with(
+            "Aktif çalışanları listele",
+            top_k=6,
+            query_understanding=qu,
+        )
+
+    @pytest.mark.asyncio
+    async def test_embedding_retriever_accepts_query_understanding(self) -> None:
+        table = _hr_table()
+        provider = _make_provider(table)
+
+        indexer = AsyncMock()
+        indexer.ensure_built = AsyncMock(return_value=False)
+        indexer.get_matrix = AsyncMock(return_value=None)
+
+        emb_provider = AsyncMock()
+        retriever = EmbeddingRetriever(provider, indexer, emb_provider)
+
+        qu = analyze_query("Aktif çalışanları listele")
+        snap = await retriever.retrieve(
+            "Aktif çalışanları listele",
+            top_k=1,
+            query_understanding=qu,
+        )
+
+        assert [t.name for t in snap.tables] == ["XXBT_PDKS_PER_DETAILS_V"]
+        emb_provider.embed_texts.assert_not_called()

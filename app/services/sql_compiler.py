@@ -36,6 +36,7 @@ from app.domain.query_plan import (
     OrderSpec,
     QueryPlan,
 )
+from app.utils.date_literals import coerce_runtime_date_value
 from app.utils.turkish import casefold_tr
 
 
@@ -55,9 +56,6 @@ _EXTRACT_YEAR_RE = re.compile(
     r"^EXTRACT\s*\(\s*YEAR\s+FROM\s+([A-Za-z_][A-Za-z0-9_\.]+)\s*\)$",
     re.IGNORECASE,
 )
-
-_ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
-
 
 def _normalize_relative_date_sql(expr: str) -> str:
     """Normalize relative date expressions to Oracle-safe canonical form."""
@@ -153,16 +151,11 @@ def _expand_expression(
 
 
 def _coerce_date_bind(value: object) -> object:
-    """Convert ISO date strings to python date for Oracle DATE binds."""
-    if not isinstance(value, str):
-        return value
-    m = _ISO_DATE_RE.match(value.strip())
-    if not m:
-        return value
-    try:
-        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-    except Exception:
-        return value
+    """Convert supported runtime date values to python date for Oracle DATE binds."""
+    normalized, valid = coerce_runtime_date_value(value)
+    if valid:
+        return normalized
+    return value
 
 
 # Oracle EBS boolean flag columns that may be VARCHAR2 in production

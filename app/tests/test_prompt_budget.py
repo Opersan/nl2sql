@@ -29,6 +29,7 @@ from app.providers.llm.prompts import (
     _MIN_PROMPT_BUDGET_CHARS,
     build_catalog_summary,
     build_hybrid_planner_prompt,
+    build_two_tier_planner_prompt_debug,
 )
 
 
@@ -486,3 +487,50 @@ class TestMinimumBudgetEnforcement:
                 _snapshot(),
                 max_prompt_chars=budget,
             )
+
+
+class TestTwoTierBudgetReduction:
+    def test_secondary_table_detail_drops_before_root_detail(self) -> None:
+        full_snapshot = CatalogSnapshot(
+            tables=[
+                TableMetadata(
+                    name="XXBT_PDKS_PER_DETAILS_V",
+                    description="Personel tablosu",
+                    columns=[
+                        ColumnMetadata(name=f"ROOT_COL_{i}", data_type=ColumnType.VARCHAR)
+                        for i in range(12)
+                    ],
+                    primary_key=["ROOT_COL_0"],
+                ),
+                TableMetadata(
+                    name="PO_HEADERS_ALL",
+                    description="Satınalma başlıkları",
+                    columns=[
+                        ColumnMetadata(name=f"PO_COL_{i}", data_type=ColumnType.VARCHAR)
+                        for i in range(12)
+                    ],
+                    primary_key=["PO_COL_0"],
+                ),
+            ],
+        )
+
+        prompt, debug = build_two_tier_planner_prompt_debug(
+            "Aktif çalışanları listele",
+            full_snapshot,
+            full_snapshot,
+            {
+                "XXBT_PDKS_PER_DETAILS_V": [f"ROOT_COL_{i}" for i in range(12)],
+                "PO_HEADERS_ALL": [f"PO_COL_{i}" for i in range(12)],
+            },
+            root_table_name="XXBT_PDKS_PER_DETAILS_V",
+            schema_docs=_many_docs(8, 600),
+            examples=_many_examples(8, 500),
+            max_prompt_chars=3600,
+        )
+
+        assert len(prompt) <= 3600
+        assert "compact_secondary_tables" in debug["reduction_steps"]
+        assert "drop_secondary_table_details" in debug["reduction_steps"]
+        assert debug["reduction_steps"].index("compact_secondary_tables") < debug["reduction_steps"].index("drop_secondary_table_details")
+        assert "Tablo: XXBT_PDKS_PER_DETAILS_V" in prompt
+        assert "Tablo: PO_HEADERS_ALL" not in prompt

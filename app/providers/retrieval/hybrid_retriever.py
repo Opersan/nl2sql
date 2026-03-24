@@ -18,10 +18,14 @@ returned.
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from app.core.logging import get_logger
 from app.domain.catalog_models import CatalogSnapshot, RelationshipMetadata
 from app.providers.retrieval.base import SchemaRetriever
+
+if TYPE_CHECKING:
+    from app.services.query_understanding import QueryUnderstanding
 
 logger = get_logger(__name__)
 
@@ -58,12 +62,21 @@ class HybridRetriever(SchemaRetriever):
         user_query: str,
         *,
         top_k: int = 5,
+        query_understanding: "QueryUnderstanding | None" = None,
     ) -> CatalogSnapshot:
         # Retrieve candidates from both back-ends in parallel
         candidate_k = min(top_k * 2, 20)
         kw_snap, sem_snap = await asyncio.gather(
-            self._keyword.retrieve(user_query, top_k=candidate_k),
-            self._semantic.retrieve(user_query, top_k=candidate_k),
+            self._keyword.retrieve(
+                user_query,
+                top_k=candidate_k,
+                query_understanding=query_understanding,
+            ),
+            self._semantic.retrieve(
+                user_query,
+                top_k=candidate_k,
+                query_understanding=query_understanding,
+            ),
         )
 
         # Build a combined table registry (name → TableMetadata)

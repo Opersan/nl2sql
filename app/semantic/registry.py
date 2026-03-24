@@ -28,7 +28,6 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from app.semantic.loader import get_semantic_foundation, load_semantic_foundation
 from app.semantic.models import (
     FlexfieldDefinition,
     GlossaryEntry,
@@ -37,6 +36,11 @@ from app.semantic.models import (
     RelationshipEdge,
     SemanticEntity,
     SemanticFoundation,
+)
+from app.semantic.repository import (
+    build_runtime_semantic_foundation,
+    get_semantic_repository,
+    load_semantic_repository,
 )
 
 
@@ -276,7 +280,9 @@ def get_registry() -> SemanticFoundationRegistry:
 
     Loaded once on first call; all subsequent calls return the same instance.
     """
-    return SemanticFoundationRegistry(get_semantic_foundation())
+    return SemanticFoundationRegistry(
+        build_runtime_semantic_foundation(get_semantic_repository())
+    )
 
 
 def make_registry_from_dir(semantic_dir: Path) -> SemanticFoundationRegistry:
@@ -285,5 +291,5 @@ def make_registry_from_dir(semantic_dir: Path) -> SemanticFoundationRegistry:
     Use this in tests to load fixture data without affecting the
     application singleton cache.
     """
-    foundation = load_semantic_foundation(semantic_dir=semantic_dir)
-    return SemanticFoundationRegistry(foundation)
+    repository = load_semantic_repository(semantic_dir=semantic_dir)
+    return SemanticFoundationRegistry(build_runtime_semantic_foundation(repository))
