@@ -1,0 +1,405 @@
+{
+  "run_name": "run5",
+  "dataset_path": "data\\eval_dataset_100.json",
+  "dataset_size": 50,
+  "benchmark": [],
+  "summary": {
+    "total_questions": 50,
+    "counts": {
+      "success": 24,
+      "empty_result": 6,
+      "execution_error": 5,
+      "clarification": 9,
+      "validation_error": 4,
+      "wrong_plan": 2
+    },
+    "success_rate": 0.6,
+    "clarification_rate": 0.18,
+    "wrong_plan_rate": 0.044444444444444446,
+    "validation_error_rate": 0.08,
+    "compile_error_rate": 0.0,
+    "execution_error_rate": 0.1,
+    "avg_latency_ms": 80699.86,
+    "p95_latency_ms": 120033.0,
+    "timeout_count": 3,
+    "row_count_distribution": {
+      "11_100": 16,
+      "0": 9,
+      "1_10": 10,
+      "unknown": 15
+    },
+    "heavy_join_queries": [
+      {
+        "id": "p15",
+        "question": "Toplam dagitim miktarini hesapla",
+        "latency_ms": 64091,
+        "status": "execution_error",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      }
+    ],
+    "top_slowest_queries": [
+      {
+        "id": "p06",
+        "question": "USD cinsinden siparis basliklarini listele",
+        "latency_ms": 328023,
+        "status": "execution_error",
+        "tables": []
+      },
+      {
+        "id": "e12",
+        "question": "Istanbul'daki calisanlari say",
+        "latency_ms": 222783,
+        "status": "execution_error",
+        "tables": []
+      },
+      {
+        "id": "p18",
+        "question": "Aylik PO olusturma sayisini goster",
+        "latency_ms": 120033,
+        "status": "success",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p11",
+        "question": "Tedarikciye gore PO sayisini goster",
+        "latency_ms": 109362,
+        "status": "success",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "e20",
+        "question": "Birim ve lokasyon bazinda gruplandirmali calisan sayisi",
+        "latency_ms": 106027,
+        "status": "success",
+        "tables": [
+          "XXBT_PDKS_PER_DETAILS_V"
+        ]
+      },
+      {
+        "id": "e16",
+        "question": "Hangi departmanda kac calisan var",
+        "latency_ms": 102235,
+        "status": "success",
+        "tables": [
+          "XXBT_PDKS_PER_DETAILS_V"
+        ]
+      },
+      {
+        "id": "p02",
+        "question": "Son 30 gunde olusturulan PO basliklarini goster",
+        "latency_ms": 99650,
+        "status": "validation_error",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "e14",
+        "question": "Toplam aktif calisan sayisi",
+        "latency_ms": 97720,
+        "status": "success",
+        "tables": [
+          "XXBT_PDKS_PER_DETAILS_V"
+        ]
+      },
+      {
+        "id": "p14",
+        "question": "Onay durumuna gore PO dagilimi",
+        "latency_ms": 96735,
+        "status": "validation_error",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      },
+      {
+        "id": "p04",
+        "question": "Kapali PO basliklarini listele",
+        "latency_ms": 91856,
+        "status": "wrong_plan",
+        "tables": [
+          "PO_HEADERS_ALL"
+        ]
+      }
+    ],
+    "clarification_breakdown": {
+      "recoverable_ambiguity": 7,
+      "genuine_ambiguity": 2
+    },
+    "safety_checks": {
+      "sqlguard_select_only": true,
+      "multi_statement_block": true,
+      "bind_param_usage": true,
+      "bind_param_usage_count": 35,
+      "row_limit_enforced": true,
+      "row_limit_enforced_count": 35,
+      "timeout_enforced": true,
+      "sql_leak_count": 0,
+      "presentation_leak_count": 0,
+      "restricted_fields_exposure_count": 0
+    },
+    "manual_review_list_size": 11,
+    "readiness_decision": "not_ready",
+    "execution_error_subtypes": {
+      "timeout": 3,
+      "ambiguous_column": 1,
+      "expression_rendering_issue": 1
+    },
+    "structured_parse_errors": 3,
+    "top_failure_buckets": [
+      {
+        "bucket": "clarification",
+        "count": 6
+      },
+      {
+        "bucket": "execution_error/timeout",
+        "count": 3
+      },
+      {
+        "bucket": "structured_parse_error",
+        "count": 3
+      },
+      {
+        "bucket": "wrong_plan/wrong_filter_column",
+        "count": 2
+      },
+      {
+        "bucket": "validation_error/Kolon bulunamadı: 'all' (tablo: PO_HEADERS_ALL).",
+        "count": 1
+      },
+      {
+        "bucket": "execution_error/ambiguous_column",
+        "count": 1
+      },
+      {
+        "bucket": "validation_error/Kolon bulunamadı: 'PO_DISTRIBUTION_ID' (tablo: PO_HEADERS_AL",
+        "count": 1
+      },
+      {
+        "bucket": "validation_error/ORDER BY kolonu/alias bulunamadı: 'AUTHORIZATION_STATUS' (ta",
+        "count": 1
+      },
+      {
+        "bucket": "execution_error/expression_rendering_issue",
+        "count": 1
+      },
+      {
+        "bucket": "validation_error/Aggregate kolonu bulunamadı: 'PO_LINE_COUNT' (tablo: PO_HEAD",
+        "count": 1
+      }
+    ],
+    "repair_applied_total": 2,
+    "repaired_fields_total": 2,
+    "questions_with_repair_rate": 0.04,
+    "repair_action_counts": {
+      "syntax_normalize": 2
+    },
+    "wrong_plan_bucket_counts": {
+      "wrong_filter_column": 2
+    },
+    "execution_error_bucket_counts": {
+      "timeout_heavy_join": 3,
+      "ambiguous_column": 1,
+      "expression_rendering_issue": 1
+    },
+    "repaired_wrong_plan_count": 0,
+    "repair_prevented_clarification_count": 0,
+    "repair_prevented_validation_error_count": 0,
+    "repair_prevented_execution_error_count": 0,
+    "top_semantic_intents_by_failure": [
+      {
+        "semantic_intent": "po_header_query",
+        "count": 9
+      },
+      {
+        "semantic_intent": "employee_list",
+        "count": 8
+      },
+      {
+        "semantic_intent": "unknown",
+        "count": 2
+      },
+      {
+        "semantic_intent": "po_distribution_amount",
+        "count": 1
+      }
+    ],
+    "top_root_entities_by_failure": [
+      {
+        "root_entity": "PO_HEADERS_ALL",
+        "count": 10
+      },
+      {
+        "root_entity": "XXBT_PDKS_PER_DETAILS_V",
+        "count": 8
+      },
+      {
+        "root_entity": "None",
+        "count": 2
+      }
+    ],
+    "concurrency": 10,
+    "max_retries": 2,
+    "total_wall_time_s": 411.58333340000536,
+    "avg_question_latency_s": 80.69986,
+    "p50_question_latency_s": 72.5835,
+    "p95_question_latency_s": 120.033,
+    "llm_retry_count": 2,
+    "llm_retry_success_count": 0,
+    "business_success_rate": 0.64,
+    "quality_pass_rate": 0.72,
+    "safety_pass_rate": 1.0,
+    "first_fail_stage_counts": {
+      "none": 40,
+      "planner": 3,
+      "validation": 4,
+      "execute": 3
+    },
+    "root_cause_category_counts": {
+      "no_failure": 30,
+      "unknown": 2,
+      "planner_output": 3,
+      "validation_failure": 4,
+      "semantic_override": 8,
+      "execution_failure": 3
+    },
+    "narrator_leak_rate": 0.0,
+    "presentation_leak_rate": 0.0,
+    "sql_leak_rate": 0.0,
+    "final_narrator_leak_rate": 0.0,
+    "final_presentation_leak_rate": 0.0,
+    "final_sql_leak_rate": 0.0,
+    "final_oracle_error_leak_rate": 0.0,
+    "raw_narrator_leak_rate": 0.46,
+    "raw_presentation_leak_rate": 0.46,
+    "raw_sql_leak_rate": 0.1,
+    "raw_oracle_error_leak_rate": 0.0,
+    "planner_parse_fail_rate": 0.06,
+    "repair_apply_rate": 0.04,
+    "semantic_override_rate": 0.16,
+    "sql_shape_changed_rate": 0.04,
+    "trace_alignment_error_count": 0,
+    "narration_context_mismatch_count": 0,
+    "sanitizer_effective_rate": 0.96,
+    "final_response_mapping_error_count": 0,
+    "sanitizer_saved_response_count": 23,
+    "raw_leak_but_final_clean_count": 23,
+    "no_failure_count": 30,
+    "user_visible_pass_rate": 0.96,
+    "pass_with_sanitization_rate": 0.46,
+    "semantic_rescue_rate": 0.14,
+    "executable_after_repair_rate": 0.0,
+    "narration_genericness_rate": 0.0,
+    "fallback_template_usage_rate": 0.0,
+    "pass_without_sanitization_rate": 0.0,
+    "false_success_risk_rate": 0.0,
+    "success_blocked_by_filter_loss_count": 0,
+    "success_blocked_by_filter_loss_rate": 0.0,
+    "semantic_rescue_executable_rate": 0.02,
+    "user_visible_quality_distribution": {
+      "pass_with_sanitization": 48,
+      "fail": 2
+    },
+    "model_behavior_quality_distribution": {
+      "pass": 25,
+      "degraded": 23,
+      "fail": 2
+    },
+    "sanitizer_reason_code_distribution": {
+      "raw_missing": 25,
+      "policy_leak_removed": 23,
+      "none": 2
+    },
+    "clarification_reason_code_distribution": {
+      "none": 41,
+      "parse_recovery_failed": 3,
+      "unsupported_metric_shape": 1,
+      "multiple_valid_entities": 1,
+      "planner_requested_clarification": 4
+    },
+    "confidence_band_distribution": {
+      "high": 29,
+      "medium": 10,
+      "unknown": 2,
+      "low": 9
+    },
+    "pre_execution_risk_flag_distribution": {
+      "timeout_prone_simple_listing": 4,
+      "none": 45,
+      "high_risk_but_executable": 2
+    },
+    "execution_guard_reason_distribution": {
+      "execution_safe_mode_applied": 3,
+      "none": 46,
+      "execution_blocked_high_risk": 1
+    },
+    "sql_shape_change_stage_distribution": {
+      "none": 37,
+      "semantic": 7,
+      "canonicalize": 1,
+      "repair": 2,
+      "normalize": 3
+    },
+    "sql_shape_change_reason_distribution": {
+      "no_change": 37,
+      "semantic_table_anchor": 7,
+      "alias_canonicalization": 1,
+      "qualified_column_repair": 1,
+      "aggregation_repair": 1,
+      "clarification_cleanup": 3
+    },
+    "user_visible_status_distribution": {
+      "pass": 25,
+      "pass_with_sanitization": 23,
+      "fail": 2
+    },
+    "technical_pipeline_status_distribution": {
+      "degraded": 38,
+      "fail": 12
+    },
+    "execution_error_subtype_distribution": {
+      "timeout": 3,
+      "ambiguous_column": 1,
+      "expression_rendering_issue": 1
+    },
+    "primary_root_cause_stage_distribution": {
+      "none": 23,
+      "sanitizer": 17,
+      "planner": 3,
+      "compile": 4,
+      "execution": 2,
+      "execution_guard": 1
+    },
+    "primary_root_cause_category_distribution": {
+      "no_failure": 20,
+      "narration_leak_but_sanitized": 12,
+      "wrong_entity": 3,
+      "missing_filter": 12,
+      "execution_failed_runtime": 2,
+      "execution_blocked_valid": 1
+    },
+    "failure_severity_distribution": {
+      "none": 21,
+      "degraded": 13,
+      "hard_failure": 16
+    },
+    "primary_failure_family_distribution": {
+      "none": 20,
+      "narration": 12,
+      "plan_quality": 15,
+      "execution": 2,
+      "execution_guard": 1
+    },
+    "technical_success_rate": 0.64,
+    "user_visible_success_rate": 0.96,
+    "model_behavior_success_rate": 0.5,
+    "false_success_rate": 0.0,
+    "sanitized_but_model_failed_rate": 0.46,
+    "compile_valid_but_business_invalid_rate": 0.04
+  }
+}
