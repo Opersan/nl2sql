@@ -109,6 +109,7 @@ class SemanticFoundationRegistry:
         self._all_entities: list[SemanticEntity] = list(foundation.entities)
         self._all_relationships: list[RelationshipEdge] = list(foundation.relationships)
         self._all_glossary_entries: list[GlossaryEntry] = list(foundation.glossary)
+        self._all_lookups: list[LookupType] = list(foundation.lookups)
 
     # ------------------------------------------------------------------
     # Term resolution
@@ -212,6 +213,27 @@ class SemanticFoundationRegistry:
         """Return all lookup codes for *lookup_type*."""
         return self._lookup_index.get(lookup_type, [])
 
+    def get_lookups_for_column(
+        self,
+        column_name: str,
+        *,
+        table_name: str | None = None,
+    ) -> list[LookupType]:
+        """Return lookup records whose ``table_ref`` targets *column_name*."""
+        column_upper = column_name.upper()
+        table_upper = table_name.upper() if table_name else None
+        matches: list[LookupType] = []
+        for lookup in self._all_lookups:
+            if not lookup.table_ref or "." not in lookup.table_ref:
+                continue
+            ref_table, ref_column = lookup.table_ref.rsplit(".", 1)
+            if ref_column.upper() != column_upper:
+                continue
+            if table_upper and ref_table.upper() != table_upper:
+                continue
+            matches.append(lookup)
+        return matches
+
     # ------------------------------------------------------------------
     # Flexfield access
     # ------------------------------------------------------------------
@@ -227,6 +249,10 @@ class SemanticFoundationRegistry:
     def get_all_glossary_entries(self) -> list[GlossaryEntry]:
         """Return all glossary entries in definition order."""
         return self._all_glossary_entries
+
+    def get_all_lookups(self) -> list[LookupType]:
+        """Return all lookup records in definition order."""
+        return list(self._all_lookups)
 
     # ------------------------------------------------------------------
     # Aggregate signal-keyword index (used by intent_guard)

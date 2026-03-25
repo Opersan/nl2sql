@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
+import time
 from typing import Any
 
 from app.core.config import settings
@@ -274,10 +275,12 @@ class OracleExecutor(ExecutorProvider):
                     "Call init_pool() after setting ORACLE_DSN, ORACLE_USER "
                     "and ORACLE_PASSWORD."
                 ),
+                execution_error_subtype="executor_unavailable",
+                execution_error_message_normalized="oracle_executor_not_configured",
             )
 
         # 5-7. Real execution — sync call wrapped in thread pool
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             return await asyncio.wait_for(
                 loop.run_in_executor(self._thread_pool, self._sync_query, compiled_query),
@@ -287,6 +290,15 @@ class OracleExecutor(ExecutorProvider):
             raise ExecutionError(
                 "Query timeout exceeded.",
                 detail=f"Query did not complete within {self._timeout}s.",
+                execution_error_subtype="timeout",
+                execution_error_message_normalized=f"query_timeout_{self._timeout}s",
+            ) from exc
+        except asyncio.CancelledError as exc:
+            raise ExecutionError(
+                "Query execution cancelled.",
+                detail="Execution was cancelled before completion.",
+                execution_error_subtype="execution_cancelled",
+                execution_error_message_normalized="execution_cancelled",
             ) from exc
 
     def _sync_query(self, compiled_query: CompiledQuery) -> ExecutionResult:
@@ -297,9 +309,18 @@ class OracleExecutor(ExecutorProvider):
             compiled_query.debug_plan.limit if compiled_query.debug_plan else settings.default_row_limit,
             settings.max_row_limit,
         )
+        started = time.perf_counter()
         try:
             with self._pool.acquire() as conn:
+                call_timeout_ms = max(int(float(self._timeout) * 1000), 1)
+                if hasattr(conn, "call_timeout"):
+                    conn.call_timeout = call_timeout_ms
                 with conn.cursor() as cur:
+                    fetch_hint = max(1, min(row_limit, 200))
+                    if hasattr(cur, "arraysize"):
+                        cur.arraysize = fetch_hint
+                    if hasattr(cur, "prefetchrows"):
+                        cur.prefetchrows = fetch_hint
                     cur.execute(compiled_query.sql, compiled_query.params)
                     columns: list[str] = (
                         [d[0].lower() for d in cur.description]
@@ -320,6 +341,7 @@ class OracleExecutor(ExecutorProvider):
                         columns=columns,
                         rows=result_rows,
                         row_count=len(result_rows),
+                        execution_time_ms=int((time.perf_counter() - started) * 1000),
                     )
         except oracledb.DatabaseError as exc:
             detail = str(exc)

@@ -53,6 +53,15 @@ from app.services.validation_service import ValidationService
 logger = get_logger(__name__)
 
 
+_PRECHECK_REASON_TO_SUBTYPE: dict[str, str] = {
+    "precheck_date_literal_invalid": "oracle_date_type_error",
+    "precheck_timeout_prone_shape": "timeout",
+    "precheck_timeout_prone_large_join": "timeout",
+    "precheck_timeout_prone_simple_listing": "timeout",
+    "precheck_invalid_filter_value": "unknown_execution_error",
+}
+
+
 class Orchestrator:
     """Sprint 1 pipeline orchestrator (no LLM).
 
@@ -135,6 +144,7 @@ class Orchestrator:
             repaired_plan, repair_result, repair_trace = await self._validation_repair.repair(plan, validation)
             self._last_trace["validation_repair"] = {
                 "attempted": repair_trace.get("attempted", False),
+                "repair_applied": repair_trace.get("repaired", False),
                 "repaired": repair_trace.get("repaired", False),
                 "reason_codes": list(dict.fromkeys(repair_trace.get("reasons", []))),
                 "skipped_reason_codes": list(dict.fromkeys(repair_trace.get("skipped_reason_codes", []))),
@@ -172,6 +182,11 @@ class Orchestrator:
                         "resolved_tables": sorted(validation.resolved_tables.keys()),
                         "latency_ms": validation_ms,
                     }
+                else:
+                    reason_codes = list(self._last_trace["validation_repair"].get("reason_codes", []))
+                    if "revalidate_failed_after_repair" not in reason_codes:
+                        reason_codes.append("revalidate_failed_after_repair")
+                    self._last_trace["validation_repair"]["reason_codes"] = reason_codes
 
         if validation.ok:
             self._last_trace["last_completed_stage"] = "validation"
@@ -232,37 +247,86 @@ class Orchestrator:
         logger.info("Params: %s", compiled.params)
 
         precheck = assess_pre_execution_risk(plan, table)
+        execution_plan = plan
+        execution_compiled = compiled
+        if precheck.safe_mode_applied and precheck.effective_limit is not None and precheck.effective_limit < plan.limit:
+            execution_plan = plan.model_copy(update={"limit": precheck.effective_limit})
+            safe_compile_started = time.perf_counter()
+            try:
+                execution_compiled = self._compiler.compile(
+                    execution_plan,
+                    table,
+                    extra_tables=validation.resolved_tables or None,
+                )
+            except CompilationError as exc:
+                self._last_trace["compile"] = {
+                    "ok": False,
+                    "error": str(exc),
+                    "latency_ms": int((time.perf_counter() - safe_compile_started) * 1000),
+                }
+                self._last_trace["current_stage_at_failure"] = "compile"
+                self._last_trace["root_cause_stage"] = "compile"
+                logger.error("Safe-mode recompilation error: %s", exc)
+                return OrchestrationResult(
+                    validation=validation,
+                    failed_phase=ErrorPhase.COMPILATION,
+                    compilation_error=str(exc),
+                )
+
+            self._last_trace["compile"] = {
+                "ok": True,
+                "sql": execution_compiled.sql,
+                "params": execution_compiled.params,
+                "table": execution_compiled.table,
+                "selected_columns": list(execution_compiled.selected_columns),
+                "executed_sql_fingerprint": sql_fingerprint(execution_compiled.sql),
+                "bind_summary": bind_summary(execution_compiled),
+                "latency_ms": int((time.perf_counter() - compile_started) * 1000),
+            }
+
         self._last_trace["pre_execution"] = {
             "pre_execution_risk_flags": list(precheck.pre_execution_risk_flags),
             "execution_guard_reason": precheck.execution_guard_reason,
             "execution_skipped_reason": precheck.execution_skipped_reason,
             "why_not_executed": precheck.execution_skipped_reason,
+            "safe_mode_applied": precheck.safe_mode_applied,
+            "safe_mode_reason": precheck.safe_mode_reason,
+            "original_limit": plan.limit,
+            "effective_limit": execution_plan.limit,
             "should_execute": precheck.should_execute,
-            "executed_sql_fingerprint": sql_fingerprint(compiled.sql),
-            "bind_summary": bind_summary(compiled),
+            "executed_sql_fingerprint": sql_fingerprint(execution_compiled.sql),
+            "bind_summary": bind_summary(execution_compiled),
         }
 
         if not precheck.should_execute:
             reason = str(precheck.execution_skipped_reason or "pre_execution_blocked")
+            subtype = _PRECHECK_REASON_TO_SUBTYPE.get(reason)
             self._last_trace["execute"] = {
                 "status": "skipped",
                 "row_count": 0,
                 "columns": [],
                 "error_message": reason,
+                "execution_error_subtype": subtype,
+                "execution_error_message_normalized": reason,
                 "execution_guard_reason": precheck.execution_guard_reason,
                 "execution_skipped_reason": reason,
                 "pre_execution_risk_flags": list(precheck.pre_execution_risk_flags),
+                "safe_mode_applied": precheck.safe_mode_applied,
+                "safe_mode_reason": precheck.safe_mode_reason,
+                "effective_limit": execution_plan.limit,
                 "why_not_executed": reason,
-                "executed_sql_fingerprint": sql_fingerprint(compiled.sql),
-                "bind_summary": bind_summary(compiled),
+                "executed_sql_fingerprint": sql_fingerprint(execution_compiled.sql),
+                "bind_summary": bind_summary(execution_compiled),
                 "latency_ms": 0,
             }
             return OrchestrationResult(
                 validation=validation,
-                compiled_query=compiled,
+                compiled_query=execution_compiled,
                 execution_result=ExecutionResult(
                     status=ExecutionStatus.ERROR,
                     error_message=reason,
+                    execution_error_subtype=subtype,
+                    execution_error_message_normalized=reason,
                 ),
                 failed_phase=ErrorPhase.EXECUTION,
             )
@@ -271,7 +335,7 @@ class Orchestrator:
         # 4 – Execute
         execute_started = time.perf_counter()
         try:
-            execution = await self._executor.execute(compiled)
+            execution = await self._executor.execute(execution_compiled)
         except Exception as exc:
             logger.error("Execution error: %s", exc)
             subtype = getattr(exc, "execution_error_subtype", None) or "unknown_execution_error"
@@ -290,11 +354,14 @@ class Orchestrator:
             "execution_error_subtype": execution.execution_error_subtype,
             "execution_error_message_normalized": execution.execution_error_message_normalized,
             "execution_time_ms": execution.execution_time_ms,
-            "executed_sql_fingerprint": sql_fingerprint(compiled.sql),
-            "bind_summary": bind_summary(compiled),
+            "executed_sql_fingerprint": sql_fingerprint(execution_compiled.sql),
+            "bind_summary": bind_summary(execution_compiled),
             "execution_guard_reason": precheck.execution_guard_reason,
             "execution_skipped_reason": precheck.execution_skipped_reason,
             "pre_execution_risk_flags": list(precheck.pre_execution_risk_flags),
+            "safe_mode_applied": precheck.safe_mode_applied,
+            "safe_mode_reason": precheck.safe_mode_reason,
+            "effective_limit": execution_plan.limit,
             "latency_ms": int((time.perf_counter() - execute_started) * 1000),
         }
         if execution.status == ExecutionStatus.ERROR:
@@ -312,7 +379,7 @@ class Orchestrator:
 
         return OrchestrationResult(
             validation=validation,
-            compiled_query=compiled,
+            compiled_query=execution_compiled,
             execution_result=execution,
             failed_phase=failed,
         )

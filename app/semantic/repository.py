@@ -29,6 +29,7 @@ from app.domain.semantic_models import (
     CanonicalJoinPath,
     ColumnAliases,
     PolicyRules,
+    RegistryLookupSpec,
     SemanticRegistry,
 )
 from app.semantic.loader import load_semantic_foundation
@@ -93,6 +94,8 @@ class CanonicalSemanticEntity(BaseModel):
     likely_filters: list[str] = Field(default_factory=list)
     likely_identifiers: list[str] = Field(default_factory=list)
     filter_signal_keywords: dict[str, list[str]] = Field(default_factory=dict)
+    filter_signal_columns: dict[str, str] = Field(default_factory=dict)
+    extraction_patterns: list = Field(default_factory=list)  # list[ExtractionPattern]
     keywords: list[str] = Field(default_factory=list)
     default_intent: str = "generic"
     status_filter_column: str | None = None
@@ -117,6 +120,8 @@ class CanonicalSemanticEntity(BaseModel):
             likely_filters=list(self.likely_filters),
             likely_identifiers=list(self.likely_identifiers),
             filter_signal_keywords={k: list(v) for k, v in self.filter_signal_keywords.items()},
+            filter_signal_columns=dict(self.filter_signal_columns),
+            extraction_patterns=list(self.extraction_patterns),
             keywords=list(self.keywords),
             default_intent=self.default_intent,
             status_filter_column=self.status_filter_column,
@@ -178,6 +183,18 @@ class SemanticRepository(BaseModel):
         return SemanticRegistry(
             version="2.0",
             entities=[entity.to_business_entity_semantic() for entity in self.entities],
+            lookups=[
+                RegistryLookupSpec(
+                    lookup_type=lookup.lookup_type,
+                    meaning=lookup.meaning,
+                    decoded_value=lookup.decoded_value,
+                    raw_value=lookup.raw_value,
+                    domain=lookup.domain,
+                    table_ref=lookup.table_ref,
+                    notes=lookup.notes,
+                )
+                for lookup in self.lookups
+            ],
             intent_join_paths=dict(self.intent_join_paths),
             policy_rules=self.policy_rules,
             column_aliases=self.column_aliases,
@@ -188,7 +205,10 @@ def _safe_load_legacy_registry(path: Path) -> SemanticRegistry:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        logger.warning("Semantic registry file not found: %s", path)
+        logger.info(
+            "Optional semantic registry overlay not found; continuing with canonical semantic repository only: %s",
+            path,
+        )
         return SemanticRegistry()
     except Exception as exc:
         logger.warning("Semantic registry load failed (%s): %s", path, exc)
@@ -263,6 +283,16 @@ def _merge_entity(
             {name: list(values) for name, values in foundation_entity.filter_signal_keywords.items()}
             if foundation_entity is not None
             else {}
+        ),
+        filter_signal_columns=(
+            dict(foundation_entity.filter_signal_columns)
+            if foundation_entity is not None
+            else {}
+        ),
+        extraction_patterns=(
+            list(foundation_entity.extraction_patterns)
+            if foundation_entity is not None
+            else []
         ),
         keywords=_dedup_preserve_order(keywords),
         default_intent=default_intent,

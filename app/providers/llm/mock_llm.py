@@ -931,8 +931,13 @@ class MockLLMProvider(LLMProvider):
 
     async def generate_text(self, prompt: str) -> str:
         folded = casefold_tr(prompt)
-        summary_folded = folded.split("sonuç özeti:")[-1] if "sonuç özeti:" in folded else folded
-        summary_folded = summary_folded.split("yanıtını ver:")[0]
+        summary_folded = folded
+        match = re.search(r"veri_ozeti<<<\s*(.*?)\s*>>>", folded, re.DOTALL)
+        if match:
+            summary_folded = match.group(1)
+        elif "sonuç özeti:" in folded:
+            summary_folded = folded.split("sonuç özeti:")[-1]
+            summary_folded = summary_folded.split("yanıtını ver:")[0]
 
         # Empty result
         if "satır sayısı: 0" in summary_folded or "satır_sayısı=0" in summary_folded:

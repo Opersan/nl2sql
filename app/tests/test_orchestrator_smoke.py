@@ -285,6 +285,37 @@ class TestValidationFailure:
         assert result.failed_phase == ErrorPhase.VALIDATION
         assert trace.get("validation_repair", {}).get("repaired") is False
 
+    @pytest.mark.asyncio
+    async def test_partial_repair_that_still_fails_revalidation_is_reported(self, orchestrator: Orchestrator) -> None:
+        plan = QueryPlan(
+            intent="mixed repairability",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["firstName", "totally_unknown_column"],
+        )
+
+        result = await orchestrator.run_plan(plan)
+        trace = orchestrator.last_trace or {}
+
+        assert result.validation.ok is False
+        assert result.failed_phase == ErrorPhase.VALIDATION
+        assert trace.get("validation_repair", {}).get("repaired") is True
+        assert trace.get("validation_repair", {}).get("revalidate_ok") is False
+        assert "revalidate_failed_after_repair" in trace.get("validation_repair", {}).get("reason_codes", [])
+
+    @pytest.mark.asyncio
+    async def test_already_valid_plan_does_not_enter_validation_repair(self, orchestrator: Orchestrator) -> None:
+        plan = QueryPlan(
+            intent="already valid",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["reg_no", "first_name"],
+        )
+
+        result = await orchestrator.run_plan(plan)
+        trace = orchestrator.last_trace or {}
+
+        assert result.validation.ok is True
+        assert trace.get("validation_repair") is None
+
 
 
 # ---------------------------------------------------------------------------

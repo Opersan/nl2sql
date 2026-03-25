@@ -71,7 +71,38 @@ async def test_plan_like_payload_missing_intent_is_salvaged() -> None:
     assert plan.needs_clarification is False
     assert plan.table == "PO_HEADERS_ALL"
     assert plan.intent == "Acik siparisleri getir"
-    assert provider.last_structured_parse_taxonomy == "missing_required_field"
+    assert provider.last_structured_parse_taxonomy == "missing_required_intent"
+    assert provider.last_structured_salvage_applied is True
+
+
+@pytest.mark.asyncio
+async def test_malformed_but_recoverable_field_shapes_are_salvaged() -> None:
+    provider = OpenAICompatibleProvider(base_url="http://dummy", model="dummy")
+
+    async def _fake_chat(*_args, **_kwargs) -> str:
+        return """```json
+{
+  "table": "PO_HEADERS_ALL",
+  "select_columns": {"column": "PO_HEADER_ID"},
+  "filters": {"column": "AUTHORIZATION_STATUS", "op": "=", "value": "APPROVED", "table": "PO_HEADERS_ALL"},
+  "aggregations": [],
+  "group_by": [],
+  "order_by": {"column": "PO_HEADER_ID", "direction": "DESC", "table": "PO_HEADERS_ALL"},
+  "joins": [],
+  "limit": 10,
+  "needs_clarification": false,
+  "clarification_message": null
+}
+```"""
+
+    provider._chat_completion = _fake_chat  # type: ignore[method-assign]
+    plan = await provider.generate_structured("Kullanıcı sorusu: Onaylı siparişleri getir", QueryPlan)
+
+    assert plan.intent == "Onaylı siparişleri getir"
+    assert plan.select_columns == ["PO_HEADER_ID"]
+    assert len(plan.filters) == 1
+    assert plan.order_by[0].column == "PO_HEADER_ID"
+    assert provider.last_structured_parse_taxonomy == "missing_required_intent"
     assert provider.last_structured_salvage_applied is True
 
 
@@ -119,12 +150,12 @@ async def test_free_text_clarification_is_salvaged() -> None:
 
     assert plan.needs_clarification is True
     assert "tarih aral" in (plan.clarification_message or "").lower()
-    assert provider.last_structured_parse_taxonomy == "free_text_clarification_only"
+    assert provider.last_structured_parse_taxonomy == "free_text_instead_of_json"
     assert provider.last_structured_salvage_applied is True
 
 
 @pytest.mark.asyncio
-async def test_multi_object_response_sets_taxonomy_when_salvaged() -> None:
+async def test_multi_object_response_is_rejected() -> None:
     provider = OpenAICompatibleProvider(base_url="http://dummy", model="dummy")
 
     async def _fake_chat(*_args, **_kwargs) -> str:
@@ -133,6 +164,37 @@ async def test_multi_object_response_sets_taxonomy_when_salvaged() -> None:
     provider._chat_completion = _fake_chat  # type: ignore[method-assign]
     plan = await provider.generate_structured("Kullanıcı sorusu: Siparisler", QueryPlan)
 
-    assert plan.table == "PO_HEADERS_ALL"
+    assert plan.needs_clarification is True
+    assert plan.intent == "clarification_required"
     assert provider.last_structured_parse_taxonomy == "multi_object_response"
-    assert provider.last_structured_salvage_applied is True
+    assert provider.last_structured_salvage_applied is False
+
+
+@pytest.mark.asyncio
+async def test_meta_json_shell_falls_back_with_free_text_taxonomy() -> None:
+    provider = OpenAICompatibleProvider(base_url="http://dummy", model="dummy")
+
+    async def _fake_chat(*_args, **_kwargs) -> str:
+        return '{"response": ""}'
+
+    provider._chat_completion = _fake_chat  # type: ignore[method-assign]
+    plan = await provider.generate_structured("Kullanıcı sorusu: Bordrolu çalışanları listele", QueryPlan)
+
+    assert plan.needs_clarification is True
+    assert provider.last_structured_parse_taxonomy == "free_text_instead_of_json"
+
+
+@pytest.mark.asyncio
+async def test_already_valid_planner_output_remains_unchanged() -> None:
+    provider = OpenAICompatibleProvider(base_url="http://dummy", model="dummy")
+
+    async def _fake_chat(*_args, **_kwargs) -> str:
+        return '{"intent":"Aktif çalışanları listele","table":"XXBT_PDKS_PER_DETAILS_V","select_columns":["SICIL_NO"],"filters":[{"column":"CIKIS_TARIHI","op":"IS_NULL","value":null,"table":"XXBT_PDKS_PER_DETAILS_V"}],"aggregations":[],"group_by":[],"order_by":[],"joins":[],"limit":100,"needs_clarification":false,"clarification_message":null}'
+
+    provider._chat_completion = _fake_chat  # type: ignore[method-assign]
+    plan = await provider.generate_structured("Kullanıcı sorusu: Aktif çalışanları listele", QueryPlan)
+
+    assert plan.intent == "Aktif çalışanları listele"
+    assert plan.table == "XXBT_PDKS_PER_DETAILS_V"
+    assert provider.last_structured_parse_taxonomy is None
+    assert provider.last_structured_salvage_applied is False

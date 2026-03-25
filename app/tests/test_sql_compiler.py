@@ -145,6 +145,67 @@ class TestWhereFilters:
         assert isinstance(result.params["p1"], datetime.date)
 
     @pytest.mark.asyncio
+    async def test_natural_relative_date_expression_is_coerced_to_date_bind(self, compiler: SQLCompiler) -> None:
+        provider = InMemoryCatalogProvider()
+        po_headers = await provider.get_table("PO_HEADERS_ALL")
+        assert po_headers is not None
+
+        plan = QueryPlan(
+            intent="son 30 gun po",
+            table="PO_HEADERS_ALL",
+            select_columns=["PO_HEADER_ID", "CREATION_DATE"],
+            filters=[FilterSpec(column="CREATION_DATE", op=FilterOp.GTE, value="NOW - 30 DAYS")],
+        )
+
+        result = compiler.compile(plan, po_headers)
+
+        assert isinstance(result.params["p1"], datetime.date)
+
+    @pytest.mark.asyncio
+    async def test_week_boundary_tokens_are_coerced_to_date_binds(self, compiler: SQLCompiler) -> None:
+        provider = InMemoryCatalogProvider()
+        po_headers = await provider.get_table("PO_HEADERS_ALL")
+        assert po_headers is not None
+
+        plan = QueryPlan(
+            intent="bu hafta siparisler",
+            table="PO_HEADERS_ALL",
+            select_columns=["PO_HEADER_ID", "CREATION_DATE"],
+            filters=[
+                FilterSpec(column="CREATION_DATE", op=FilterOp.GTE, value="this_week_start"),
+                FilterSpec(column="CREATION_DATE", op=FilterOp.LT, value="this_week_end"),
+            ],
+        )
+
+        result = compiler.compile(plan, po_headers)
+
+        assert isinstance(result.params["p1"], datetime.date)
+        assert isinstance(result.params["p2"], datetime.date)
+
+    @pytest.mark.asyncio
+    async def test_timestamp_datetime_value_is_coerced_to_date_bind(self, compiler: SQLCompiler) -> None:
+        provider = InMemoryCatalogProvider()
+        po_headers = await provider.get_table("PO_HEADERS_ALL")
+        assert po_headers is not None
+
+        plan = QueryPlan(
+            intent="timestamp bind",
+            table="PO_HEADERS_ALL",
+            select_columns=["PO_HEADER_ID", "CREATION_DATE"],
+            filters=[
+                FilterSpec(
+                    column="CREATION_DATE",
+                    op=FilterOp.GTE,
+                    value=datetime.datetime(2024, 3, 25, 14, 30, 0),
+                )
+            ],
+        )
+
+        result = compiler.compile(plan, po_headers)
+
+        assert result.params["p1"] == datetime.date(2024, 3, 25)
+
+    @pytest.mark.asyncio
     async def test_in_filter(self, compiler: SQLCompiler, employee_table) -> None:
         plan = QueryPlan(
             intent="multiple units",

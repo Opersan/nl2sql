@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.catalog_models import CatalogSnapshot
+from app.domain.catalog_models import CatalogSnapshot, ColumnMetadata, TableMetadata
 from app.domain.query_plan import QueryPlan
 from app.providers.catalog.in_memory import InMemoryCatalogProvider
 from app.providers.llm.mock_llm import MockLLMProvider
@@ -287,10 +287,22 @@ async def test_planner_service_orchestrates_stage_services_in_order(
             )
 
     class _ClarificationStage:
-        def apply(self, user_message: str, planner_snapshot: QueryPlan, resolved_plan: QueryPlan) -> ClarificationDecisionResult:
+        def apply(
+            self,
+            user_message: str,
+            planner_snapshot: QueryPlan,
+            resolved_plan: QueryPlan,
+            **kwargs: object,
+        ) -> ClarificationDecisionResult:
             assert user_message == "Aktif çalışanları listele"
             assert planner_snapshot is planner_plan
             assert resolved_plan is final_plan
+            assert kwargs["query_understanding"] is planning_context.query_understanding
+            assert kwargs["retrieval_diagnostics"] is planning_context.retrieval_diagnostics
+            assert kwargs["semantic_diagnostics"] == {"decision_reasons": ["query_understanding_alignment"]}
+            assert kwargs["parse_error_taxonomy"] is None
+            assert kwargs["salvage_applied"] is False
+            assert kwargs["catalog_snapshot"] is planning_context.retrieved_snapshot
             execution_order.append("clarification")
             return ClarificationDecisionResult(
                 plan=resolved_plan,
@@ -366,3 +378,58 @@ def test_clarification_decision_service_returns_typed_decision() -> None:
 
     assert isinstance(result.decision, ClarificationDecision)
     assert result.trace["confidence_band"] == result.decision.confidence_band
+
+
+def test_clarification_decision_service_recovers_safe_listing_clarification() -> None:
+    service = ClarificationDecisionService()
+    planner_plan = QueryPlan(
+        intent="clarification_required",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        needs_clarification=True,
+        clarification_message="Çalışan kayıtlarını biraz daha netleştirir misiniz?",
+    )
+    resolved_plan = planner_plan.model_copy(update={"semantic_intent": "employee_list", "root_entity": "HR_EMPLOYEES"})
+    query_understanding = QueryUnderstanding(
+        original_question="Çalışan kayıtları",
+        normalized_question="calisan kayitlari",
+        requested_output_type="list",
+        entity_confidence="high",
+    )
+    catalog_snapshot = CatalogSnapshot(
+        tables=[
+            TableMetadata(
+                name="XXBT_PDKS_PER_DETAILS_V",
+                columns=[
+                    ColumnMetadata(name="PERSON_ID", data_type="NUMBER"),
+                    ColumnMetadata(name="SICIL_NO", data_type="VARCHAR"),
+                    ColumnMetadata(name="AD", data_type="VARCHAR"),
+                    ColumnMetadata(name="SOYAD", data_type="VARCHAR"),
+                    ColumnMetadata(name="TC_NO", data_type="VARCHAR", restricted=True),
+                ],
+            )
+        ]
+    )
+
+    result = service.apply(
+        "Çalışan kayıtları",
+        planner_plan,
+        resolved_plan,
+        query_understanding=query_understanding,
+        retrieval_diagnostics=RetrievalDiagnostics(
+            assessment="sufficient",
+            dominant_domain_match=True,
+            root_table_name="XXBT_PDKS_PER_DETAILS_V",
+            root_table_confidence="high",
+        ),
+        semantic_diagnostics={
+            "confidence": "high",
+            "selected_root_table": "XXBT_PDKS_PER_DETAILS_V",
+            "selected_entity_score": 9,
+            "runner_up_score": 2,
+        },
+        catalog_snapshot=catalog_snapshot,
+    )
+
+    assert result.plan.needs_clarification is False
+    assert result.plan.select_columns == ["SICIL_NO", "AD", "SOYAD"]
+    assert result.decision.clarification_reason_code is None

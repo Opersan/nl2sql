@@ -35,6 +35,18 @@ _REGISTRY_PATH = Path(__file__).resolve().parents[2] / "data" / "semantic_regist
 _SEMANTIC_DIR = Path(__file__).resolve().parents[2] / "data" / "semantic"
 _TOKEN_RE = re.compile(r"[^\w\s]", re.UNICODE)
 
+
+def _norm(text: str) -> str:
+    folded = casefold_tr(text or "")
+    return (
+        folded.replace("ı", "i")
+        .replace("ş", "s")
+        .replace("ç", "c")
+        .replace("ğ", "g")
+        .replace("ö", "o")
+        .replace("ü", "u")
+    )
+
 @lru_cache(maxsize=1)
 def _load_registry() -> SemanticRegistry:
     """Load and cache the planner registry projection from the canonical repository."""
@@ -51,9 +63,9 @@ def _match_entity(
     registry: SemanticRegistry,
 ) -> BusinessEntitySemantic | None:
     """Return the strongest registry entity match by keywords, then table membership."""
-    folded = casefold_tr(" ".join(part for part in [user_message, plan.intent] if part))
+    folded = _norm(" ".join(part for part in [user_message, plan.intent] if part))
     referenced_columns = {
-        casefold_tr(column)
+        _norm(column)
         for column in [
             *plan.select_columns,
             *plan.group_by,
@@ -70,7 +82,7 @@ def _match_entity(
         entity_tables = {entity.root_table, *entity.child_tables}
         keyword_hits = sum(1 for keyword in entity.keywords if keyword and keyword in folded)
         entity_columns = {
-            casefold_tr(column)
+            _norm(column)
             for column in [
                 *entity.dimensions.values(),
                 *entity.measures.values(),
@@ -105,14 +117,14 @@ def _entity_tables(entity: BusinessEntitySemantic) -> set[str]:
 
 
 def _tokenize(text: str) -> set[str]:
-    folded = casefold_tr(text or "")
+    folded = _norm(text or "")
     cleaned = _TOKEN_RE.sub(" ", folded)
     return {token for token in cleaned.split() if len(token) >= 2}
 
 
 def _semantic_columns(entity: BusinessEntitySemantic) -> set[str]:
     return {
-        casefold_tr(column)
+        _norm(column)
         for column in [
             *entity.dimensions.values(),
             *entity.measures.values(),
@@ -177,8 +189,9 @@ def _score_query_understanding_filters(
     score = 0
     for extracted_filter in getattr(query_understanding, "extracted_filters", []):
         dim = casefold_tr(str(extracted_filter.get("dimension", "")))
-        column_hint = casefold_tr(str(extracted_filter.get("column_hint", "")))
-        value = casefold_tr(str(extracted_filter.get("value", "")))
+        column_hint = _norm(str(extracted_filter.get("column_hint", "")))
+        value = _norm(str(extracted_filter.get("value", "")))
+        dim = _norm(dim)
 
         if column_hint and column_hint in semantic_columns:
             score += 3
@@ -230,10 +243,10 @@ def _score_entity_candidates(
     schema_docs: list[Any] | None = None,
     examples: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
-    folded = casefold_tr(" ".join(part for part in [user_message, plan.intent] if part))
+    folded = _norm(" ".join(part for part in [user_message, plan.intent] if part))
     tokens = _tokenize(folded)
     referenced_columns = {
-        casefold_tr(column)
+        _norm(column)
         for column in [
             *plan.select_columns,
             *plan.group_by,
@@ -253,10 +266,15 @@ def _score_entity_candidates(
         reasons: list[str] = []
         breakdown: dict[str, int] = defaultdict(int)
 
-        keyword_hits = sum(1 for keyword in entity.keywords if keyword and casefold_tr(keyword) in folded)
+        keyword_hits = sum(1 for keyword in entity.keywords if keyword and _norm(keyword) in folded)
         if keyword_hits:
             breakdown["lexical"] += keyword_hits * 5
             reasons.append("entity_alias_match")
+
+        entity_tokens = _tokenize(" ".join([entity.entity_id, entity.root_table, *entity.keywords]))
+        token_hits = sum(1 for token in tokens if any(token == entity_token or token in entity_token or entity_token in token for entity_token in entity_tokens))
+        if token_hits:
+            breakdown["lexical"] += token_hits * 2
 
         semantic_columns = _semantic_columns(entity)
         column_hits = len(referenced_columns & semantic_columns)
@@ -379,18 +397,18 @@ def _preserve_filter_ownership(
 
 
 def _filter_signal_key(signal: dict[str, Any]) -> str:
-    dimension = casefold_tr(str(signal.get("dimension", "") or ""))
-    value = casefold_tr(str(signal.get("value", "") or ""))
-    column_hint = casefold_tr(str(signal.get("column_hint", "") or ""))
+    dimension = _norm(str(signal.get("dimension", "") or ""))
+    value = _norm(str(signal.get("value", "") or ""))
+    column_hint = _norm(str(signal.get("column_hint", "") or ""))
     return "|".join([dimension, value, column_hint])
 
 
 def _filter_matches_signal(filter_spec: FilterSpec, signal: dict[str, Any]) -> bool:
-    dimension = casefold_tr(str(signal.get("dimension", "") or ""))
-    value = casefold_tr(str(signal.get("value", "") or ""))
-    column_hint = casefold_tr(str(signal.get("column_hint", "") or ""))
-    column = casefold_tr(filter_spec.column)
-    filter_value = casefold_tr(str(filter_spec.value)) if filter_spec.value is not None else ""
+    dimension = _norm(str(signal.get("dimension", "") or ""))
+    value = _norm(str(signal.get("value", "") or ""))
+    column_hint = _norm(str(signal.get("column_hint", "") or ""))
+    column = _norm(filter_spec.column)
+    filter_value = _norm(str(filter_spec.value)) if filter_spec.value is not None else ""
 
     if column_hint and column_hint == column:
         return True
@@ -409,6 +427,159 @@ def _filter_coverage_keys(plan: QueryPlan, query_understanding: Any | None) -> s
         if any(_filter_matches_signal(filter_spec, signal) for filter_spec in plan.filters):
             coverage.add(_filter_signal_key(signal))
     return coverage
+
+
+def _signal_owner_table(entity: BusinessEntitySemantic, context: CatalogSnapshot, column_name: str) -> str | None:
+    for table_name in _entity_tables(entity):
+        table = _context_get_table(context, table_name)
+        if table is not None and table.has_column(column_name):
+            return table.name
+    return None
+
+
+def _lookup_raw_values_for_column(
+    registry: SemanticRegistry,
+    column_name: str,
+    *,
+    table_name: str | None = None,
+) -> set[str]:
+    return {
+        str(lookup.raw_value).strip().upper()
+        for lookup in registry.get_lookups_for_column(column_name, table_name=table_name)
+        if str(lookup.raw_value).strip()
+    }
+
+
+def _normalize_signal_value(raw_value: str) -> object:
+    if raw_value.isdigit():
+        return int(raw_value)
+    return raw_value
+
+
+def _expected_filters_from_query_understanding(
+    entity: BusinessEntitySemantic,
+    query_understanding: Any | None,
+    context: CatalogSnapshot,
+) -> tuple[list[FilterSpec], set[str]]:
+    if query_understanding is None:
+        return [], set()
+
+    grouped_values: dict[tuple[str, str | None], list[str]] = defaultdict(list)
+    filters: list[FilterSpec] = []
+    replaced_columns: set[str] = set()
+
+    for signal in getattr(query_understanding, "extracted_filters", []):
+        column_hint = str(signal.get("column_hint") or "").upper()
+        raw_value = str(signal.get("value") or "").strip()
+        if not column_hint:
+            continue
+
+        owner_table = _signal_owner_table(entity, context, column_hint)
+        if owner_table is None:
+            continue
+
+        if column_hint == "CIKIS_TARIHI" and raw_value.lower() == "active":
+            filters.append(FilterSpec(column="CIKIS_TARIHI", table=owner_table, op=FilterOp.IS_NULL))
+            replaced_columns.add(column_hint)
+            continue
+
+        if column_hint == "UNVAN" and raw_value:
+            filters.append(
+                FilterSpec(column="UNVAN", table=owner_table, op=FilterOp.LIKE, value=f"%{raw_value}%")
+            )
+            continue
+
+        if raw_value:
+            grouped_values[(column_hint, owner_table)].append(raw_value)
+
+    for (column_hint, owner_table), raw_values in grouped_values.items():
+        unique_values = list(dict.fromkeys(raw_values))
+        if not unique_values:
+            continue
+        replaced_columns.add(column_hint)
+        if len(unique_values) == 1:
+            filters.append(
+                FilterSpec(
+                    column=column_hint,
+                    table=owner_table,
+                    op=FilterOp.EQ,
+                    value=_normalize_signal_value(unique_values[0]),
+                )
+            )
+        else:
+            filters.append(
+                FilterSpec(
+                    column=column_hint,
+                    table=owner_table,
+                    op=FilterOp.IN,
+                    value=[_normalize_signal_value(value) for value in unique_values],
+                )
+            )
+
+    return filters, replaced_columns
+
+
+def _is_weak_lookup_filter(filter_spec: FilterSpec, registry: SemanticRegistry) -> bool:
+    expected_values = _lookup_raw_values_for_column(
+        registry,
+        filter_spec.column,
+        table_name=filter_spec.table,
+    )
+    if not expected_values:
+        return False
+
+    if filter_spec.value is None:
+        return filter_spec.op not in {FilterOp.IS_NULL, FilterOp.IS_NOT_NULL}
+
+    values = filter_spec.value if isinstance(filter_spec.value, list) else [filter_spec.value]
+    normalized_values = {str(value).strip().upper() for value in values}
+    if not all(normalized_values):
+        return True
+
+    return not normalized_values.issubset(expected_values)
+
+
+def _replace_weak_filters(
+    filters: list[FilterSpec],
+    replacement_filters: list[FilterSpec],
+    replacement_columns: set[str],
+    registry: SemanticRegistry,
+) -> tuple[list[FilterSpec], bool]:
+    if not replacement_filters:
+        return list(filters), False
+
+    updated: list[FilterSpec] = []
+    replaced = False
+    for filter_spec in filters:
+        if filter_spec.column.upper() in replacement_columns and _is_weak_lookup_filter(filter_spec, registry):
+            replaced = True
+            continue
+        updated.append(filter_spec)
+
+    merged = _merge_filters(updated, replacement_filters)
+    return merged, replaced
+
+
+def _empty_result_diagnosis_hint(
+    *,
+    weak_filter_mapping: bool,
+    filter_ownership_conflict: bool,
+    missing_filter_detected: bool,
+    final_filter_coverage: set[str],
+    query_understanding: Any | None,
+) -> str | None:
+    extracted_filters = list(getattr(query_understanding, "extracted_filters", []) or [])
+    if not extracted_filters:
+        return None
+    if weak_filter_mapping:
+        return "value_encoding_mismatch"
+    if filter_ownership_conflict:
+        return "wrong_filter_column"
+    if missing_filter_detected:
+        return "likely_semantic_mismatch"
+    if final_filter_coverage:
+        return "true_no_data"
+    return None
 
 
 def _merge_filters(
@@ -622,6 +793,9 @@ def apply_semantic_normalization(
         "override_applied": False,
         "stable_intent_defaults_applied": False,
         "protected_filter_preserved": False,
+        "filter_ownership_conflict": bool(scored_entities[0]["conflicting_filters"]),
+        "weak_filter_mapping": False,
+        "missing_filter": False,
         "filter_coverage_before": sorted(_filter_coverage_keys(plan, query_understanding)),
     }
     has_external_signals = any([
@@ -726,6 +900,26 @@ def apply_semantic_normalization(
             diagnostics["protected_filter_preserved"] = True
             diagnostics.setdefault("decision_reasons", []).append("protected_filter_preserved")
 
+    inferred_filters, replacement_columns = _expected_filters_from_query_understanding(
+        entity,
+        query_understanding,
+        _context,
+    )
+    if inferred_filters:
+        rewritten_filters, replaced_weak_filters = _replace_weak_filters(
+            list(candidate_plan.filters),
+            inferred_filters,
+            replacement_columns,
+            reg,
+        )
+        if rewritten_filters != list(candidate_plan.filters):
+            updates["filters"] = rewritten_filters
+            candidate_plan = plan.model_copy(update=updates)
+            after_coverage = _filter_coverage_keys(candidate_plan, query_understanding)
+        if replaced_weak_filters:
+            diagnostics["weak_filter_mapping"] = True
+            diagnostics.setdefault("decision_reasons", []).append("weak_filter_mapping")
+
     if join_path_id:
         updates["join_path_id"] = join_path_id
         updates["joins"] = _joins_from_path(path)
@@ -735,6 +929,21 @@ def apply_semantic_normalization(
     diagnostics["filter_loss_risk"] = bool(
         diagnostics["filter_coverage_before"]
         and len(diagnostics["filter_coverage_after"]) < len(diagnostics["filter_coverage_before"])
+    )
+    diagnostics["missing_filter"] = bool(
+        diagnostics["filter_coverage_before"]
+        and len(diagnostics["filter_coverage_after"]) < len(diagnostics["filter_coverage_before"])
+    )
+    if diagnostics["filter_ownership_conflict"]:
+        diagnostics.setdefault("decision_reasons", []).append("filter_ownership_conflict")
+    if diagnostics["missing_filter"]:
+        diagnostics.setdefault("decision_reasons", []).append("missing_filter")
+    diagnostics["empty_result_diagnosis_hint"] = _empty_result_diagnosis_hint(
+        weak_filter_mapping=bool(diagnostics["weak_filter_mapping"]),
+        filter_ownership_conflict=bool(diagnostics["filter_ownership_conflict"]),
+        missing_filter_detected=bool(diagnostics["missing_filter"]),
+        final_filter_coverage=set(diagnostics["filter_coverage_after"]),
+        query_understanding=query_understanding,
     )
 
     # Observability fields derived from the *final* canonical plan shape.

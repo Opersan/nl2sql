@@ -103,6 +103,12 @@ def _norm(text: str | None) -> str:
     )
 
 
+def _diag_value(payload: Any | None, key: str, default: Any = None) -> Any:
+    if isinstance(payload, dict):
+        return payload.get(key, default)
+    return getattr(payload, key, default)
+
+
 def extract_filter_signals(user_message: str) -> list[dict[str, str]]:
     folded = _norm(user_message)
     out: list[dict[str, str]] = []
@@ -180,6 +186,10 @@ def derive_confidence_band(
     needs_clarification: bool,
     requested_signals: list[dict[str, str]],
     coverage: dict[str, Any],
+    query_understanding: Any | None = None,
+    retrieval_diagnostics: Any | None = None,
+    semantic_diagnostics: dict[str, Any] | None = None,
+    clarification_reason_code: str | None = None,
 ) -> tuple[str, str]:
     if needs_clarification:
         return "low", "rule_low"
@@ -190,6 +200,29 @@ def derive_confidence_band(
 
     if strong_count >= 1 and missing > 0:
         return "low", "rule_low"
+    if clarification_reason_code in {
+        "multiple_valid_entities",
+        "insufficient_context_after_retrieval",
+        "parse_recovery_failed",
+    }:
+        return "low", "rule_low"
+
+    query_ambiguities = set(getattr(query_understanding, "possible_ambiguities", []) or [])
+    retrieval_assessment = str(_diag_value(retrieval_diagnostics, "assessment", "") or "").lower()
+    retrieval_root_confidence = str(_diag_value(retrieval_diagnostics, "root_table_confidence", "") or "").lower()
+    semantic_confidence = str((semantic_diagnostics or {}).get("confidence") or "").lower()
+
+    if semantic_confidence == "low" and query_ambiguities:
+        return "medium", "rule_medium"
+    if (
+        retrieval_assessment in {"schema_only", "unknown", "insufficient"}
+        and retrieval_root_confidence not in {"high", "medium"}
+        and query_ambiguities
+    ):
+        return "medium", "rule_medium"
+    if {"too_short_no_entity", "no_entity_no_filter"} & query_ambiguities:
+        return "medium", "rule_medium"
+
     if ratio >= 0.8:
         return "high", "rule_high"
     if requested_signals:
@@ -197,11 +230,93 @@ def derive_confidence_band(
     return "high", "rule_high"
 
 
+def _is_restricted_clarification(final_plan: QueryPlan) -> bool:
+    message = _norm(final_plan.clarification_message)
+    restricted_tokens = (
+        "kisitli",
+        "erisime kapali",
+        "guvenlik",
+        "yasal",
+        "yetki",
+        "gizli",
+    )
+    return any(token in message for token in restricted_tokens)
+
+
+def _has_multiple_valid_entities(
+    *,
+    query_understanding: Any | None,
+    retrieval_diagnostics: Any | None,
+    semantic_diagnostics: dict[str, Any] | None,
+) -> bool:
+    if getattr(query_understanding, "multi_entity_flag", False):
+        return True
+
+    ambiguities = set(getattr(query_understanding, "possible_ambiguities", []) or [])
+    selected_score = semantic_diagnostics.get("selected_entity_score") if semantic_diagnostics else None
+    runner_up_score = semantic_diagnostics.get("runner_up_score") if semantic_diagnostics else None
+    root_confidence = str(_diag_value(retrieval_diagnostics, "root_table_confidence", "") or "").lower()
+
+    if isinstance(selected_score, int) and isinstance(runner_up_score, int):
+        if selected_score > 0 and abs(selected_score - runner_up_score) <= 1:
+            return True
+
+    return (
+        "no_domain_signal" in ambiguities
+        and "no_entity_no_filter" in ambiguities
+        and root_confidence not in {"high", "medium"}
+    )
+
+
+def _has_insufficient_context_after_retrieval(
+    *,
+    query_understanding: Any | None,
+    retrieval_diagnostics: Any | None,
+    semantic_diagnostics: dict[str, Any] | None,
+) -> bool:
+    ambiguities = set(getattr(query_understanding, "possible_ambiguities", []) or [])
+    retrieval_assessment = str(_diag_value(retrieval_diagnostics, "assessment", "") or "").lower()
+    root_confidence = str(_diag_value(retrieval_diagnostics, "root_table_confidence", "") or "").lower()
+    semantic_confidence = str((semantic_diagnostics or {}).get("confidence") or "").lower()
+    dominant_domain_match = _diag_value(retrieval_diagnostics, "dominant_domain_match")
+
+    return (
+        retrieval_assessment in {"schema_only", "unknown", "insufficient"}
+        and root_confidence not in {"high", "medium"}
+        and semantic_confidence in {"", "low"}
+        and {"too_short_no_entity", "no_entity_no_filter"} & ambiguities
+        and dominant_domain_match is not True
+    )
+
+
+def _is_unsupported_metric_shape(
+    *,
+    query_understanding: Any | None,
+    planner_plan: QueryPlan,
+    final_plan: QueryPlan,
+) -> bool:
+    requested_output_type = str(getattr(query_understanding, "requested_output_type", "") or "").lower()
+    aggregation_hints = list(getattr(query_understanding, "extracted_aggregation_hints", []) or [])
+    detected_metrics = list(getattr(query_understanding, "detected_metrics", []) or [])
+    wants_metric = requested_output_type == "aggregation" or bool(aggregation_hints or detected_metrics)
+    has_metric_shape = bool(
+        planner_plan.aggregations
+        or planner_plan.group_by
+        or final_plan.aggregations
+        or final_plan.group_by
+    )
+    return wants_metric and not has_metric_shape
+
+
 def derive_clarification_diagnostics(
     *,
     planner_plan: QueryPlan,
     final_plan: QueryPlan,
     guard_decision: dict[str, Any],
+    parse_error_taxonomy: str | None = None,
+    query_understanding: Any | None = None,
+    retrieval_diagnostics: Any | None = None,
+    semantic_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     missing_dimensions = list(
         dict.fromkeys(
@@ -213,7 +328,7 @@ def derive_clarification_diagnostics(
 
     if guard_decision.get("success_blocked_by_filter_loss"):
         return {
-            "clarification_reason_code": "filter_intent_missing",
+            "clarification_reason_code": "low_filter_coverage",
             "clarification_missing_dimensions": missing_dimensions,
             "clarification_was_avoidable": False,
         }
@@ -228,7 +343,7 @@ def derive_clarification_diagnostics(
     # final_plan.needs_clarification is True — reason code must always be non-None
     if missing_dimensions:
         return {
-            "clarification_reason_code": "missing_filter_dimension",
+            "clarification_reason_code": "missing_required_dimension",
             "clarification_missing_dimensions": missing_dimensions,
             "clarification_was_avoidable": False,
         }
@@ -244,10 +359,32 @@ def derive_clarification_diagnostics(
     )
     clarification_was_avoidable = bool(planner_has_query_shape and not planner_plan.needs_clarification)
 
-    if planner_plan.needs_clarification:
+    if _is_restricted_clarification(final_plan):
         reason_code = "planner_requested_clarification"
+    elif parse_error_taxonomy:
+        reason_code = "parse_recovery_failed"
+    elif _is_unsupported_metric_shape(
+        query_understanding=query_understanding,
+        planner_plan=planner_plan,
+        final_plan=final_plan,
+    ):
+        reason_code = "unsupported_metric_shape"
+    elif _has_multiple_valid_entities(
+        query_understanding=query_understanding,
+        retrieval_diagnostics=retrieval_diagnostics,
+        semantic_diagnostics=semantic_diagnostics,
+    ):
+        reason_code = "multiple_valid_entities"
+    elif _has_insufficient_context_after_retrieval(
+        query_understanding=query_understanding,
+        retrieval_diagnostics=retrieval_diagnostics,
+        semantic_diagnostics=semantic_diagnostics,
+    ):
+        reason_code = "insufficient_context_after_retrieval"
     elif clarification_was_avoidable:
         reason_code = "avoidable_clarification"
+    elif planner_plan.needs_clarification:
+        reason_code = "planner_requested_clarification"
     else:
         # Fallback: insufficient structured signal — never leave as None
         reason_code = "low_confidence"

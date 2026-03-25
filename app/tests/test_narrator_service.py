@@ -14,6 +14,7 @@ from app.domain.execution_models import (
 )
 from app.domain.query_plan import QueryPlan
 from app.providers.llm.mock_llm import MockLLMProvider
+from app.providers.llm.prompts import build_narrator_prompt
 from app.services.narrator_service import NarratorService
 
 
@@ -83,6 +84,8 @@ class TestSuccessNarration:
         assert "narration_shape" in trace
         assert "narration_business_value_score" in trace
         assert "final_narration_quality" in trace
+        assert trace["sanitizer_reason_code"] == "no_sanitization_needed"
+        assert trace["raw_leak_reason_codes"] == []
 
     @pytest.mark.asyncio
     async def test_generic_output_uses_shape_fallback_template(self, narrator: NarratorService) -> None:
@@ -96,6 +99,44 @@ class TestSuccessNarration:
 
         assert "Sorgu işlendi" not in text
         assert trace.get("narrator_used_fallback_template") is True
+        assert trace.get("sanitizer_reason_code") == "raw_unusable_final_safe"
+
+    def test_prompt_uses_compact_contract_markers(self) -> None:
+        prompt = build_narrator_prompt("Aktif çalışanları listele", "Sorgu başarılı.\nSatır sayısı: 6.")
+
+        assert "Kullanıcı sorusu:" not in prompt
+        assert "Sonuç özeti:" not in prompt
+        assert "Yanıtını ver:" not in prompt
+        assert "ISTEK<<<" in prompt
+        assert "VERI_OZETI<<<" in prompt
+        assert "TEK_CIKTI:" in prompt
+
+    @pytest.mark.asyncio
+    async def test_empty_raw_response_uses_safe_fallback_with_trace(self, narrator: NarratorService) -> None:
+        async def _empty(_prompt: str) -> str:
+            return ""
+
+        narrator._llm.generate_text = _empty  # type: ignore[assignment]  # noqa: SLF001
+        result = _success_result(row_count=5)
+
+        text = await narrator.narrate_success("Aktif çalışanları listele", result)
+        trace = narrator.last_trace or {}
+
+        assert text == "Toplam 5 kayıt listelendi. Gösterilen alanlar: reg_no, first_name."
+        assert trace.get("raw_response_empty") is True
+        assert trace.get("raw_leak_reason_codes") == ["empty_raw_response"]
+        assert trace.get("sanitizer_reason_code") == "raw_missing"
+
+    @pytest.mark.asyncio
+    async def test_success_response_stays_single_paragraph_turkish_shape(self, narrator: NarratorService) -> None:
+        result = _success_result(row_count=6)
+
+        text = await narrator.narrate_success("Aktif çalışanları listele", result)
+
+        assert "\n\n" not in text
+        assert "Thinking Process" not in text
+        assert "Kullanıcı sorusu" not in text
+        assert "Sonuç özeti" not in text
 
 
 class TestNarrationShapeClassification:

@@ -63,6 +63,25 @@ _CLARIFICATION_KEYS = {
     "question_to_user",
     "follow_up_question",
 }
+_PLAN_WRAPPER_KEYS = {
+    "plan",
+    "query_plan",
+    "queryplan",
+    "payload",
+    "result",
+    "output",
+}
+_META_TEXT_SHELL_KEYS = {
+    "response",
+    "message",
+    "analysis",
+    "reasoning",
+    "rule_check",
+    "data_analysis",
+    "logic_construction",
+    "risk_check",
+    "schema_constraints",
+}
 
 
 def _extract_user_question(prompt: str) -> str:
@@ -91,18 +110,58 @@ def _iter_json_candidates(text: str) -> Iterable[dict[str, Any]]:
         except (json.JSONDecodeError, ValueError):
             continue
 
-    # Strip explicit reasoning blocks, then scan balanced JSON objects.
+    # Strip explicit reasoning blocks, then scan only top-level JSON objects.
     scrubbed = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL)
-    decoder = json.JSONDecoder()
-    for i, ch in enumerate(scrubbed):
-        if ch != "{":
+    in_string = False
+    escape = False
+    depth = 0
+    start_index: int | None = None
+    for index, ch in enumerate(scrubbed):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
             continue
+
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "{":
+            if depth == 0:
+                start_index = index
+            depth += 1
+            continue
+        if ch != "}" or depth == 0:
+            continue
+        depth -= 1
+        if depth != 0 or start_index is None:
+            continue
+        candidate_text = scrubbed[start_index : index + 1]
+        start_index = None
         try:
-            obj, _end = decoder.raw_decode(scrubbed[i:])
-            if isinstance(obj, dict):
-                yield obj
+            data = json.loads(candidate_text)
+            if isinstance(data, dict):
+                yield data
         except (json.JSONDecodeError, ValueError):
             continue
+
+
+def _extract_nested_json_from_string(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not stripped or ("{" not in stripped and "```" not in stripped):
+        return None
+    for candidate in _iter_json_candidates(stripped):
+        found = _safe_extract_plan_dict(stripped)
+        if found is not None:
+            return found
+        if isinstance(candidate, dict):
+            return candidate
+    return None
 
 
 def _unique_json_candidates(text: str) -> list[dict[str, Any]]:
@@ -217,17 +276,45 @@ def _coerce_plan_candidate(
     return candidate, salvage_applied
 
 
+def _looks_like_missing_intent_candidate(payload: dict[str, Any]) -> bool:
+    if isinstance(payload.get("intent"), str) and payload.get("intent", "").strip():
+        return False
+    plan_keys_without_intent = _PLAN_KEYS.difference({"intent"})
+    return bool(plan_keys_without_intent.intersection(payload.keys()))
+
+
+def _classify_non_plan_response(content: str, raw_candidates: list[dict[str, Any]]) -> str:
+    stripped = content.strip()
+    if not stripped:
+        return "no_json_found"
+    if len(raw_candidates) > 1:
+        return "multi_object_response"
+    if raw_candidates:
+        candidate = raw_candidates[0]
+        if _looks_like_missing_intent_candidate(candidate):
+            return "missing_required_intent"
+        if set(candidate.keys()).intersection(_META_TEXT_SHELL_KEYS):
+            return "free_text_instead_of_json"
+        return "malformed_json"
+    if "{" in stripped or "}" in stripped or "```" in stripped:
+        return "malformed_json"
+    return "free_text_instead_of_json"
+
+
 def _classify_validation_error(exc: ValidationError) -> str:
     seen_missing = False
     seen_type = False
     for error in exc.errors():
         err_type = str(error.get("type", ""))
+        location = tuple(error.get("loc", ()))
         if err_type == "missing":
+            if location and location[-1] == "intent":
+                return "missing_required_intent"
             seen_missing = True
         elif err_type.endswith("_type") or err_type in {"list_type", "model_type", "string_type", "bool_type", "int_type"}:
             seen_type = True
     if seen_missing:
-        return "missing_required_field"
+        return "malformed_json"
     if seen_type:
         return "invalid_field_type"
     return "malformed_json"
@@ -250,7 +337,17 @@ def _safe_extract_plan_dict(content: str) -> dict[str, Any] | None:
                 return obj
             if _looks_like_plan_dict(obj):
                 return obj
+            for key in _PLAN_WRAPPER_KEYS:
+                if key in obj:
+                    found = _find_plan_dict(obj[key])
+                    if found is not None:
+                        return found
             for value in obj.values():
+                nested = _extract_nested_json_from_string(value)
+                if nested is not None:
+                    found = _find_plan_dict(nested)
+                    if found is not None:
+                        return found
                 found = _find_plan_dict(value)
                 if found is not None:
                     return found
@@ -418,11 +515,22 @@ class OpenAICompatibleProvider(LLMProvider):
             )
 
             raw_candidates = _unique_json_candidates(content)
+            if len(raw_candidates) > 1:
+                self.last_structured_parse_error = "multiple_json_objects_found"
+                self.last_structured_parse_taxonomy = "multi_object_response"
+                logger.warning(
+                    "LLM returned multiple JSON objects for QueryPlan. Preview: %r. Rejecting response.",
+                    content[:300],
+                )
+                return _make_clarification_plan()  # type: ignore[return-value]
+
             extracted = _safe_extract_plan_dict(content)
             coerced_candidate: dict[str, Any] | None = None
             salvage_applied = False
+            missing_intent_detected = False
 
             if extracted is not None:
+                missing_intent_detected = _looks_like_missing_intent_candidate(extracted)
                 coerced_candidate, salvage_applied = _coerce_plan_candidate(
                     extracted,
                     prompt=prompt,
@@ -432,24 +540,20 @@ class OpenAICompatibleProvider(LLMProvider):
                     content,
                     raw_candidates if raw_candidates else None,
                 )
+                taxonomy = _classify_non_plan_response(content, raw_candidates)
                 if clarification_message is not None:
-                    self.last_structured_parse_error = "no_queryplan_intent_found_in_response"
-                    self.last_structured_parse_taxonomy = "free_text_clarification_only"
+                    self.last_structured_parse_error = taxonomy
+                    self.last_structured_parse_taxonomy = taxonomy
                     self.last_structured_salvage_applied = True
                     logger.warning(
                         "LLM returned clarification text instead of QueryPlan JSON. "
-                        "Preview: %r. Converting to clarification plan.",
+                        "taxonomy=%s Preview: %r. Converting to clarification plan.",
+                        taxonomy,
                         content[:300],
                     )
                     return _make_clarification_plan_with_message(clarification_message)  # type: ignore[return-value]
 
-                if raw_candidates:
-                    taxonomy = "multi_object_response" if len(raw_candidates) > 1 else "missing_required_field"
-                elif "{" in content or "}" in content or "```" in content:
-                    taxonomy = "malformed_json"
-                else:
-                    taxonomy = "no_json_found"
-                self.last_structured_parse_error = "no_queryplan_intent_found_in_response"
+                self.last_structured_parse_error = taxonomy
                 self.last_structured_parse_taxonomy = taxonomy
                 logger.warning(
                     "LLM returned non-QueryPlan JSON. taxonomy=%s Preview: %r. Falling back to clarification plan.",
@@ -467,21 +571,21 @@ class OpenAICompatibleProvider(LLMProvider):
                 )
             if salvage_applied:
                 self.last_structured_salvage_applied = True
-                if len(raw_candidates) > 1:
-                    self.last_structured_parse_taxonomy = "multi_object_response"
-                elif extracted is not None and not isinstance(extracted.get("intent"), str):
-                    self.last_structured_parse_taxonomy = "missing_required_field"
+                if missing_intent_detected:
+                    self.last_structured_parse_taxonomy = "missing_required_intent"
             try:
                 return response_model.model_validate(normalised)  # type: ignore[return-value]
             except ValidationError as validate_exc:
-                taxonomy = _classify_validation_error(validate_exc)
+                base_taxonomy = _classify_validation_error(validate_exc)
                 self.last_structured_parse_error = str(validate_exc)
-                self.last_structured_parse_taxonomy = taxonomy
+                self.last_structured_parse_taxonomy = (
+                    "parse_recovery_failed" if (salvage_applied or extracted is not None) else base_taxonomy
+                )
                 logger.warning(
                     "QueryPlan model_validate failed after normalization: %s (taxonomy=%s). "
                     "Preview: %r. Falling back to clarification plan.",
                     validate_exc,
-                    taxonomy,
+                    self.last_structured_parse_taxonomy,
                     content[:300],
                 )
                 clarification_message = _extract_clarification_message(content, normalised)
@@ -491,7 +595,9 @@ class OpenAICompatibleProvider(LLMProvider):
                 return _make_clarification_plan()  # type: ignore[return-value]
             except Exception as validate_exc:
                 self.last_structured_parse_error = str(validate_exc)
-                self.last_structured_parse_taxonomy = "malformed_json"
+                self.last_structured_parse_taxonomy = (
+                    "parse_recovery_failed" if (salvage_applied or extracted is not None) else "malformed_json"
+                )
                 logger.warning(
                     "QueryPlan model_validate failed after normalization: %s. "
                     "Preview: %r. Falling back to clarification plan.",

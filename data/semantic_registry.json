@@ -1,0 +1,224 @@
+{
+  "version": "1.0",
+  "entities": [
+    {
+      "entity_id": "PO_PURCHASING",
+      "root_table": "PO_HEADERS_ALL",
+      "child_tables": [
+        "PO_LINES_ALL",
+        "PO_LINE_LOCATIONS_ALL",
+        "PO_DISTRIBUTIONS_ALL",
+        "MTL_SYSTEM_ITEMS_B"
+      ],
+      "join_paths": [
+        {
+          "path_id": "po.header_lines",
+          "steps": [
+            {
+              "left_table": "PO_HEADERS_ALL",
+              "left_column": "po_header_id",
+              "right_table": "PO_LINES_ALL",
+              "right_column": "po_header_id"
+            }
+          ]
+        },
+        {
+          "path_id": "po.header_lines_shipments",
+          "steps": [
+            {
+              "left_table": "PO_HEADERS_ALL",
+              "left_column": "po_header_id",
+              "right_table": "PO_LINES_ALL",
+              "right_column": "po_header_id"
+            },
+            {
+              "left_table": "PO_LINES_ALL",
+              "left_column": "po_line_id",
+              "right_table": "PO_LINE_LOCATIONS_ALL",
+              "right_column": "po_line_id"
+            }
+          ]
+        },
+        {
+          "path_id": "po.header_lines_shipments_distributions",
+          "steps": [
+            {
+              "left_table": "PO_HEADERS_ALL",
+              "left_column": "po_header_id",
+              "right_table": "PO_LINES_ALL",
+              "right_column": "po_header_id"
+            },
+            {
+              "left_table": "PO_LINES_ALL",
+              "left_column": "po_line_id",
+              "right_table": "PO_LINE_LOCATIONS_ALL",
+              "right_column": "po_line_id"
+            },
+            {
+              "left_table": "PO_LINE_LOCATIONS_ALL",
+              "left_column": "line_location_id",
+              "right_table": "PO_DISTRIBUTIONS_ALL",
+              "right_column": "line_location_id"
+            }
+          ]
+        },
+        {
+          "path_id": "po.header_lines_items",
+          "steps": [
+            {
+              "left_table": "PO_HEADERS_ALL",
+              "left_column": "po_header_id",
+              "right_table": "PO_LINES_ALL",
+              "right_column": "po_header_id"
+            },
+            {
+              "left_table": "PO_LINES_ALL",
+              "left_column": "item_id",
+              "right_table": "MTL_SYSTEM_ITEMS_B",
+              "right_column": "inventory_item_id"
+            }
+          ]
+        }
+      ],
+      "keywords": [
+        "sipariş",
+        "siparis",
+        "satınalma",
+        "satın alma",
+        "satın alma siparişi",
+        "satinalma siparisi",
+        "kalem",
+        "ürün",
+        "urun",
+        "teslim",
+        "dağıtım",
+        "dagitim",
+        "tedarikçi",
+        "tedarikci",
+        "vendor"
+      ],
+      "intent_rules": [
+        {
+          "intent": "po_line_quantity",
+          "all_of": ["kalem"],
+          "any_of": ["miktar", "miktarını", "miktarini", "quantity"]
+        },
+        {
+          "intent": "po_pending_delivery",
+          "all_of": ["teslim"],
+          "any_of": ["bekleyen", "pending", "shipment"]
+        },
+        {
+          "intent": "po_distribution_amount",
+          "all_of": ["dağıtım"],
+          "any_of": ["tutar", "analiz", "miktar"]
+        },
+        {
+          "intent": "po_distribution_amount",
+          "all_of": ["dagitim"],
+          "any_of": ["tutar", "analiz", "miktar"]
+        },
+        {
+          "intent": "po_item_line_count",
+          "all_of": ["ürün"],
+          "any_of": ["satır", "kaç", "say"]
+        },
+        {
+          "intent": "po_item_line_count",
+          "all_of": ["urun"],
+          "any_of": ["satir", "kac", "say"]
+        }
+      ],
+      "intent_defaults": {
+        "po_line_quantity": {
+          "stable": true,
+          "group_by": ["line_num", "item_description"],
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "quantity",
+              "table": "PO_LINES_ALL",
+              "alias": "total_qty"
+            }
+          ]
+        },
+        "po_pending_delivery": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "quantity_received",
+              "table": "PO_LINE_LOCATIONS_ALL",
+              "op": "<",
+              "value": "__COLUMN_REF__quantity"
+            }
+          ]
+        },
+        "po_distribution_amount": {
+          "stable": true,
+          "group_by": ["code_combination_id"],
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "quantity_ordered",
+              "table": "PO_DISTRIBUTIONS_ALL",
+              "alias": "ordered_qty"
+            },
+            {
+              "function": "SUM",
+              "column": "unit_price",
+              "table": "PO_LINES_ALL",
+              "alias": "price_sum"
+            }
+          ],
+          "computed_measures": [
+            {
+              "name": "total_amount",
+              "expression_ref": "PO_LINE_AMOUNT",
+              "alias": "total_amount",
+              "table": "PO_LINES_ALL"
+            }
+          ]
+        },
+        "po_item_line_count": {
+          "stable": true,
+          "group_by": ["segment1", "description"],
+          "aggregations": [
+            {
+              "function": "COUNT",
+              "column": "*",
+              "alias": "line_count"
+            }
+          ]
+        }
+      },
+      "default_intent": "po_header_query"
+    }
+  ],
+  "intent_join_paths": {
+    "po_line_quantity": "po.header_lines",
+    "po_pending_delivery": "po.header_lines_shipments",
+    "po_distribution_amount": "po.header_lines_shipments_distributions",
+    "po_item_line_count": "po.header_lines_items"
+  },
+  "policy_rules": {
+    "sensitive_intent_patterns": [
+      "password"
+    ]
+  },
+  "column_aliases": {
+    "token_abbreviations": {
+      "doc": "document",
+      "mail": "email",
+      "num": "number"
+    },
+    "global": {
+      "email": "EMAIL",
+      "mail": "EMAIL"
+    },
+    "table_scoped": {
+      "XXBT_PDKS_PER_DETAILS_V": {
+        "giris_tarihi": "ISE_GIRIS_TARIHI"
+      }
+    }
+  }
+}

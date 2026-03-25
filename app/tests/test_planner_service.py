@@ -11,6 +11,8 @@ from app.providers.llm.mock_llm import MockLLMProvider
 from app.services.catalog_service import CatalogService
 from app.services import planner_service as planner_module
 from app.services.planner_service import PlannerService
+from app.services.sql_compiler import SQLCompiler
+from app.services.validation_service import ValidationService
 
 
 @pytest.fixture
@@ -51,15 +53,11 @@ class TestBasicPlanning:
     async def test_salary_plan_produces_restricted_column(
         self, planner: PlannerService,
     ) -> None:
-        """'Maaşları göster' should produce a plan that requests salary.
-
-        Validation will reject it later; the planner simply translates the
-        user intent.
-        """
+        """High-risk salary requests should be blocked by the policy guard."""
         plan = await planner.plan("Maaşları göster")
 
-        assert plan.table == "XXBT_PDKS_PER_DETAILS_V"
-        assert "BORDROLU" in plan.select_columns
+        assert plan.needs_clarification is True
+        assert plan.intent == "clarification_required"
 
     @pytest.mark.asyncio
     async def test_generic_employee_query(self, planner: PlannerService) -> None:
@@ -103,6 +101,8 @@ class TestClarification:
 
         assert plan.needs_clarification is True
         assert plan.intent == "clarification_required"
+        assert (planner.last_trace or {})["policy_guard"]["pattern_source"] == "configured"
+        assert (planner.last_trace or {})["policy_guard"]["guard_reason_code"] == "sensitive_policy_match"
 
     def test_sensitive_guard_empty_patterns_is_safe(
         self,
@@ -115,8 +115,104 @@ class TestClarification:
         )
         monkeypatch.setattr(planner_module, "_load_registry", lambda: empty_registry)
 
-        assert planner._is_sensitive_or_invalid_request("normal bir soru") is True  # noqa: SLF001
-        assert "Sensitive policy patterns unavailable" in caplog.text
+        assert planner._is_sensitive_or_invalid_request("normal bir soru") is False  # noqa: SLF001
+        decision = planner._evaluate_policy_guard("normal bir soru")  # noqa: SLF001
+        assert decision["pattern_source"] == "built_in_fallback"
+        assert decision["guard_action"] == "allow"
+        assert decision["guard_reason_code"] is None
+        assert "using built-in fallback guard" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_ordinary_employee_query_not_blocked_when_registry_patterns_missing(
+        self,
+        planner: PlannerService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        empty_registry = SemanticRegistry(policy_rules=PolicyRules(sensitive_intent_patterns=[]))
+        monkeypatch.setattr(planner_module, "_load_registry", lambda: empty_registry)
+
+        plan = await planner.plan("Aktif çalışanları listele")
+        trace = planner.last_trace or {}
+
+        assert plan.needs_clarification is False
+        assert trace["policy_guard"]["triggered"] is False
+        assert trace["policy_guard"]["pattern_source"] == "built_in_fallback"
+        assert trace["policy_guard"]["guard_action"] == "allow"
+
+    @pytest.mark.asyncio
+    async def test_ordinary_po_query_not_blocked_when_registry_patterns_missing(
+        self,
+        planner: PlannerService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        empty_registry = SemanticRegistry(policy_rules=PolicyRules(sensitive_intent_patterns=[]))
+        monkeypatch.setattr(planner_module, "_load_registry", lambda: empty_registry)
+
+        plan = await planner.plan("Onay bekleyen satın alma siparişlerini listele")
+        trace = planner.last_trace or {}
+
+        assert trace["policy_guard"]["triggered"] is False
+        assert trace["policy_guard"]["guard_reason_code"] is None
+        assert trace["policy_guard"]["matched_pattern_count"] == 0
+        assert plan.intent != "clarification_required" or trace.get("intent_guard", {}).get("clarification_reason_code") != "sensitive_policy_match"
+
+    @pytest.mark.asyncio
+    async def test_builtin_fallback_blocks_salary_request(
+        self,
+        planner: PlannerService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        empty_registry = SemanticRegistry(policy_rules=PolicyRules(sensitive_intent_patterns=[]))
+        monkeypatch.setattr(planner_module, "_load_registry", lambda: empty_registry)
+
+        plan = await planner.plan("Çalışan maaşlarını göster")
+        trace = planner.last_trace or {}
+
+        assert plan.needs_clarification is True
+        assert trace["policy_guard"]["triggered"] is True
+        assert trace["policy_guard"]["pattern_source"] == "built_in_fallback"
+        assert "compensation" in trace["policy_guard"]["matched_pattern_types"]
+        assert trace["policy_guard"]["guard_reason_code"] == "sensitive_policy_match"
+
+    @pytest.mark.asyncio
+    async def test_missing_registry_load_does_not_deny_all(
+        self,
+        planner: PlannerService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def _boom() -> SemanticRegistry:
+            raise RuntimeError("registry unavailable")
+
+        monkeypatch.setattr(planner_module, "_load_registry", _boom)
+
+        plan = await planner.plan("Çalışanları getir")
+        trace = planner.last_trace or {}
+
+        assert plan.needs_clarification is False
+        assert trace["policy_guard"]["triggered"] is False
+        assert trace["policy_guard"]["pattern_source"] == "built_in_fallback"
+        assert trace["policy_guard"]["source_warning"] == "registry_load_failed:RuntimeError"
+
+    @pytest.mark.asyncio
+    async def test_ordinary_query_reaches_validation_and_compile_with_missing_registry_patterns(
+        self,
+        planner: PlannerService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        empty_registry = SemanticRegistry(policy_rules=PolicyRules(sensitive_intent_patterns=[]))
+        monkeypatch.setattr(planner_module, "_load_registry", lambda: empty_registry)
+
+        plan = await planner.plan("Aktif çalışanları listele")
+        validator = ValidationService(CatalogService(InMemoryCatalogProvider()))
+        validation = await validator.validate(plan)
+
+        assert validation.ok is True
+        assert validation.resolved_table is not None
+
+        compiled = SQLCompiler().compile(plan, validation.resolved_table)
+
+        assert compiled.sql
+        assert "SELECT" in compiled.sql.upper()
 
     def test_aggregation_intent_guard_triggers_for_non_aggregated_plan(
         self,
@@ -243,7 +339,7 @@ class TestAliasHandling:
                 plan=planner_plan,
                 raw_response_text="{...}",
                 parse_error=None,
-                parse_error_taxonomy="missing_required_field",
+                parse_error_taxonomy="missing_required_intent",
                 salvage_applied=True,
             )
 
@@ -252,7 +348,7 @@ class TestAliasHandling:
         await planner.plan("Aktif çalışanları listele")
         trace = planner.last_trace or {}
 
-        assert trace["llm"]["parse_error_taxonomy"] == "missing_required_field"
+        assert trace["llm"]["parse_error_taxonomy"] == "missing_required_intent"
         assert trace["llm"]["salvage_applied"] is True
 
 
@@ -323,7 +419,7 @@ class TestIntentGuard:
         assert plan.needs_clarification is True
         assert plan.intent == "clarification_required"
         assert plan.clarification_message is not None
-        assert guard.get("clarification_reason_code") == "filter_intent_missing"
+        assert guard.get("clarification_reason_code") == "low_filter_coverage"
         assert guard.get("clarification_missing_dimensions") == ["status"]
         assert guard.get("clarification_was_avoidable") is False
         assert guard.get("confidence_band") == "low"
@@ -398,17 +494,20 @@ class TestIntentGuard:
 
 
 class TestRestrictedFieldStrategy:
-    """The planner does NOT block restricted fields; validation does."""
+    """High-risk restricted-field requests should be caught by the policy guard."""
 
     @pytest.mark.asyncio
     async def test_restricted_field_flows_through_planner(
         self, planner: PlannerService,
     ) -> None:
-        """Planner should produce a plan with restricted columns intact."""
+        """Sensitive compensation requests should be clarified before planning."""
         plan = await planner.plan("Maaşları göster")
+        trace = planner.last_trace or {}
 
-        assert "BORDROLU" in plan.select_columns
-        assert plan.needs_clarification is False
+        assert plan.intent == "clarification_required"
+        assert plan.needs_clarification is True
+        assert trace["policy_guard"]["guard_reason_code"] == "sensitive_policy_match"
+        assert "compensation" in trace["policy_guard"]["matched_pattern_types"]
 
     @pytest.mark.asyncio
     async def test_clarification_e2e_strips_artifacts(

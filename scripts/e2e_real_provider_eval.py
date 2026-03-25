@@ -27,6 +27,7 @@ import time
 from collections import Counter
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -45,6 +46,16 @@ VALID_OUTCOMES = {
     "execution_error",
     "wrong_plan",
 }
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    raise TypeError(f"Object of type {value.__class__.__name__} is not JSON serializable")
+
+
+def _json_dumps(value: Any, *, indent: int | None = None) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=indent, default=_json_default)
 
 
 @dataclass
@@ -1368,8 +1379,7 @@ def _classify_root_cause_category(result: EvalResult, trace: dict[str, Any]) -> 
     if semantic_changed and result.status in {"wrong_plan", "clarification", "validation_error", "compile_error", "execution_error"}:
         return "semantic_override", "semantic:critical_override"
 
-    repair = trace.get("repair") or {}
-    if repair.get("repair_applied") and result.status in {"wrong_plan", "clarification", "validation_error", "compile_error", "execution_error"}:
+    if _combined_repair_applied(trace) and result.status in {"wrong_plan", "clarification", "validation_error", "compile_error", "execution_error"}:
         return "repair_mutation", "repair:critical_mutation"
 
     return "no_failure", "no_failure"
@@ -1388,6 +1398,24 @@ def _determine_root_cause_stage(result: EvalResult, trace: dict[str, Any]) -> st
     if not result.narration_ok:
         return "narration"
     return "none"
+
+
+def _combined_repair_actions(trace: dict[str, Any]) -> list[str]:
+    actions: list[str] = []
+    for action in ((trace.get("repair") or {}).get("repair_actions") or []):
+        actions.append(str(action.get("repair_type", "unknown")))
+    for action in ((trace.get("validation_repair") or {}).get("repair_actions") or []):
+        actions.append(str(action.get("repair_type", "unknown")))
+    return list(dict.fromkeys(actions))
+
+
+def _combined_repair_applied(trace: dict[str, Any]) -> bool:
+    planner_repair = bool((trace.get("repair") or {}).get("repair_applied"))
+    validation_repair = bool(
+        (trace.get("validation_repair") or {}).get("repair_applied")
+        or (trace.get("validation_repair") or {}).get("repaired")
+    )
+    return planner_repair or validation_repair
 
 
 def _compute_diff_flags(trace: dict[str, Any], narration: dict[str, Any] | None) -> dict[str, bool]:
@@ -1488,7 +1516,7 @@ def _make_stage_statuses(result: EvalResult, trace: dict[str, Any]) -> dict[str,
         "execute": execute_stage,
         "narration": narration_stage,
         "_flags": {
-            "repair_applied": bool((trace.get("repair") or {}).get("repair_applied")),
+            "repair_applied": _combined_repair_applied(trace),
             "semantic_changed": bool(((trace.get("semantic_normalization") or {}).get("diff") or {}).get("changed_fields")),
             "narration_sql_leak": bool(narration.get("final_sql_leak", False)),
             "narration_presentation_leak": bool(narration.get("final_presentation_leak", False)),
@@ -1642,7 +1670,7 @@ def _build_trace_markdown(traces: list[dict[str, Any]]) -> str:
                 f"- diff: {(trace.get('normalize') or {}).get('diff')}",
                 "",
                 "### Repair",
-                f"- actions: {[a.get('repair_type') for a in ((trace.get('repair') or {}).get('repair_actions') or [])]}",
+                f"- actions: {_combined_repair_actions(trace)}",
                 f"- diff: {(trace.get('repair') or {}).get('diff')}",
                 "",
                 "### Semantic",
@@ -3064,12 +3092,9 @@ async def _run_one(chat: Any, item: EvalQuestion, session_prefix: str) -> EvalRe
         result.semantic_intent = plan.semantic_intent or plan.intent
         result.predicted_tables = _plan_tables(plan)
         result.join_path = _join_path(plan)
-        result.repair_applied = bool((trace.get("repair") or {}).get("repair_applied"))
-        result.repair_actions = [
-            str(action.get("repair_type", "unknown"))
-            for action in ((trace.get("repair") or {}).get("repair_actions") or [])
-        ]
-        result.repair_fields_count = len((trace.get("repair") or {}).get("repair_actions") or [])
+        result.repair_applied = _combined_repair_applied(trace)
+        result.repair_actions = _combined_repair_actions(trace)
+        result.repair_fields_count = len(result.repair_actions)
         result.structured_parse_error = bool((trace.get("llm_raw_output") or {}).get("parse_error"))
         intent_guard_state = trace.get("intent_guard") or {}
         result.requested_filter_signals = list(intent_guard_state.get("requested_filter_signals") or [])
@@ -4294,7 +4319,7 @@ async def main() -> None:
     parser.add_argument("--no-oracle", action="store_true", help="Use mock executor instead of Oracle (for dry-run)")
     parser.add_argument("--concurrency", type=int, default=1, help="Bounded concurrency for question execution (default: 1, keeps legacy behavior)")
     parser.add_argument("--max-retries", type=int, default=2, help="Max retries for retryable LLM HTTP failures (429/5xx)")
-    parser.add_argument("--question-timeout", type=float, default=120.0, help="Per-question timeout in seconds")
+    parser.add_argument("--question-timeout", type=float, default=180.0, help="Per-question timeout in seconds")
     parser.add_argument("--benchmark-concurrency", default="", help="Optional benchmark mode, e.g. '1,2,4,8'")
     args = parser.parse_args()
 
@@ -4483,15 +4508,15 @@ async def main() -> None:
 
     if args.emit_extra_files:
         summary_json_path.parent.mkdir(parents=True, exist_ok=True)
-        summary_json_path.write_text(json.dumps(summary_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        summary_json_path.write_text(_json_dumps(summary_payload, indent=2), encoding="utf-8")
 
         manual_json_path.parent.mkdir(parents=True, exist_ok=True)
-        manual_json_path.write_text(json.dumps(manual_review, ensure_ascii=False, indent=2), encoding="utf-8")
+        manual_json_path.write_text(_json_dumps(manual_review, indent=2), encoding="utf-8")
 
         trace_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
         with trace_jsonl_path.open("w", encoding="utf-8") as handle:
             for trace in traces:
-                handle.write(json.dumps(trace, ensure_ascii=False) + "\n")
+                handle.write(_json_dumps(trace) + "\n")
 
         trace_md_path.parent.mkdir(parents=True, exist_ok=True)
         trace_md_path.write_text(_build_trace_markdown(traces), encoding="utf-8")
@@ -4499,7 +4524,7 @@ async def main() -> None:
         if report_json_path is not None:
             report_json_path.parent.mkdir(parents=True, exist_ok=True)
             report_json_path.write_text(
-                json.dumps(
+                _json_dumps(
                     {
                         "run_name": run_name,
                         "dataset_path": str(dataset_path),
@@ -4508,7 +4533,6 @@ async def main() -> None:
                         "summary": asdict(summary),
                         "results": [asdict(r) for r in results],
                     },
-                    ensure_ascii=False,
                     indent=2,
                 ),
                 encoding="utf-8",

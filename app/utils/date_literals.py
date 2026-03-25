@@ -10,6 +10,10 @@ _RELATIVE_DATE_EXPR_RE = re.compile(
     r"^(?:TRUNC\(\s*SYSDATE\s*\)|SYSDATE|CURRENT_DATE)\s*([+-])\s*(\d+)\s*$",
     re.IGNORECASE,
 )
+_NATURAL_RELATIVE_DATE_EXPR_RE = re.compile(
+    r"^(?:NOW|TODAY|CURRENT_DATE|SYSDATE)\s*([+-])\s*(\d+)\s*(DAY|DAYS|WEEK|WEEKS)$",
+    re.IGNORECASE,
+)
 _TRUNC_SYSDATE_RE = re.compile(r"^TRUNC\(\s*SYSDATE\s*\)$", re.IGNORECASE)
 _TRUNC_FMT_RE = re.compile(
     r"^TRUNC\(\s*SYSDATE\s*,\s*'(?P<fmt>IW|MM|YYYY)'\s*\)$",
@@ -27,6 +31,7 @@ def _week_start(anchor: date) -> date:
 
 def _resolve_relative_date_token(raw: str, *, anchor: date) -> date | None:
     token = raw.strip().upper()
+    week_start = _week_start(anchor)
     sentinels: dict[str, date] = {
         "__RELATIVE_DATE_LAST_30_DAYS__": anchor - timedelta(days=30),
         "__RELATIVE_DATE_LAST_6_MONTHS__": anchor - timedelta(days=183),
@@ -34,15 +39,19 @@ def _resolve_relative_date_token(raw: str, *, anchor: date) -> date | None:
         "__RELATIVE_DATE_1_YEAR__": anchor - timedelta(days=365),
         "__RELATIVE_DATE_10_YEARS_AGO__": anchor - timedelta(days=3650),
         "TODAY": anchor,
+        "NOW": anchor,
         "CURRENT_DATE": anchor,
         "SYSDATE": anchor,
         "TRUNC(SYSDATE)": anchor,
-        "CURRENT_WEEK_START": _week_start(anchor),
+        "CURRENT_WEEK_START": week_start,
+        "THIS_WEEK_START": week_start,
+        "THIS_WEEK_END": week_start + timedelta(days=7),
+        "CURRENT_WEEK_END": week_start + timedelta(days=7),
         "CURRENT_MONTH_START": anchor.replace(day=1),
         "CURRENT_YEAR_START": anchor.replace(month=1, day=1),
-        "BU_HAFTA": _week_start(anchor),
-        "THIS_WEEK": _week_start(anchor),
-        "CURRENT_WEEK": _week_start(anchor),
+        "BU_HAFTA": week_start,
+        "THIS_WEEK": week_start,
+        "CURRENT_WEEK": week_start,
     }
     return sentinels.get(token)
 
@@ -69,6 +78,16 @@ def _resolve_relative_date_expr(raw: str, *, anchor: date) -> date | None:
         if operator == "+":
             return anchor + timedelta(days=days)
         return anchor - timedelta(days=days)
+
+    natural_relative = _NATURAL_RELATIVE_DATE_EXPR_RE.match(token)
+    if natural_relative:
+        operator = natural_relative.group(1)
+        amount = int(natural_relative.group(2))
+        unit = natural_relative.group(3).upper()
+        delta_days = amount * 7 if unit.startswith("WEEK") else amount
+        if operator == "+":
+            return anchor + timedelta(days=delta_days)
+        return anchor - timedelta(days=delta_days)
 
     return None
 

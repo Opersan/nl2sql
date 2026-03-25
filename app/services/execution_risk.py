@@ -15,7 +15,11 @@ _BLOCKING_FLAG_TO_REASON: dict[str, str] = {
     "oracle_date_type_error": "precheck_date_literal_invalid",
     "invalid_filter_value": "precheck_invalid_filter_value",
     "timeout_prone_wide_listing": "precheck_timeout_prone_shape",
+    "timeout_prone_large_join": "precheck_timeout_prone_large_join",
+    "timeout_prone_simple_listing": "precheck_timeout_prone_simple_listing",
 }
+
+_SAFE_MODE_SIMPLE_LISTING_LIMIT = 25
 
 
 def _is_date_column(meta: TableMetadata, column_name: str) -> bool:
@@ -30,8 +34,45 @@ def _is_status_column(column_name: str) -> bool:
     return "status" in c or "durum" in c
 
 
+def _is_structural_listing_filter(table: TableMetadata, column_name: str) -> bool:
+    c = column_name.lower()
+    return _is_date_column(table, column_name) or _is_status_column(column_name) or any(
+        token in c
+        for token in ("aktif", "active", "enabled", "cikis", "exit", "termination", "end_date")
+    )
+
+
+def _simple_listing_risk_mode(plan: QueryPlan, table: TableMetadata) -> str | None:
+    if plan.is_multi_table:
+        return None
+    if plan.aggregations or plan.group_by or plan.computed_measures:
+        return None
+    if plan.limit < settings.default_row_limit:
+        return None
+    if len(plan.select_columns) < 4:
+        return None
+    if not (table.name.upper().endswith("_V") or len(table.columns) >= 18):
+        return None
+
+    if not plan.filters:
+        return "blocked"
+
+    low_selectivity_ops = {FilterOp.IS_NULL, FilterOp.IS_NOT_NULL}
+    if not all(f.op in low_selectivity_ops for f in plan.filters):
+        return None
+
+    if all(_is_structural_listing_filter(table, f.column) for f in plan.filters):
+        return "safe_mode"
+
+    return "blocked"
+
+
 def assess_pre_execution_risk(plan: QueryPlan, table: TableMetadata) -> ExecutionPolicyDecision:
     flags: list[str] = []
+    guard_reason: str | None = None
+    safe_mode_applied = False
+    safe_mode_reason: str | None = None
+    effective_limit: int | None = None
     date_value_ops = {
         FilterOp.EQ,
         FilterOp.NEQ,
@@ -84,6 +125,16 @@ def assess_pre_execution_risk(plan: QueryPlan, table: TableMetadata) -> Executio
         and len(plan.select_columns) >= 4
     ):
         flags.append("timeout_prone_wide_listing")
+        flags.append("timeout_prone_large_join")
+
+    simple_listing_mode = _simple_listing_risk_mode(plan, table)
+    if simple_listing_mode is not None:
+        flags.append("timeout_prone_simple_listing")
+        if simple_listing_mode == "safe_mode":
+            safe_mode_applied = True
+            safe_mode_reason = "execution_safe_mode_applied"
+            guard_reason = safe_mode_reason
+            effective_limit = min(plan.limit, _SAFE_MODE_SIMPLE_LISTING_LIMIT)
 
     if not plan.filters and not plan.aggregations and plan.limit >= settings.default_row_limit:
         flags.append("high_risk_but_executable")
@@ -91,13 +142,20 @@ def assess_pre_execution_risk(plan: QueryPlan, table: TableMetadata) -> Executio
     # deterministic order for trace stability
     uniq_flags = sorted(set(flags))
     blocking = [f for f in uniq_flags if f in _BLOCKING_FLAG_TO_REASON]
+    if safe_mode_applied and "timeout_prone_simple_listing" in blocking:
+        blocking.remove("timeout_prone_simple_listing")
 
     should_execute = len(blocking) == 0
+    if blocking and any(flag.startswith("timeout_prone_") for flag in blocking):
+        guard_reason = "execution_blocked_high_risk"
     return ExecutionPolicyDecision(
         pre_execution_risk_flags=uniq_flags,
         blocking_risk_flags=blocking,
-        execution_guard_reason=_BLOCKING_FLAG_TO_REASON.get(blocking[0]) if blocking else None,
+        execution_guard_reason=guard_reason or (_BLOCKING_FLAG_TO_REASON.get(blocking[0]) if blocking else None),
         execution_skipped_reason=_BLOCKING_FLAG_TO_REASON.get(blocking[0]) if blocking else None,
+        safe_mode_applied=safe_mode_applied,
+        safe_mode_reason=safe_mode_reason,
+        effective_limit=effective_limit,
         should_execute=should_execute,
     )
 

@@ -140,8 +140,55 @@ class TestClarificationDiagnostics:
             final_plan=final_plan,
             guard_decision=guard,
         )
-        assert diag["clarification_reason_code"] == "missing_filter_dimension"
+        assert diag["clarification_reason_code"] == "missing_required_dimension"
         assert "VENDOR_ID" in diag["clarification_missing_dimensions"]
+
+    def test_parse_recovery_failed_gives_code(self) -> None:
+        planner_plan = _make_plan(needs_clarification=True)
+        final_plan = _make_plan(needs_clarification=True)
+        diag = derive_clarification_diagnostics(
+            planner_plan=planner_plan,
+            final_plan=final_plan,
+            guard_decision=self._empty_guard(),
+            parse_error_taxonomy="missing_required_intent",
+        )
+        assert diag["clarification_reason_code"] == "parse_recovery_failed"
+
+    def test_multiple_valid_entities_gives_code(self) -> None:
+        planner_plan = _make_plan(needs_clarification=True)
+        final_plan = _make_plan(needs_clarification=True)
+
+        class _QU:
+            multi_entity_flag = False
+            possible_ambiguities = ["no_domain_signal", "no_entity_no_filter"]
+
+        diag = derive_clarification_diagnostics(
+            planner_plan=planner_plan,
+            final_plan=final_plan,
+            guard_decision=self._empty_guard(),
+            query_understanding=_QU(),
+            retrieval_diagnostics={"root_table_confidence": "low"},
+            semantic_diagnostics={"selected_entity_score": 3, "runner_up_score": 3},
+        )
+        assert diag["clarification_reason_code"] == "multiple_valid_entities"
+
+    def test_unsupported_metric_shape_gives_code(self) -> None:
+        planner_plan = _make_plan(needs_clarification=True)
+        final_plan = _make_plan(needs_clarification=True)
+
+        class _QU:
+            requested_output_type = "aggregation"
+            extracted_aggregation_hints = ["kaç"]
+            detected_metrics = []
+            possible_ambiguities = []
+
+        diag = derive_clarification_diagnostics(
+            planner_plan=planner_plan,
+            final_plan=final_plan,
+            guard_decision=self._empty_guard(),
+            query_understanding=_QU(),
+        )
+        assert diag["clarification_reason_code"] == "unsupported_metric_shape"
 
     def test_low_confidence_fallback_never_none(self) -> None:
         """When planner has no shape, fallback must still produce non-None code."""

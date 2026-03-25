@@ -128,10 +128,26 @@ class ColumnAliases(BaseModel):
 
     global_aliases: dict[str, str] = Field(default_factory=dict, alias="global")
     table_scoped: dict[str, dict[str, str]] = Field(default_factory=dict)
+    # Short token → expanded token for sub-word compound-name alias generation.
+    # E.g. {"doc": "document", "num": "number"} so that a column named
+    # "PO_DOC_NUM" can also be matched as "podocumentnumber".
+    token_abbreviations: dict[str, str] = Field(default_factory=dict)
 
     model_config = {
         "populate_by_name": True,
     }
+
+
+class RegistryLookupSpec(BaseModel):
+    """Lookup record projected into the planner-side semantic registry."""
+
+    lookup_type: str
+    meaning: str
+    decoded_value: str
+    raw_value: str
+    domain: str
+    table_ref: str | None = None
+    notes: str | None = None
 
 
 class SemanticRegistry(BaseModel):
@@ -139,6 +155,7 @@ class SemanticRegistry(BaseModel):
 
     version: str = "1.0"
     entities: list[BusinessEntitySemantic] = Field(default_factory=list)
+    lookups: list[RegistryLookupSpec] = Field(default_factory=list)
     intent_join_paths: dict[str, str] = Field(default_factory=dict)
     policy_rules: PolicyRules = Field(default_factory=PolicyRules)
     column_aliases: ColumnAliases = Field(default_factory=ColumnAliases)
@@ -148,3 +165,26 @@ class SemanticRegistry(BaseModel):
             if e.entity_id == entity_id:
                 return e
         return None
+
+    def get_lookup(self, lookup_type: str) -> list[RegistryLookupSpec]:
+        return [lookup for lookup in self.lookups if lookup.lookup_type == lookup_type]
+
+    def get_lookups_for_column(
+        self,
+        column_name: str,
+        *,
+        table_name: str | None = None,
+    ) -> list[RegistryLookupSpec]:
+        column_upper = column_name.upper()
+        table_upper = table_name.upper() if table_name else None
+        matches: list[RegistryLookupSpec] = []
+        for lookup in self.lookups:
+            if not lookup.table_ref or "." not in lookup.table_ref:
+                continue
+            ref_table, ref_column = lookup.table_ref.rsplit(".", 1)
+            if ref_column.upper() != column_upper:
+                continue
+            if table_upper and ref_table.upper() != table_upper:
+                continue
+            matches.append(lookup)
+        return matches

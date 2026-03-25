@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import types
+
 import pytest
 
 from app.core.exceptions import ExecutionError
@@ -205,3 +208,115 @@ class TestOracleExecutorSafety:
                     selected_columns=["reg_no"],
                 )
             )
+
+    @pytest.mark.asyncio
+    async def test_oracle_executor_not_configured_sets_subtype(self) -> None:
+        from app.domain.execution_models import CompiledQuery
+        from app.providers.executor.oracle_executor import OracleExecutor
+
+        executor = OracleExecutor()
+
+        with pytest.raises(ExecutionError) as exc_info:
+            await executor.execute(
+                CompiledQuery(
+                    sql="SELECT reg_no FROM employee WHERE ROWNUM <= :p1",
+                    params={"p1": 100},
+                    table="XXBT_PDKS_PER_DETAILS_V",
+                    selected_columns=["reg_no"],
+                )
+            )
+
+        assert exc_info.value.execution_error_subtype == "executor_unavailable"
+        assert exc_info.value.execution_error_message_normalized == "oracle_executor_not_configured"
+
+    @pytest.mark.asyncio
+    async def test_oracle_executor_async_timeout_sets_timeout_subtype(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.domain.execution_models import CompiledQuery
+        from app.providers.executor.oracle_executor import OracleExecutor
+
+        executor = OracleExecutor(timeout=1)
+
+        async def _raise_timeout(awaitable, timeout):  # type: ignore[no-untyped-def]
+            raise asyncio.TimeoutError()
+
+        monkeypatch.setattr("app.providers.executor.oracle_executor.asyncio.wait_for", _raise_timeout)
+        monkeypatch.setattr(executor, "_pool", object())
+
+        with pytest.raises(ExecutionError) as exc_info:
+            await executor.execute(
+                CompiledQuery(
+                    sql="SELECT reg_no FROM employee WHERE ROWNUM <= :p1",
+                    params={"p1": 100},
+                    table="XXBT_PDKS_PER_DETAILS_V",
+                    selected_columns=["reg_no"],
+                )
+            )
+
+        assert exc_info.value.execution_error_subtype == "timeout"
+        assert exc_info.value.execution_error_message_normalized == "query_timeout_1s"
+
+    def test_oracle_sync_query_sets_call_timeout_and_fetch_hints(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.domain.execution_models import CompiledQuery
+        from app.providers.executor.oracle_executor import OracleExecutor
+
+        class _Cursor:
+            def __init__(self) -> None:
+                self.description = [("REG_NO",)]
+                self.arraysize = 0
+                self.prefetchrows = 0
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> None:
+                return None
+
+            def execute(self, sql, params) -> None:
+                self.sql = sql
+                self.params = params
+
+            def fetchmany(self, amount):
+                return [(1001,)]
+
+        class _Connection:
+            def __init__(self) -> None:
+                self.call_timeout = 0
+                self.cursor_instance = _Cursor()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> None:
+                return None
+
+            def cursor(self):
+                return self.cursor_instance
+
+        class _Pool:
+            def __init__(self) -> None:
+                self.connection = _Connection()
+
+            def acquire(self):
+                return self.connection
+
+        fake_oracledb = types.SimpleNamespace(DatabaseError=RuntimeError)
+        monkeypatch.setitem(__import__("sys").modules, "oracledb", fake_oracledb)
+
+        executor = OracleExecutor(timeout=2)
+        pool = _Pool()
+        executor._pool = pool
+
+        result = executor._sync_query(
+            CompiledQuery(
+                sql="SELECT REG_NO FROM employee WHERE ROWNUM <= :p1",
+                params={"p1": 1},
+                table="XXBT_PDKS_PER_DETAILS_V",
+                selected_columns=["REG_NO"],
+            )
+        )
+
+        assert pool.connection.call_timeout == 2000
+        assert pool.connection.cursor_instance.arraysize == 100
+        assert pool.connection.cursor_instance.prefetchrows == 100
+        assert result.execution_time_ms is not None
+        assert result.execution_time_ms >= 0

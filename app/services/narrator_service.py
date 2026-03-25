@@ -70,8 +70,9 @@ _REASONING_LINE_RE = re.compile(
 )
 
 _PROMPT_ECHO_LINE_RE = re.compile(
-    r'\b(kullan\u0131c\u0131\s+sorusu|sonu\u00e7\s+\u00f6zeti|yan\u0131t\u0131n\u0131\s+ver|'
-    r'user\s+question|result\s+summary|constraints?:|rules?:)\b',
+    r'(kullan\u0131c\u0131\s+sorusu|sonu\u00e7\s+\u00f6zeti|yan\u0131t\u0131n\u0131\s+ver|'
+    r'user\s+question|result\s+summary|constraints?:|rules?:|'
+    r'istek<<<|veri_ozeti<<<|tek_cikti:)',
     re.IGNORECASE,
 )
 
@@ -87,6 +88,11 @@ _POLICY_ECHO_LINE_RE = re.compile(
 _NUMBERED_OUTLINE_RE = re.compile(r'^\s*\d+[\.)]\s+')
 
 _SQL_KEYWORD_RE = re.compile(r'\b(SELECT|FROM|WHERE|JOIN|GROUP\s+BY|ORDER\s+BY|INSERT|UPDATE|DELETE)\b', re.IGNORECASE)
+
+_PRESENTATION_META_RE = re.compile(
+    r'(^|\n)\s*(?:\d+[\.)]\s+|[-*]\s+|#{1,6}\s+)',
+    re.IGNORECASE,
+)
 
 
 class NarratorService:
@@ -162,14 +168,17 @@ class NarratorService:
             "narrator_used_fallback_template": False,
             "prompt_contract_violated": False,
             "sanitizer_reason_code": None,
+            "raw_response_empty": False,
+            "raw_leak_reason_codes": [],
             "user_visible_quality": "fail",
             "model_behavior_quality": "fail",
             "error": None,
         })
         try:
             raw = await self._llm.generate_text(prompt)
+            raw_reasons = self._classify_raw_response_issues(raw)
             cleaned = self._strip_leakage(raw)
-            contract_violation = bool(_THINK_BLOCK_RE.search(raw or "") or _REASONING_HEADER_RE.search(raw or ""))
+            contract_violation = bool(raw_reasons)
             generic = self._is_generic_low_value(cleaned)
             if generic:
                 cleaned = self._fallback_template(
@@ -183,11 +192,21 @@ class NarratorService:
                 source = "sanitized"
             else:
                 source = "raw"
+            if not raw or not raw.strip():
+                sanitizer_reason = "raw_missing"
+            elif source == "sanitized":
+                sanitizer_reason = "policy_leak_removed"
+            elif source == "fallback_template":
+                sanitizer_reason = "raw_unusable_final_safe"
+            else:
+                sanitizer_reason = "no_sanitization_needed"
             quality_score = self._business_value_score(cleaned, summary)
             narration_quality = "high" if quality_score >= 70 else ("medium" if quality_score >= 40 else "low")
-            if source == "raw" and not contract_violation:
+            if not raw or not raw.strip():
+                model_bq = "fail"
+            elif source == "raw" and not contract_violation:
                 model_bq = "pass"
-            elif contract_violation:
+            elif contract_violation or source in {"sanitized", "fallback_template"}:
                 model_bq = "degraded"
             else:
                 model_bq = "degraded"
@@ -199,10 +218,15 @@ class NarratorService:
                     "final_response_source": source,
                     "narration_business_value_score": quality_score,
                     "narration_genericness_flag": generic,
-                    "raw_narration_quality": "poor" if contract_violation else "acceptable",
+                    "raw_narration_quality": (
+                        "missing" if not raw or not raw.strip() else ("poor" if contract_violation or generic else "acceptable")
+                    ),
                     "final_narration_quality": narration_quality,
                     "narrator_used_fallback_template": generic,
                     "prompt_contract_violated": contract_violation,
+                    "sanitizer_reason_code": sanitizer_reason,
+                    "raw_response_empty": not bool(raw and raw.strip()),
+                    "raw_leak_reason_codes": raw_reasons,
                     "user_visible_quality": "pass" if source == "raw" else "pass_with_sanitization",
                     "model_behavior_quality": model_bq,
                 }
@@ -231,10 +255,19 @@ class NarratorService:
         cleaned = _ORA_ERROR_RE.sub("", cleaned)
 
         result_lines: list[str] = []
+        skipping_prompt_block = False
         for line in cleaned.splitlines():
             stripped = line.strip()
             if not stripped:
                 result_lines.append("")
+                continue
+            if stripped in {"ISTEK<<<", "VERI_OZETI<<<"}:
+                skipping_prompt_block = True
+                continue
+            if skipping_prompt_block and stripped == ">>>":
+                skipping_prompt_block = False
+                continue
+            if skipping_prompt_block:
                 continue
             lowered = stripped.lower()
             if lowered in {"<think>", "</think>", "</analysis>", "</final>", "</plan>"}:
@@ -246,6 +279,8 @@ class NarratorService:
             if _PROMPT_ECHO_LINE_RE.search(stripped):
                 continue
             if _POLICY_ECHO_LINE_RE.search(stripped):
+                continue
+            if stripped in {">>>", "<<<"}:
                 continue
             if _NUMBERED_OUTLINE_RE.match(stripped) and ("**" in stripped or ":" in stripped):
                 continue
@@ -273,6 +308,28 @@ class NarratorService:
             logger.warning("Narrator response was entirely leakage; returning safe default.")
             return "Sorgu işlendi."
         return final
+
+    @staticmethod
+    def _classify_raw_response_issues(text: str | None) -> list[str]:
+        reasons: list[str] = []
+        if not text or not text.strip():
+            return ["empty_raw_response"]
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+        if _THINK_BLOCK_RE.search(text) or any(
+            _REASONING_HEADER_RE.match(line) or _REASONING_LINE_RE.match(line)
+            for line in lines
+        ):
+            reasons.append("chain_of_thought_like")
+        if _PROMPT_ECHO_LINE_RE.search(text):
+            reasons.append("prompt_echo")
+        if _POLICY_ECHO_LINE_RE.search(text):
+            reasons.append("policy_echo")
+        if _PRESENTATION_META_RE.search(text) and (":" in text or any(_NUMBERED_OUTLINE_RE.match(line) for line in lines)):
+            reasons.append("presentation_meta")
+
+        return sorted(set(reasons))
 
     # -- Summary builders (no raw SQL, no restricted values) ----------------
 

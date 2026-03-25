@@ -100,6 +100,34 @@ def test_prompt_echo_classified_separately() -> None:
     assert checks["policy_echo_leak"] is False
 
 
+def test_raw_leak_reason_classification_consistency() -> None:
+    raw = """
+Thinking Process:
+1. Analyze the Request
+Kullanıcı sorusu: Aktif çalışanlar
+Rule 1: Only answer based on the summary
+Toplam 10 kayıt bulundu.
+"""
+    reasons = NarratorService._classify_raw_response_issues(raw)  # noqa: SLF001
+
+    assert reasons == ["chain_of_thought_like", "policy_echo", "presentation_meta", "prompt_echo"]
+
+
+def test_empty_raw_response_classified_explicitly() -> None:
+    reasons = NarratorService._classify_raw_response_issues("")  # noqa: SLF001
+    assert reasons == ["empty_raw_response"]
+
+
+def test_new_prompt_markers_are_removed_by_sanitizer() -> None:
+    raw = "ISTEK<<<\nAktif çalışanları listele\n>>>\nVERI_OZETI<<<\nSatır sayısı: 10\n>>>\nTEK_CIKTI:\nToplam 10 kayıt bulundu."
+    cleaned = NarratorService._strip_leakage(raw)  # noqa: SLF001
+
+    assert "ISTEK<<<" not in cleaned
+    assert "VERI_OZETI<<<" not in cleaned
+    assert "TEK_CIKTI" not in cleaned
+    assert cleaned == "Toplam 10 kayıt bulundu."
+
+
 def test_final_response_source_sanitized_mapping() -> None:
     out = _sanitize_narration_output(
         raw_response="Thinking Process:\n1. Analyze\nToplam 3 kayıt bulundu.",

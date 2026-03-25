@@ -32,6 +32,19 @@ class GlossaryEntry(BaseModel, extra="forbid"):
     source: Literal["curated", "inferred", "etrm_curated"]
 
 
+class ExtractionPattern(BaseModel, extra="forbid"):
+    """A regex-based extraction rule for a named dimension.
+
+    Patterns are applied to the diacritic-stripped, casefold-normalized query
+    text (i.e. the same *normed* string used by the QU pre-pass).  The first
+    capture group is used as the extracted value.
+    """
+
+    dimension: str   # e.g. "title"
+    patterns: list[str]  # regex strings (group 1 = extracted value)
+    column_hint: str  # canonical DB column name, e.g. "UNVAN"
+
+
 class SemanticEntity(BaseModel, extra="forbid"):
     """Lightweight entity record for query-understanding and retrieval seeding.
 
@@ -52,6 +65,11 @@ class SemanticEntity(BaseModel, extra="forbid"):
 
     # signal_code → list of normalized keywords that indicate this signal
     filter_signal_keywords: dict[str, list[str]] = Field(default_factory=dict)
+    # signal_code → DB column to query when that signal is triggered
+    filter_signal_columns: dict[str, str] = Field(default_factory=dict)
+
+    # Regex-based value extraction patterns (e.g. "yönetici unvanlı" → title)
+    extraction_patterns: list[ExtractionPattern] = Field(default_factory=list)
 
     # Normalized terms used for phrase-level entity scoring
     keywords: list[str] = Field(default_factory=list)

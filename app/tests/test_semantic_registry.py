@@ -102,6 +102,12 @@ def test_registry_reads_policy_rules_and_column_aliases() -> None:
     assert scoped.get("giris_tarihi") == "ISE_GIRIS_TARIHI"
 
 
+def test_registry_exposes_lookup_projection() -> None:
+    registry = _load_registry()
+    values = {lookup.raw_value for lookup in registry.get_lookups_for_column("AUTHORIZATION_STATUS", table_name="PO_HEADERS_ALL")}
+    assert {"APPROVED", "IN PROCESS", "INCOMPLETE", "PRE-APPROVED", "REJECTED"} <= values
+
+
 def test_registry_backward_compat_defaults_when_new_fields_missing() -> None:
     legacy_payload = {
         "version": "1.0",
@@ -154,6 +160,7 @@ def test_registry_loader_file_missing_returns_safe_defaults_with_warning(
     from app.services import semantic_planning
 
     semantic_planning._load_registry.cache_clear()
+    caplog.set_level("INFO")
     missing = Path("C:/this/path/does/not/exist/semantic_registry.json")
     monkeypatch.setattr(semantic_planning, "_REGISTRY_PATH", missing)
 
@@ -162,7 +169,7 @@ def test_registry_loader_file_missing_returns_safe_defaults_with_warning(
     assert isinstance(registry, SemanticRegistry)
     assert registry.policy_rules.sensitive_intent_patterns == []
     assert registry.column_aliases.global_aliases == {}
-    assert "Semantic registry file not found" in caplog.text
+    assert "Optional semantic registry overlay not found" in caplog.text
 
 
 def test_registry_loader_invalid_global_alias_type_falls_back_with_warning(

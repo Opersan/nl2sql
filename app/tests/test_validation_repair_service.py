@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.domain.catalog_models import ColumnMetadata, ColumnType, TableMetadata
 from app.domain.execution_models import ValidationResult
 from app.domain.query_plan import AggregateFn, AggregationSpec, FilterOp, FilterSpec, OrderSpec, QueryPlan, SortDirection
 from app.providers.catalog.in_memory import InMemoryCatalogProvider
@@ -117,3 +118,67 @@ class TestValidationRepairService:
         assert repair_result.repair_applied is True
         assert repaired.order_by[0].column == "employee_count"
         assert "invalid_sort_column_mapped" in trace["reasons"]
+
+    @pytest.mark.asyncio
+    async def test_po_num_alias_variant_repairs_to_segment1(self, repair_service: ValidationRepairService) -> None:
+        po_headers = TableMetadata(
+            name="PO_HEADERS_ALL",
+            columns=[
+                ColumnMetadata(name="PO_HEADER_ID", data_type=ColumnType.NUMBER),
+                ColumnMetadata(
+                    name="SEGMENT1",
+                    data_type=ColumnType.VARCHAR,
+                    aliases=["po number", "po no", "belge no"],
+                ),
+            ],
+        )
+        plan = QueryPlan(
+            intent="po list",
+            table="PO_HEADERS_ALL",
+            select_columns=["PO_HEADER_ID", "PO_NUM"],
+        )
+        validation = ValidationResult(
+            ok=False,
+            resolved_table=po_headers,
+            resolved_tables={"PO_HEADERS_ALL": po_headers},
+        )
+        validation.add_error("invalid_column", "invalid select", field="select_columns[1]")
+
+        repaired, repair_result, trace = await repair_service.repair(plan, validation)
+
+        assert repair_result.repair_applied is True
+        assert repaired.select_columns == ["PO_HEADER_ID", "SEGMENT1"]
+        assert "alias_to_canonical" in trace["reasons"]
+
+    @pytest.mark.asyncio
+    async def test_wrong_table_hint_is_corrected_only_on_unique_match(self, repair_service: ValidationRepairService) -> None:
+        po_headers = TableMetadata(
+            name="PO_HEADERS_ALL",
+            columns=[ColumnMetadata(name="PO_HEADER_ID", data_type=ColumnType.NUMBER)],
+        )
+        po_lines = TableMetadata(
+            name="PO_LINES_ALL",
+            columns=[ColumnMetadata(name="LINE_NUM", data_type=ColumnType.NUMBER)],
+        )
+        plan = QueryPlan(
+            intent="line filter",
+            table="PO_HEADERS_ALL",
+            select_columns=["PO_HEADER_ID"],
+            filters=[FilterSpec(column="lineNum", table="PO_HEADERS_ALL", op=FilterOp.EQ, value=1)],
+        )
+        validation = ValidationResult(
+            ok=False,
+            resolved_table=po_headers,
+            resolved_tables={
+                "PO_HEADERS_ALL": po_headers,
+                "PO_LINES_ALL": po_lines,
+            },
+        )
+        validation.add_error("invalid_column", "invalid filter", field="filters[0].column")
+
+        repaired, repair_result, trace = await repair_service.repair(plan, validation)
+
+        assert repair_result.repair_applied is True
+        assert repaired.filters[0].column == "LINE_NUM"
+        assert repaired.filters[0].table == "PO_LINES_ALL"
+        assert "alias_to_canonical" in trace["reasons"]

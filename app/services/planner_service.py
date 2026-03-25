@@ -58,7 +58,7 @@ from app.services.plan_generation_service import PlanGenerationService
 from app.services.plan_normalization_service import PlanNormalizationService
 from app.services.plan_repair_service import PlanRepairService
 from app.services.planning_context_service import PlanningContextAssemblyService
-from app.services.planning_models import PlanPostProcessResult, PlanningContext, RequestContext
+from app.services.planning_models import PlanGenerationResult, PlanPostProcessResult, PlanningContext, RequestContext
 from app.services.prompt_assembly_service import PromptAssemblyService
 from app.services.query_plan_repair import RepairResult
 from app.services.query_understanding import QueryUnderstanding
@@ -66,8 +66,46 @@ from app.services.query_understanding_service import QueryUnderstandingService
 from app.services.semantic_planning import _load_registry, apply_semantic_normalization
 from app.services.semantic_resolution_service import SemanticResolutionService
 from app.services.plan_normalizer import NormalizationStats
+from app.utils.turkish import casefold_tr
 
 logger = get_logger(__name__)
+
+_BUILTIN_SENSITIVE_PATTERN_TYPES: dict[str, tuple[str, ...]] = {
+    "compensation": (
+        "maaş",
+        "maas",
+        "salary",
+        "ücret",
+        "ucret",
+        "wage",
+    ),
+    "personal_identifier": (
+        "tc kimlik",
+        "tckn",
+        "tc no",
+        "kimlik numarası",
+        "kimlik numarasi",
+        "ssn",
+        "social security",
+    ),
+    "banking": (
+        "iban",
+        "hesap numarası",
+        "hesap numarasi",
+        "banka hesab",
+        "bank account",
+    ),
+    "credentials": (
+        "password",
+        "şifre",
+        "sifre",
+        "parola",
+        "credential",
+        "api key",
+        "access token",
+        "secret key",
+    ),
+}
 
 @lru_cache(maxsize=16)
 def _compile_sensitive_intent_re(patterns: tuple[str, ...]) -> re.Pattern[str] | None:
@@ -77,6 +115,31 @@ def _compile_sensitive_intent_re(patterns: tuple[str, ...]) -> re.Pattern[str] |
 
     escaped = [re.escape(p).replace(r"\ ", r"\s*") for p in normalized]
     return re.compile("|".join(escaped), re.IGNORECASE)
+
+
+def _find_sensitive_pattern_matches(
+    user_message: str,
+    patterns: tuple[str, ...],
+) -> list[str]:
+    normalized_message = casefold_tr(user_message or "")
+    matches: list[str] = []
+    for raw_pattern in patterns:
+        pattern = raw_pattern.strip()
+        if not pattern:
+            continue
+        escaped = re.escape(casefold_tr(pattern)).replace(r"\ ", r"\s*")
+        if re.search(escaped, normalized_message):
+            matches.append(pattern)
+    return matches
+
+
+def _evaluate_sensitive_pattern_sets(user_message: str) -> dict[str, list[str]]:
+    matched_types: dict[str, list[str]] = {}
+    for pattern_type, patterns in _BUILTIN_SENSITIVE_PATTERN_TYPES.items():
+        matches = _find_sensitive_pattern_matches(user_message, patterns)
+        if matches:
+            matched_types[pattern_type] = matches
+    return matched_types
 
 
 class PlannerService:
@@ -110,6 +173,8 @@ class PlannerService:
             )
         )
         self._clarification_decision_service = ClarificationDecisionService()
+        self._logged_sensitive_pattern_load_failure = False
+        self._logged_sensitive_pattern_missing = False
 
     def _set_last_trace(self, trace: dict[str, Any] | None) -> None:
         self._last_trace = trace
@@ -168,7 +233,18 @@ class PlannerService:
         """
         self._set_last_trace({
             "user_message": user_message,
-            "policy_guard": {"triggered": False, "reason": None},
+            "policy_guard": {
+                "triggered": False,
+                "reason": None,
+                "pattern_source": None,
+                "configured_pattern_count": 0,
+                "matched_pattern_count": 0,
+                "matched_pattern_types": [],
+                "matched_patterns": [],
+                "guard_action": "allow",
+                "guard_reason_code": None,
+                "source_warning": None,
+            },
             "query_understanding": None,
             "retrieval": None,
             "prompt": None,
@@ -190,18 +266,20 @@ class PlannerService:
         assert trace is not None
 
         # 0. Minimal sensitive-intent guard (no planner guesswork)
-        if self._is_sensitive_or_invalid_request(user_message):
-            logger.info("Planner sensitive/invalid guard triggered.")
+        policy_guard = self._evaluate_policy_guard(user_message)
+        trace["policy_guard"] = dict(policy_guard)
+        if policy_guard["triggered"]:
+            logger.info(
+                "Planner sensitive/invalid guard triggered: source=%s reason=%s",
+                policy_guard["pattern_source"],
+                policy_guard["guard_reason_code"],
+            )
             plan = QueryPlan(
                 intent="clarification_required",
                 table=None,
                 needs_clarification=True,
                 clarification_message="Bu talep kapsamında güvenlik veya gizlilik riski var. Lütfen iş amaçlı ve yetkili bir sorgu belirtin.",
             )
-            trace["policy_guard"] = {
-                "triggered": True,
-                "reason": "sensitive_or_invalid_request",
-            }
             # Always set intent_guard so downstream eval can read clarification diagnostics
             trace["intent_guard"] = {
                 "requested_filter_signals": [],
@@ -209,13 +287,16 @@ class PlannerService:
                 "final_filter_coverage": {},
                 "false_success_risk": False,
                 "success_blocked_by_filter_loss": False,
-                "clarification_reason_code": "policy_guard_triggered",
+                "clarification_reason_code": policy_guard["guard_reason_code"],
                 "clarification_missing_dimensions": [],
                 "clarification_was_avoidable": False,
                 "plan_confidence": "rule_low",
                 "semantic_confidence": "rule_low",
                 "confidence_band": "low",
                 "plan_confidence_band": "low",
+                "policy_pattern_source": policy_guard["pattern_source"],
+                "policy_matched_pattern_count": policy_guard["matched_pattern_count"],
+                "policy_matched_pattern_types": list(policy_guard["matched_pattern_types"]),
             }
             trace["final_plan"] = self._snapshot_plan(plan)
             return plan
@@ -293,6 +374,7 @@ class PlannerService:
             planner_plan_snapshot,
             user_message,
             planning_context,
+            generation_result,
         )
         query_plan = post_process.final_plan
         trace["normalize"] = {
@@ -460,13 +542,73 @@ class PlannerService:
         return result
 
     def _is_sensitive_or_invalid_request(self, user_message: str) -> bool:
-        registry = _load_registry()
-        patterns = tuple(registry.policy_rules.sensitive_intent_patterns)
-        matcher = _compile_sensitive_intent_re(patterns)
-        if matcher is None:
-            logger.warning("Sensitive policy patterns unavailable; applying fail-safe clarification guard.")
-            return True
-        return bool(matcher.search(user_message or ""))
+        return bool(self._evaluate_policy_guard(user_message)["triggered"])
+
+    def _evaluate_policy_guard(self, user_message: str) -> dict[str, Any]:
+        configured_patterns: tuple[str, ...] = ()
+        pattern_source = "configured"
+        source_warning: str | None = None
+
+        try:
+            registry = _load_registry()
+            configured_patterns = tuple(registry.policy_rules.sensitive_intent_patterns)
+        except Exception as exc:  # pragma: no cover - defensive runtime guard
+            pattern_source = "built_in_fallback"
+            source_warning = f"registry_load_failed:{exc.__class__.__name__}"
+            if not self._logged_sensitive_pattern_load_failure:
+                logger.warning(
+                    "Sensitive policy pattern loading failed (%s); using built-in fallback guard.",
+                    exc,
+                )
+                self._logged_sensitive_pattern_load_failure = True
+
+        matched_patterns: list[str] = []
+        matched_pattern_types: list[str] = []
+
+        if configured_patterns:
+            matched_patterns = _find_sensitive_pattern_matches(user_message, configured_patterns)
+            if matched_patterns:
+                matched_pattern_types = ["configured_sensitive_pattern"]
+        else:
+            pattern_source = "built_in_fallback"
+            if source_warning is None:
+                source_warning = "configured_patterns_missing"
+                if not self._logged_sensitive_pattern_missing:
+                    logger.info(
+                        "Sensitive policy patterns not configured in semantic registry; using built-in fallback guard."
+                    )
+                    self._logged_sensitive_pattern_missing = True
+            built_in_matches = _evaluate_sensitive_pattern_sets(user_message)
+            if built_in_matches:
+                matched_pattern_types = sorted(built_in_matches)
+                for pattern_type in matched_pattern_types:
+                    matched_patterns.extend(built_in_matches[pattern_type])
+
+        matched_patterns = list(dict.fromkeys(matched_patterns))
+        guard_triggered = bool(matched_patterns)
+        guard_reason_code = "sensitive_policy_match" if guard_triggered else None
+        guard_action = "clarification" if guard_triggered else "allow"
+
+        if guard_triggered:
+            logger.info(
+                "Sensitive policy guard triggered: source=%s matched_types=%s patterns=%s",
+                pattern_source,
+                matched_pattern_types,
+                matched_patterns,
+            )
+
+        return {
+            "triggered": guard_triggered,
+            "reason": guard_reason_code,
+            "pattern_source": pattern_source,
+            "configured_pattern_count": len(configured_patterns),
+            "matched_pattern_count": len(matched_patterns),
+            "matched_pattern_types": matched_pattern_types,
+            "matched_patterns": matched_patterns,
+            "guard_action": guard_action,
+            "guard_reason_code": guard_reason_code,
+            "source_warning": source_warning,
+        }
 
     def _enforce_aggregation_intent_guard(self, plan: QueryPlan, user_message: str) -> QueryPlan:
         return self._clarification_decision_service.enforce_aggregation_intent_guard(plan, user_message)
@@ -495,6 +637,7 @@ class PlannerService:
         planner_plan_snapshot: QueryPlan,
         user_message: str,
         planning_context: PlanningContext,
+        generation_result: PlanGenerationResult,
     ) -> PlanPostProcessResult:
         normalization = self._plan_normalization_service.normalize(planner_plan_snapshot)
         repair = self._plan_repair_service.repair(normalization.plan, user_message)
@@ -511,6 +654,12 @@ class PlannerService:
             user_message,
             planner_plan_snapshot,
             semantic_resolution.canonicalized_plan,
+            query_understanding=planning_context.query_understanding,
+            retrieval_diagnostics=planning_context.retrieval_diagnostics,
+            semantic_diagnostics=semantic_resolution.diagnostics,
+            parse_error_taxonomy=generation_result.parse_error_taxonomy,
+            salvage_applied=generation_result.salvage_applied,
+            catalog_snapshot=planning_context.retrieved_snapshot,
         )
         return PlanPostProcessResult(
             original_plan=planner_plan_snapshot,

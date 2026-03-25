@@ -96,6 +96,9 @@ class ExecutionPolicyDecision(BaseModel):
     blocking_risk_flags: list[str] = Field(default_factory=list)
     execution_guard_reason: str | None = None
     execution_skipped_reason: str | None = None
+    safe_mode_applied: bool = False
+    safe_mode_reason: str | None = None
+    effective_limit: int | None = None
     should_execute: bool = True
 
 

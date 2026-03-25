@@ -36,6 +36,17 @@ from app.domain.query_plan import (
 logger = get_logger(__name__)
 
 _PLAN_LIST_FIELD_ALIASES: tuple[str, ...] = ("column", "name", "field", "value")
+_LIST_LIKE_PLAN_FIELDS: tuple[str, ...] = (
+    "select_columns",
+    "group_by",
+    "candidate_tables",
+)
+_OBJECT_LIST_PLAN_FIELDS: tuple[str, ...] = (
+    "filters",
+    "aggregations",
+    "order_by",
+    "joins",
+)
 
 
 # -----------------------------------------------------------------------
@@ -318,6 +329,19 @@ def normalize_raw_plan(
         stats = NormalizationStats()
 
     out: dict[str, Any] = dict(raw)  # shallow copy
+
+    # --- 0. Coerce common field-shape drift into QueryPlan-compatible lists ---
+    for key in _LIST_LIKE_PLAN_FIELDS:
+        value = out.get(key)
+        if isinstance(value, (str, dict)):
+            out[key] = [value]
+            stats.whitespace_trimmed += 1
+
+    for key in _OBJECT_LIST_PLAN_FIELDS:
+        value = out.get(key)
+        if isinstance(value, dict):
+            out[key] = [value]
+            stats.whitespace_trimmed += 1
 
     # --- 1. Trim whitespace from scalar string fields ---
     for key in ("intent", "table", "clarification_message"):

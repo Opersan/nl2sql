@@ -112,6 +112,13 @@ def _tokenize(text: str) -> list[str]:
     return [t for t in cleaned.split() if t]
 
 
+def _keyword_tokens(*phrases: str) -> set[str]:
+    tokens: set[str] = set()
+    for phrase in phrases:
+        tokens.update(_tokenize(phrase))
+    return tokens
+
+
 # ---------------------------------------------------------------------------
 # Entity detection is now registry-driven (data/semantic/glossary.jsonl)
 #
@@ -180,6 +187,92 @@ _STATUS_KEYWORDS: dict[str, str] = {
     "onay bekleyen": "pending_approval",
 }
 
+_NEGATION_TOKENS = {"not", "degil", "değil", "non", "yok"}
+
+
+def _append_filter(qu: QueryUnderstanding, **payload: str) -> None:
+    qu.extracted_filters.append({k: v for k, v in payload.items() if v})
+
+
+def _lookup_values_with_column(
+    registry: "SemanticFoundationRegistry",
+    entity: object,
+    *,
+    terms: set[str],
+) -> list[tuple[str, str]]:
+    """Scan all lookups for the entity's tables and return (raw_value, column) pairs
+    whose label matches any term in *terms*.
+
+    Used as an auto-discover fallback when ``filter_signal_columns`` is not set
+    for a given signal.
+    """
+    root_table: str = getattr(entity, "root_table", "")
+    default_tables: list[str] = list(getattr(entity, "default_tables", []))
+    table_names = {root_table.upper(), *(t.upper() for t in default_tables)}
+    normalized_terms = {_norm(t) for t in terms if t}
+    results: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for lookup in registry.get_all_lookups():
+        if not lookup.table_ref or "." not in lookup.table_ref:
+            continue
+        ref_table, ref_col = lookup.table_ref.rsplit(".", 1)
+        if ref_table.upper() not in table_names:
+            continue
+        label_texts = [_norm(lookup.meaning), _norm(lookup.decoded_value), _norm(lookup.raw_value)]
+        label_tokens = {tok for txt in label_texts for tok in _tokenize(txt)}
+        if _NEGATION_TOKENS & label_tokens:
+            continue
+        hits = any(
+            term in label_tokens
+            or any(
+                term == txt or (("|" in term or "-" in term or " " in term) and term in txt)
+                for txt in label_texts
+            )
+            for term in normalized_terms
+        )
+        if hits:
+            key = (lookup.raw_value, ref_col.upper())
+            if key not in seen:
+                results.append((lookup.raw_value, ref_col.upper()))
+                seen.add(key)
+    return results
+
+
+def _lookup_values_for_terms(
+    registry: "SemanticFoundationRegistry | None",
+    column_hint: str,
+    *,
+    terms: set[str],
+    table_name: str | None = None,
+) -> list[str]:
+    if registry is None:
+        return []
+
+    normalized_terms = {_norm(term) for term in terms if term}
+    if not normalized_terms:
+        return []
+
+    matches: list[str] = []
+    fallback_matches: list[str] = []
+    for lookup in registry.get_lookups_for_column(column_hint, table_name=table_name):
+        label_texts = [_norm(lookup.meaning), _norm(lookup.decoded_value), _norm(lookup.raw_value)]
+        label_tokens = {token for text in label_texts for token in _tokenize(text)}
+        if not label_tokens:
+            continue
+        hits = any(
+            term in label_tokens
+            or any(term == text or ((" " in term or "-" in term) and term in text) for text in label_texts)
+            for term in normalized_terms
+        )
+        if not hits:
+            continue
+        target = fallback_matches if (_NEGATION_TOKENS & label_tokens) else matches
+        if lookup.raw_value not in target:
+            target.append(lookup.raw_value)
+
+    return matches or fallback_matches
+
 # ---------------------------------------------------------------------------
 # Main analysis function
 # ---------------------------------------------------------------------------
@@ -240,6 +333,18 @@ def analyze_query(
                 elif not canonical.startswith("filter:"):
                     entity_scores[canonical] = entity_scores.get(canonical, 0) + 1
 
+        # Token-overlap fallback for inflected phrases that the exact glossary
+        # entries may miss (e.g. siparişlerini vs sipariş).
+        for entity in reg.get_all_entities():
+            entity_token_set = _keyword_tokens(entity.display_name, entity.entity_id, *entity.keywords)
+            overlap = sum(
+                1
+                for token in token_set
+                if any(token == entity_token or token in entity_token or entity_token in token for entity_token in entity_token_set)
+            )
+            if overlap:
+                entity_scores[entity.entity_id] = entity_scores.get(entity.entity_id, 0) + overlap
+
         # Populate QU from scored entities (unique, stable order)
         for entity_id, _score in sorted(
             entity_scores.items(), key=lambda kv: kv[1], reverse=True
@@ -261,7 +366,7 @@ def analyze_query(
         qu.entity_confidence = "medium"
     elif qu.inferred_modules:
         dominant = max(entity_scores.values()) if entity_scores else 0
-        qu.entity_confidence = "high" if dominant >= 3 else "medium"
+        qu.entity_confidence = "high" if dominant >= 2 else "medium"
     else:
         qu.entity_confidence = "low"
         qu.possible_ambiguities.append("no_domain_signal")
@@ -298,20 +403,85 @@ def analyze_query(
     # Status
     for keyword, status_val in _STATUS_KEYWORDS.items():
         if keyword in normed:
-            qu.extracted_filters.append({
-                "dimension": "status",
-                "value": status_val,
-                "column_hint": keyword,
-            })
+            _append_filter(
+                qu,
+                dimension="status",
+                value=status_val,
+                column_hint=keyword,
+            )
+
+    # --- Generic entity-driven filter extraction (registry-indexed) ----------
+    # 1. Direct lookup scan: for each column in entity.likely_filters, check
+    #    whether any lookup meaning appears verbatim in the normalized query.
+    # 2. Signal-keyword scan: fire when a filter_signal_keywords trigger is
+    #    present, then resolve values via filter_signal_columns or auto-discovery.
+    # 3. Extraction patterns: compile and apply entity-specific regex patterns
+    #    (e.g. "yönetici unvanlı" → title filter).
+    if reg is not None:
+        for entity_id in qu.resolved_entities:
+            entity = reg.get_entity(entity_id)
+            if entity is None:
+                continue
+
+            # 1. Direct lookup-meaning scan
+            for filter_col in entity.likely_filters:
+                lookups = reg.get_lookups_for_column(filter_col, table_name=entity.root_table)
+                if not lookups:
+                    continue
+                for lkp in lookups:
+                    lkp_label = _norm(lkp.meaning)
+                    lkp_decoded = _norm(lkp.decoded_value)
+                    lkp_tokens = set(_tokenize(lkp_label)) | set(_tokenize(lkp_decoded))
+                    if _NEGATION_TOKENS & lkp_tokens:
+                        continue  # skip "not intern", "degil" etc.
+                    if lkp_label in normed or lkp_decoded in normed:
+                        _append_filter(
+                            qu,
+                            dimension="status",
+                            value=lkp.raw_value,
+                            column_hint=filter_col,
+                        )
+
+            # 2. Signal-keyword scan
+            for signal_code, keywords in entity.filter_signal_keywords.items():
+                col: str | None = entity.filter_signal_columns.get(signal_code)
+                trigger_terms = {_norm(k) for k in keywords}
+                if not any(t in normed for t in trigger_terms):
+                    continue
+                dim = signal_code.split("_")[0]
+                if col:
+                    for raw_value in _lookup_values_for_terms(
+                        reg, col, terms=trigger_terms, table_name=entity.root_table
+                    ):
+                        _append_filter(qu, dimension=dim, value=raw_value, column_hint=col)
+                else:
+                    for raw_value, ref_col in _lookup_values_with_column(
+                        reg, entity, terms=trigger_terms
+                    ):
+                        _append_filter(qu, dimension=dim, value=raw_value, column_hint=ref_col)
+
+            # 3. Regex extraction patterns
+            for ep in entity.extraction_patterns:
+                for pattern_str in ep.patterns:
+                    m = re.compile(pattern_str, re.I).search(normed)
+                    if m:
+                        _append_filter(
+                            qu,
+                            dimension=ep.dimension,
+                            value=m.group(1),
+                            column_hint=ep.column_hint,
+                        )
+                        break
 
     # Specific value filters (e.g. "vendor_id 501", "BT-01")
     vendor_id_match = re.search(r"tedarikci\w*\s*(?:id|no|numarasi?)?\s*(\d+)", normed)
     if vendor_id_match:
-        qu.extracted_filters.append({
-            "dimension": "vendor",
-            "value": vendor_id_match.group(1),
-            "column_hint": "VENDOR_ID",
-        })
+        _append_filter(
+            qu,
+            dimension="vendor",
+            value=vendor_id_match.group(1),
+            column_hint="VENDOR_ID",
+        )
 
     # --- Ambiguity detection ---
     if len(tokens) <= 2 and not qu.detected_entities:
