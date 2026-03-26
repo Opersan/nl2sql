@@ -6,6 +6,10 @@ from typing import TYPE_CHECKING, Any
 
 from app.core.config import settings
 from app.providers.llm.prompts import build_two_tier_planner_prompt_debug
+from app.providers.retrieval.gating_policy import (
+    compute_domain_noise,
+    is_high_confidence_single_domain,
+)
 from app.services.document_retrieval_service import DocumentRetrievalService
 from app.services.planning_models import (
     PlanningContext,
@@ -75,10 +79,26 @@ class PromptAssemblyService:
                 }
             )
 
+        # ------------------------------------------------------------------
+        # Fallback dominant_domain_match computation
+        # ------------------------------------------------------------------
+        # When the retriever did not propagate diagnostics (dominant_domain_match
+        # is None), derive it from retrieved tables via the semantic registry.
+        # Only applies for high-confidence single-domain queries.
+        effective_dominant_domain_match = retrieval_diag.dominant_domain_match
+        if effective_dominant_domain_match is None and query_understanding is not None:
+            should_gate, _primary_module = is_high_confidence_single_domain(query_understanding)
+            if should_gate and _primary_module is not None:
+                tables = planning_context.retrieved_snapshot.tables
+                effective_dominant_domain_match, cross_domain = compute_domain_noise(
+                    tables, _primary_module
+                )
+                noisy_context_count += cross_domain
+
         retrieval_assessment = "sufficient"
         if not planning_context.retrieved_snapshot.tables:
             retrieval_assessment = "insufficient"
-        elif retrieval_diag.dominant_domain_match is False or noisy_context_count > 1:
+        elif effective_dominant_domain_match is False or noisy_context_count > 1:
             retrieval_assessment = "noisy"
         elif retrieval_diag.root_table_confidence == "low":
             retrieval_assessment = "partial"

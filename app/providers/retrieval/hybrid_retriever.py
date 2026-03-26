@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 from app.core.logging import get_logger
 from app.domain.catalog_models import CatalogSnapshot, RelationshipMetadata
 from app.providers.retrieval.base import SchemaRetriever
+from app.providers.retrieval.gating_policy import is_high_confidence_single_domain
 
 if TYPE_CHECKING:
     from app.services.query_understanding import QueryUnderstanding
@@ -56,6 +57,12 @@ class HybridRetriever(SchemaRetriever):
         self._keyword = keyword
         self._semantic = semantic
         self._alpha = alpha
+
+    @property
+    def last_retrieval_diagnostics(self) -> "dict[str, object] | None":
+        """Forward keyword sub-retriever diagnostics so callers can read
+        entity-seeding results, dominant_domain_match, etc."""
+        return getattr(self._keyword, "last_retrieval_diagnostics", None)
 
     async def retrieve(
         self,
@@ -95,8 +102,29 @@ class HybridRetriever(SchemaRetriever):
                 1.0 - self._alpha
             ) / (rank + _RRF_K)
 
-        # Sort by fused score, return top-K
+        # Sort by fused score
         ranked_names = sorted(scores, key=lambda n: scores[n], reverse=True)
+
+        # ------------------------------------------------------------------
+        # High-confidence single-domain hardening via keyword-retriever trust
+        # ------------------------------------------------------------------
+        # For queries where QueryUnderstanding established a single domain with
+        # high entity confidence, restrict the RRF result to only tables that
+        # the keyword sub-retriever (which applies entity-first seeding and
+        # module boost/suppress) approved.  No table-name heuristics.
+        should_gate, _primary_module = is_high_confidence_single_domain(query_understanding)
+        if should_gate:
+            kw_table_names = {t.name for t in kw_snap.tables}
+            filtered_names = [n for n in ranked_names if n in kw_table_names]
+            if filtered_names:  # guard: never empty the result entirely
+                ranked_names = filtered_names
+                logger.debug(
+                    "[hybrid-retriever] domain-hardening active module=%s "
+                    "before=%d after=%d",
+                    _primary_module, len(scores), len(ranked_names),
+                )
+
+        # Return top-K
         selected = [
             name_to_table[n] for n in ranked_names[:top_k] if n in name_to_table
         ]

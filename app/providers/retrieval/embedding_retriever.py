@@ -22,6 +22,10 @@ from app.domain.catalog_models import CatalogSnapshot, RelationshipMetadata
 from app.providers.catalog.base import CatalogProvider
 from app.providers.embedding.base import EmbeddingProvider
 from app.providers.retrieval.base import SchemaRetriever
+from app.providers.retrieval.gating_policy import (
+    is_high_confidence_single_domain,
+    table_module_from_registry,
+)
 from app.services.catalog_embedding_indexer import CatalogEmbeddingIndexer
 
 if TYPE_CHECKING:
@@ -99,6 +103,28 @@ class EmbeddingRetriever(SchemaRetriever):
             key=lambda x: x[0],
             reverse=True,
         )
+
+        # ------------------------------------------------------------------
+        # Domain-aware post-filtering for high-confidence single-domain queries
+        # ------------------------------------------------------------------
+        # When QueryUnderstanding signals high-confidence single-domain intent,
+        # suppress tables whose registry module conflicts with the primary module.
+        # Table→module resolution uses SemanticFoundationRegistry (no substring
+        # heuristics).  Tables not in the registry are kept (fail-open).
+        should_gate, _primary_module = is_high_confidence_single_domain(query_understanding)
+        if should_gate and _primary_module is not None:
+            gated = [
+                (s, n)
+                for s, n in ranked
+                if table_module_from_registry(n) in (_primary_module, None)
+            ]
+            if gated:  # guard: never empty the result entirely
+                ranked = gated
+                logger.debug(
+                    "[embedding-retriever] domain-gating active module=%s "
+                    "candidates_after=%d",
+                    _primary_module, len(ranked),
+                )
 
         selected = []
         for _score, name in ranked[:top_k]:

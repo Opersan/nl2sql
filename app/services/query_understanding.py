@@ -112,6 +112,15 @@ def _tokenize(text: str) -> list[str]:
     return [t for t in cleaned.split() if t]
 
 
+# Minimum token length for substring matching in the token-overlap fallback.
+# Tokens shorter than this threshold are allowed only exact matches to prevent
+# short abbreviations (e.g. "it", "hr", "po") from accidentally matching unrelated
+# keywords (e.g. "it" in "item", "it" in "dagitimi").
+# Tokens of length >= this value continue to use substring matching so that
+# inflected Turkish morphology (e.g. "calisanlari" ↔ "calisan") keeps working.
+_MIN_TOKEN_LEN_FOR_SUBSTRING: int = 4
+
+
 def _keyword_tokens(*phrases: str) -> set[str]:
     tokens: set[str] = set()
     for phrase in phrases:
@@ -335,12 +344,23 @@ def analyze_query(
 
         # Token-overlap fallback for inflected phrases that the exact glossary
         # entries may miss (e.g. siparişlerini vs sipariş).
+        # IMPORTANT: substring matching is gated on minimum token length.
+        # Tokens shorter than _MIN_TOKEN_LEN_FOR_SUBSTRING use exact match only
+        # to prevent short abbreviations ("it", "hr") from triggering unrelated
+        # entity keywords ("item", "dagitimi", etc.).
         for entity in reg.get_all_entities():
             entity_token_set = _keyword_tokens(entity.display_name, entity.entity_id, *entity.keywords)
             overlap = sum(
                 1
                 for token in token_set
-                if any(token == entity_token or token in entity_token or entity_token in token for entity_token in entity_token_set)
+                if any(
+                    token == entity_token
+                    or (
+                        len(token) >= _MIN_TOKEN_LEN_FOR_SUBSTRING
+                        and (token in entity_token or entity_token in token)
+                    )
+                    for entity_token in entity_token_set
+                )
             )
             if overlap:
                 entity_scores[entity.entity_id] = entity_scores.get(entity.entity_id, 0) + overlap
