@@ -86,6 +86,11 @@ class FilterResolutionAction:
     dimension: str | None
     confidence: str          # "high" | "low"
     reason: str              # machine-readable reason code
+    original_table: str | None = None
+    resolved_table: str | None = None
+    operator: str | None = None
+    original_value: Any = None
+    resolved_value: Any = None
 
 
 @dataclass
@@ -96,11 +101,51 @@ class FilterColumnResolutionResult:
     actions: list[FilterResolutionAction] = field(default_factory=list)
     any_changed: bool = False
 
+    @staticmethod
+    def _serialize_filter(filter_spec: FilterSpec) -> dict[str, Any]:
+        return {
+            "table": filter_spec.table,
+            "column": filter_spec.column,
+            "operator": filter_spec.op.value,
+            "value": filter_spec.value,
+        }
+
     def as_trace_dict(self) -> dict[str, Any]:
+        total_filters_seen = len(self.actions)
+        changed_count = sum(1 for a in self.actions if a.changed)
+        skipped_count = total_filters_seen - changed_count
+        skip_reasons: dict[str, int] = {}
+        changed_items: list[dict[str, Any]] = []
+        original_filters: list[dict[str, Any]] = []
+        for action in self.actions:
+            original_filters.append({
+                "table": action.original_table,
+                "column": action.original_column,
+                "operator": action.operator,
+                "value": action.original_value,
+            })
+            if action.changed:
+                changed_items.append({
+                    "filter_index": action.filter_index,
+                    "original_column": action.original_column,
+                    "resolved_column": action.resolved_column,
+                    "reason": action.reason,
+                })
+            else:
+                skip_reasons[action.reason] = skip_reasons.get(action.reason, 0) + 1
+
         return {
             "any_changed": self.any_changed,
-            "total_filters": len(self.actions),
-            "changed_count": sum(1 for a in self.actions if a.changed),
+            "total_filters": total_filters_seen,
+            "total_filters_seen": total_filters_seen,
+            "processed_filters": total_filters_seen,
+            "changed_count": changed_count,
+            "changed_filters": changed_count,
+            "skipped_filters": skipped_count,
+            "skip_reasons": skip_reasons,
+            "changed_items": changed_items,
+            "original_filters": original_filters,
+            "final_filters": [self._serialize_filter(filter_spec) for filter_spec in self.resolved_plan.filters],
             "actions": [
                 {
                     "filter_index": a.filter_index,
@@ -110,6 +155,11 @@ class FilterColumnResolutionResult:
                     "dimension": a.dimension,
                     "confidence": a.confidence,
                     "reason": a.reason,
+                    "original_table": a.original_table,
+                    "resolved_table": a.resolved_table,
+                    "operator": a.operator,
+                    "original_value": a.original_value,
+                    "resolved_value": a.resolved_value,
                 }
                 for a in self.actions
             ],
@@ -262,13 +312,54 @@ class FilterColumnResolutionService:
         """
         _no_change = FilterColumnResolutionResult(resolved_plan=plan)
 
-        # Short-circuit: skip clarification plans and plans without filters.
-        if plan.needs_clarification or not plan.filters:
+        if not plan.filters:
             return _no_change
 
-        # Short-circuit: if provider has no config, no-op safely.
+        if plan.needs_clarification:
+            return FilterColumnResolutionResult(
+                resolved_plan=plan,
+                actions=[
+                    FilterResolutionAction(
+                        filter_index=idx,
+                        original_column=fspec.column,
+                        resolved_column=fspec.column,
+                        changed=False,
+                        dimension=None,
+                        confidence="low",
+                        reason="clarification_plan_no_op",
+                        original_table=fspec.table,
+                        resolved_table=fspec.table,
+                        operator=fspec.op.value,
+                        original_value=fspec.value,
+                        resolved_value=fspec.value,
+                    )
+                    for idx, fspec in enumerate(plan.filters)
+                ],
+                any_changed=False,
+            )
+
         if not self._provider.loaded_ok:
-            return _no_change
+            return FilterColumnResolutionResult(
+                resolved_plan=plan,
+                actions=[
+                    FilterResolutionAction(
+                        filter_index=idx,
+                        original_column=fspec.column,
+                        resolved_column=fspec.column,
+                        changed=False,
+                        dimension=None,
+                        confidence="low",
+                        reason="grounding_config_unavailable_no_op",
+                        original_table=fspec.table,
+                        resolved_table=fspec.table,
+                        operator=fspec.op.value,
+                        original_value=fspec.value,
+                        resolved_value=fspec.value,
+                    )
+                    for idx, fspec in enumerate(plan.filters)
+                ],
+                any_changed=False,
+            )
 
         normalized_q = _norm(user_question)
         intended_dimension = _detect_intended_dimension(normalized_q, provider=self._provider)
@@ -290,6 +381,11 @@ class FilterColumnResolutionService:
                     dimension=None,
                     confidence="high",
                     reason="protected_column_no_op",
+                    original_table=fspec.table,
+                    resolved_table=fspec.table,
+                    operator=fspec.op.value,
+                    original_value=fspec.value,
+                    resolved_value=fspec.value,
                 ))
                 new_filters.append(fspec)
                 continue
@@ -304,6 +400,11 @@ class FilterColumnResolutionService:
                     dimension=None,
                     confidence="low",
                     reason="no_dimension_signal_in_question",
+                    original_table=fspec.table,
+                    resolved_table=fspec.table,
+                    operator=fspec.op.value,
+                    original_value=fspec.value,
+                    resolved_value=fspec.value,
                 ))
                 new_filters.append(fspec)
                 continue
@@ -319,6 +420,11 @@ class FilterColumnResolutionService:
                     dimension=intended_dimension,
                     confidence="low",
                     reason="dimension_config_missing",
+                    original_table=fspec.table,
+                    resolved_table=fspec.table,
+                    operator=fspec.op.value,
+                    original_value=fspec.value,
+                    resolved_value=fspec.value,
                 ))
                 new_filters.append(fspec)
                 continue
@@ -335,6 +441,11 @@ class FilterColumnResolutionService:
                     dimension=intended_dimension,
                     confidence="high",
                     reason=f"column_not_confusable_for_{intended_dimension}",
+                    original_table=fspec.table,
+                    resolved_table=fspec.table,
+                    operator=fspec.op.value,
+                    original_value=fspec.value,
+                    resolved_value=fspec.value,
                 ))
                 new_filters.append(fspec)
                 continue
@@ -349,6 +460,11 @@ class FilterColumnResolutionService:
                     dimension=intended_dimension,
                     confidence="high",
                     reason="already_correct_column",
+                    original_table=fspec.table,
+                    resolved_table=fspec.table,
+                    operator=fspec.op.value,
+                    original_value=fspec.value,
+                    resolved_value=fspec.value,
                 ))
                 new_filters.append(fspec)
                 continue
@@ -364,6 +480,11 @@ class FilterColumnResolutionService:
                 dimension=intended_dimension,
                 confidence="high",
                 reason=f"dimension_{intended_dimension}_keyword_detected_in_question",
+                original_table=fspec.table,
+                resolved_table=fspec.table,
+                operator=fspec.op.value,
+                original_value=fspec.value,
+                resolved_value=fspec.value,
             ))
             new_filters.append(corrected)
             logger.info(

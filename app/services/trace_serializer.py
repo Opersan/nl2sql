@@ -376,8 +376,10 @@ def build_filter_column_resolution_payload(fcr_trace: dict[str, Any]) -> dict[st
     for every filter processed — so engineers can inspect column corrections in
     the live view without hunting through raw trace JSON.
     """
-    changed_count = int(fcr_trace.get("changed_count", 0))
-    total = int(fcr_trace.get("total_filters", 0))
+    changed_count = int(fcr_trace.get("changed_filters", fcr_trace.get("changed_count", 0)))
+    total = int(fcr_trace.get("total_filters_seen", fcr_trace.get("total_filters", 0)))
+    processed = int(fcr_trace.get("processed_filters", total))
+    skipped = int(fcr_trace.get("skipped_filters", max(processed - changed_count, 0)))
     actions_raw = fcr_trace.get("actions") or []
 
     # Build a compact per-action summary for the UI
@@ -387,8 +389,13 @@ def build_filter_column_resolution_payload(fcr_trace: dict[str, Any]) -> dict[st
             continue
         action_summaries.append({
             "filter_index": a.get("filter_index"),
+            "original_table": a.get("original_table"),
+            "resolved_table": a.get("resolved_table"),
             "original_column": safe_text(str(a.get("original_column", "")), max_len=80),
             "resolved_column": safe_text(str(a.get("resolved_column", "")), max_len=80),
+            "operator": safe_text(str(a.get("operator", "")), max_len=20),
+            "original_value": safe_payload(a.get("original_value"), max_str=80),
+            "resolved_value": safe_payload(a.get("resolved_value"), max_str=80),
             "changed": bool(a.get("changed", False)),
             "dimension": a.get("dimension"),
             "confidence": a.get("confidence"),
@@ -398,7 +405,15 @@ def build_filter_column_resolution_payload(fcr_trace: dict[str, Any]) -> dict[st
     return {
         "any_changed": bool(fcr_trace.get("any_changed", False)),
         "total_filters": total,
+        "total_filters_seen": total,
+        "processed_filters": processed,
+        "skipped_filters": skipped,
         "changed_count": changed_count,
+        "changed_filters": changed_count,
+        "skip_reasons": safe_payload(fcr_trace.get("skip_reasons", {}), max_str=80),
+        "changed_items": safe_payload(fcr_trace.get("changed_items", []), max_str=80),
+        "original_filters": safe_payload(fcr_trace.get("original_filters", []), max_str=80),
+        "final_filters": safe_payload(fcr_trace.get("final_filters", []), max_str=80),
         "actions": action_summaries,
     }
 
@@ -406,6 +421,10 @@ def build_filter_column_resolution_payload(fcr_trace: dict[str, Any]) -> dict[st
 def build_filter_value_resolution_payload(fvr_trace: dict[str, Any]) -> dict[str, Any]:
     """Build a safe Pipeline Live View payload for filter_value_resolution."""
     actions_raw = fvr_trace.get("actions") or []
+    total = int(fvr_trace.get("total_filters_seen", fvr_trace.get("total_filters", len(actions_raw))))
+    processed = int(fvr_trace.get("processed_filters", len(actions_raw)))
+    changed = int(fvr_trace.get("changed_filters", fvr_trace.get("changed_count", 0)))
+    skipped = int(fvr_trace.get("skipped_filters", max(processed - changed, 0)))
     action_summaries = []
     for action in actions_raw[:_MAX_LIST_ITEMS]:
         if not isinstance(action, dict):
@@ -425,8 +444,16 @@ def build_filter_value_resolution_payload(fvr_trace: dict[str, Any]) -> dict[str
     return {
         "any_changed": bool(fvr_trace.get("any_changed", False)),
         "clarification_required": bool(fvr_trace.get("clarification_required", False)),
-        "total_filters": len(actions_raw),
-        "changed_count": sum(1 for action in actions_raw if isinstance(action, dict) and action.get("changed")),
+        "total_filters": total,
+        "total_filters_seen": total,
+        "processed_filters": processed,
+        "skipped_filters": skipped,
+        "changed_count": changed,
+        "changed_filters": changed,
+        "skip_reasons": safe_payload(fvr_trace.get("skip_reasons", {}), max_str=80),
+        "changed_items": safe_payload(fvr_trace.get("changed_items", []), max_str=80),
+        "original_filters": safe_payload(fvr_trace.get("original_filters", []), max_str=80),
+        "final_filters": safe_payload(fvr_trace.get("final_filters", []), max_str=80),
         "actions": action_summaries,
     }
 

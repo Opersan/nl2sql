@@ -155,6 +155,14 @@ Not: `pytest` her ortamda PATH üzerinde olmayabilir. Bu durumda `.venv\Scripts\
 uvicorn app.api.main:app --reload
 ```
 
+Windows'ta `uvicorn --reload` bazı ortamlarda terminali geri bırakmadan takılabiliyor. Bu durumda repo içindeki wrapper'ı kullanın:
+
+```powershell
+.\.venv\Scripts\python scripts\dev_server.py
+```
+
+Wrapper, Windows'ta `WATCHFILES_FORCE_POLLING=true` ile çalışır ve `Ctrl+C` geldiğinde uvicorn process tree'sini kapatır.
+
 Varsayılan endpoint'ler:
 
 - `GET /health`

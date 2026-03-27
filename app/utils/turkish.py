@@ -7,6 +7,8 @@ solution for case-insensitive comparison of identifiers and aliases.
 
 from __future__ import annotations
 
+import unicodedata
+
 # Turkish-specific case-mapping pairs that Python's casefold misses.
 _TR_UPPER_TO_LOWER: dict[str, str] = {
     "İ": "i",
@@ -53,6 +55,15 @@ def normalize_text(text: str) -> str:
     Useful for fuzzy identifier / alias matching.
     """
     return casefold_tr(" ".join(text.split()))
+
+
+def normalize_for_matching(text: str) -> str:
+    """Normalize text for robust Turkish-insensitive keyword/value matching."""
+    normalized = normalize_text(text)
+    decomposed = unicodedata.normalize("NFKD", normalized)
+    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    collapsed = stripped.replace("ı", "i")
+    return " ".join(collapsed.split())
 
 
 def eq_tr(a: str, b: str) -> bool:

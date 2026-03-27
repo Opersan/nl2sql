@@ -370,4 +370,4 @@ class OracleExecutor(ExecutorProvider):
             self._pool.close()
             self._pool = None
             logger.info("Oracle connection pool closed.")
-        self._thread_pool.shutdown(wait=False)
+        self._thread_pool.shutdown(wait=False, cancel_futures=True)

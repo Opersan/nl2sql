@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -10,6 +11,7 @@ from fastapi import FastAPI
 from app.api.deps import build_chat_orchestrator, build_document_retrieval
 from app.api.routes_chat import router as chat_router
 from app.api.routes_health import router as health_router
+from app.api.routes_trace import router as trace_router
 from app.core.config import APP_VERSION, settings
 from app.core.logging import get_logger
 
@@ -29,12 +31,58 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.chat_orchestrator = build_chat_orchestrator(
         doc_retrieval=doc_retrieval,
     )
+    await _initialize_executor_resources(app)
 
     # -- Startup: semantic registry ↔ catalog consistency check (fail-open) --
     await _validate_semantic_registry()
 
     yield
-    # -- Shutdown: nothing to clean up for now ----------------------------
+
+    # -- Shutdown: close resources that keep worker threads/process alive --
+    await _close_executor_resources(app)
+
+
+def _resolve_inner_executor(app: FastAPI) -> object | None:
+    """Return the inner executor instance if the chat orchestrator is wired."""
+    chat_orchestrator = getattr(app.state, "chat_orchestrator", None)
+    inner_orchestrator = getattr(chat_orchestrator, "_orchestrator", None)
+    return getattr(inner_orchestrator, "_executor", None)
+
+
+async def _initialize_executor_resources(app: FastAPI) -> None:
+    """Initialise executor resources during startup when supported."""
+    executor = _resolve_inner_executor(app)
+    init_method = getattr(executor, "init_pool", None)
+    if init_method is None:
+        return
+
+    try:
+        maybe_awaitable = init_method()
+        if inspect.isawaitable(maybe_awaitable):
+            await maybe_awaitable
+        logger.info("[startup] executor resources initialised cleanly.")
+    except Exception as exc:
+        logger.error("[startup] executor initialisation failed: %s", exc)
+
+
+async def _close_executor_resources(app: FastAPI) -> None:
+    """Close executor resources during shutdown when available.
+
+    This is intentionally duck-typed so tests and alternative executors do
+    not need to inherit a specific shutdown interface.
+    """
+    executor = _resolve_inner_executor(app)
+    close_method = getattr(executor, "close", None)
+    if close_method is None:
+        return
+
+    try:
+        maybe_awaitable = close_method()
+        if inspect.isawaitable(maybe_awaitable):
+            await maybe_awaitable
+        logger.info("[shutdown] executor resources closed cleanly.")
+    except Exception as exc:
+        logger.warning("[shutdown] executor cleanup failed: %s", exc)
 
 
 async def _validate_semantic_registry() -> None:
@@ -78,6 +126,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(chat_router)
+    app.include_router(trace_router)
     return app
 
 

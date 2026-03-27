@@ -552,13 +552,26 @@ class TestBuildFilterColumnResolutionPayload:
 
         trace = {
             "any_changed": True,
+            "total_filters_seen": 2,
+            "processed_filters": 2,
+            "skipped_filters": 1,
+            "changed_filters": 1,
             "total_filters": 2,
             "changed_count": 1,
+            "skip_reasons": {"protected_column_no_op": 1},
+            "changed_items": [{"filter_index": 0, "original_column": "ORGANIZATION_ADI", "resolved_column": "BIRIM_ADI", "reason": "dimension_department_keyword_detected_in_question"}],
+            "original_filters": [{"column": "ORGANIZATION_ADI", "operator": "=", "value": "IT", "table": None}],
+            "final_filters": [{"column": "BIRIM_ADI", "operator": "=", "value": "IT", "table": None}],
             "actions": [
                 {
                     "filter_index": 0,
+                    "original_table": None,
+                    "resolved_table": None,
                     "original_column": "ORGANIZATION_ADI",
                     "resolved_column": "BIRIM_ADI",
+                    "operator": "=",
+                    "original_value": "IT",
+                    "resolved_value": "IT",
                     "changed": True,
                     "dimension": "department",
                     "confidence": "high",
@@ -566,8 +579,13 @@ class TestBuildFilterColumnResolutionPayload:
                 },
                 {
                     "filter_index": 1,
+                    "original_table": None,
+                    "resolved_table": None,
                     "original_column": "CIKIS_TARIHI",
                     "resolved_column": "CIKIS_TARIHI",
+                    "operator": "IS_NULL",
+                    "original_value": None,
+                    "resolved_value": None,
                     "changed": False,
                     "dimension": None,
                     "confidence": "high",
@@ -579,7 +597,12 @@ class TestBuildFilterColumnResolutionPayload:
         assert payload["any_changed"] is True
         assert payload["changed_count"] == 1
         assert payload["total_filters"] == 2
+        assert payload["total_filters_seen"] == 2
+        assert payload["processed_filters"] == 2
+        assert payload["skipped_filters"] == 1
         assert len(payload["actions"]) == 2
+        assert payload["original_filters"][0]["column"] == "ORGANIZATION_ADI"
+        assert payload["final_filters"][0]["column"] == "BIRIM_ADI"
         assert payload["actions"][0]["original_column"] == "ORGANIZATION_ADI"
         assert payload["actions"][0]["resolved_column"] == "BIRIM_ADI"
         assert payload["actions"][0]["changed"] is True
@@ -606,6 +629,7 @@ class TestBuildFilterColumnResolutionPayload:
         payload = build_filter_column_resolution_payload(trace)
         assert payload["any_changed"] is False
         assert payload["changed_count"] == 0
+        assert payload["processed_filters"] == 1
 
     def test_payload_handles_empty_actions(self) -> None:
         from app.services.trace_serializer import build_filter_column_resolution_payload
@@ -621,3 +645,30 @@ class TestBuildFilterColumnResolutionPayload:
         assert payload["any_changed"] is False
         assert payload["total_filters"] == 0
         assert payload["changed_count"] == 0
+
+
+class TestFilterColumnResolutionAccounting:
+    def test_real_filter_is_counted_even_when_not_changed(self) -> None:
+        service = FilterColumnResolutionService(provider=_provider_from_dict(_minimal_grounding_json()))
+        plan = _make_plan([_filter("BOLUM", FilterOp.EQ, "IT")])
+
+        result = service.resolve(plan, "IT departmanindaki calisanlar")
+        trace = result.as_trace_dict()
+
+        assert trace["total_filters_seen"] == 1
+        assert trace["processed_filters"] == 1
+        assert trace["changed_filters"] == 0
+        assert trace["skipped_filters"] == 1
+        assert trace["actions"][0]["reason"] == "column_not_confusable_for_department"
+
+    def test_like_filter_is_counted_and_explained(self) -> None:
+        service = FilterColumnResolutionService(provider=_provider_from_dict(_minimal_grounding_json()))
+        plan = _make_plan([_filter("BIRIM_ADI", FilterOp.LIKE, "%IT%")])
+
+        result = service.resolve(plan, "IT departmanindaki calisanlar")
+        trace = result.as_trace_dict()
+
+        assert trace["total_filters_seen"] == 1
+        assert trace["processed_filters"] == 1
+        assert trace["actions"][0]["operator"] == "LIKE"
+        assert trace["actions"][0]["reason"] == "already_correct_column"

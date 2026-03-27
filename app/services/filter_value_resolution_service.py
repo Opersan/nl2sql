@@ -37,6 +37,23 @@ class FilterValueResolutionService:
 
         policy = self._provider.policy()
 
+        if not plan.filters:
+            return plan, {
+                "actions": [],
+                "any_changed": False,
+                "changed_count": 0,
+                "changed_filters": 0,
+                "processed_filters": 0,
+                "skipped_filters": 0,
+                "total_filters": 0,
+                "total_filters_seen": 0,
+                "skip_reasons": {},
+                "changed_items": [],
+                "original_filters": [],
+                "final_filters": [],
+                "clarification_required": False,
+            }
+
         for filter_spec in plan.filters:
             action, next_filter, changed, clarification = self._resolve_filter(filter_spec, policy)
             actions.append(action)
@@ -55,7 +72,15 @@ class FilterValueResolutionService:
                     "actions": actions,
                     "any_changed": any_changed,
                     "changed_count": changed_count,
+                    "changed_filters": changed_count,
+                    "processed_filters": len(actions),
+                    "skipped_filters": len(actions) - changed_count,
                     "total_filters": len(plan.filters),
+                    "total_filters_seen": len(plan.filters),
+                    "skip_reasons": self._summarize_skip_reasons(actions),
+                    "changed_items": self._summarize_changed_items(actions),
+                    "original_filters": self._serialize_filters(plan.filters),
+                    "final_filters": self._serialize_filters(clarified.filters),
                     "clarification_required": True,
                 }
 
@@ -64,9 +89,55 @@ class FilterValueResolutionService:
             "actions": actions,
             "any_changed": any_changed,
             "changed_count": changed_count,
+            "changed_filters": changed_count,
+            "processed_filters": len(actions),
+            "skipped_filters": len(actions) - changed_count,
             "total_filters": len(plan.filters),
+            "total_filters_seen": len(plan.filters),
+            "skip_reasons": self._summarize_skip_reasons(actions),
+            "changed_items": self._summarize_changed_items(actions),
+            "original_filters": self._serialize_filters(plan.filters),
+            "final_filters": self._serialize_filters(resolved_plan.filters),
             "clarification_required": False,
         }
+
+    @staticmethod
+    def _serialize_filters(filters: list[FilterSpec]) -> list[dict[str, Any]]:
+        return [
+            {
+                "table": filter_spec.table,
+                "column": filter_spec.column,
+                "operator": filter_spec.op.value,
+                "value": filter_spec.value,
+            }
+            for filter_spec in filters
+        ]
+
+    @staticmethod
+    def _summarize_skip_reasons(actions: list[dict[str, Any]]) -> dict[str, int]:
+        reasons: dict[str, int] = {}
+        for action in actions:
+            if action.get("changed"):
+                continue
+            reason = str(action.get("reason") or "unknown_no_op")
+            reasons[reason] = reasons.get(reason, 0) + 1
+        return reasons
+
+    @staticmethod
+    def _summarize_changed_items(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for action in actions:
+            if not action.get("changed"):
+                continue
+            items.append(
+                {
+                    "column": action.get("column"),
+                    "original_value": action.get("original_value"),
+                    "resolved_value": action.get("resolved_value"),
+                    "reason": action.get("reason"),
+                }
+            )
+        return items
 
     def _resolve_filter(
         self,
@@ -77,7 +148,7 @@ class FilterValueResolutionService:
         base_action = {
             "table": filter_spec.table,
             "column": filter_spec.column,
-            "operator": filter_spec.op,
+            "operator": filter_spec.op.value,
             "original_value": original_value,
             "resolved_value": original_value,
             "normalized_value": normalize_for_matching(original_value) if isinstance(original_value, str) else None,

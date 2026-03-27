@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.core.config import settings
 from app.core.exceptions import CompilationError, PlannerError
@@ -49,6 +49,9 @@ from app.services.sql_compiler import SQLCompiler
 from app.services.validation_repair_service import ValidationRepairService
 from app.services.execution_risk import assess_pre_execution_risk, bind_summary, sql_fingerprint
 from app.services.validation_service import ValidationService
+
+if TYPE_CHECKING:
+    from app.domain.trace_models import TraceCollector
 
 logger = get_logger(__name__)
 
@@ -104,7 +107,12 @@ class Orchestrator:
             return self._last_trace_by_task[id(task)]
         return self._last_trace
 
-    async def run_plan(self, plan: QueryPlan) -> OrchestrationResult:
+    async def run_plan(
+        self,
+        plan: QueryPlan,
+        *,
+        trace_collector: TraceCollector | None = None,
+    ) -> OrchestrationResult:
         """Execute the full deterministic pipeline for *plan*.
 
         Steps
@@ -128,6 +136,12 @@ class Orchestrator:
         })
 
         # 1 – Validate
+        if trace_collector:
+            _tc_val_mono = trace_collector.stage_started(
+                "validation",
+                summary="Validating QueryPlan against catalog…",
+                metadata={"plan_table": plan.table, "plan_intent": plan.intent},
+            )
         validation_started = time.perf_counter()
         validation = await self._validator.validate(plan)
         validation_ms = int((time.perf_counter() - validation_started) * 1000)
@@ -194,6 +208,35 @@ class Orchestrator:
             self._last_trace["current_stage_at_failure"] = "validation"
             self._last_trace["root_cause_stage"] = "validation"
 
+        if trace_collector:
+            from app.services.trace_serializer import build_validation_payload, safe_payload
+
+            validation_payload = build_validation_payload(self._last_trace.get("validation") or {})
+            if self._last_trace.get("validation_repair"):
+                validation_payload["validation_repair"] = safe_payload(
+                    self._last_trace["validation_repair"]
+                )
+            validation_summary = (
+                f"Validation OK — table={self._last_trace['validation'].get('resolved_table')}"
+                if validation.ok
+                else "Validation FAILED: " + ", ".join(e.message for e in validation.errors[:2])
+            )
+            if validation.ok:
+                trace_collector.stage_completed(
+                    "validation",
+                    started_at_mono=_tc_val_mono,
+                    summary=validation_summary,
+                    payload=validation_payload,
+                    metadata={"resolved_table": self._last_trace["validation"].get("resolved_table")},
+                )
+            else:
+                trace_collector.stage_failed(
+                    "validation",
+                    started_at_mono=_tc_val_mono,
+                    summary=validation_summary,
+                    payload=validation_payload,
+                )
+
         if not validation.ok:
             logger.info("Plan validation failed: %s", validation.errors)
             return OrchestrationResult(
@@ -209,6 +252,12 @@ class Orchestrator:
         )
 
         # 3 – Compile
+        if trace_collector:
+            _tc_cmp_mono = trace_collector.stage_started(
+                "compile",
+                summary="Compiling QueryPlan → Oracle SQL…",
+                metadata={"table": validation.resolved_table.name if validation.resolved_table else None},
+            )
         compile_started = time.perf_counter()
         try:
             compiled = self._compiler.compile(
@@ -225,6 +274,13 @@ class Orchestrator:
             self._last_trace["current_stage_at_failure"] = "compile"
             self._last_trace["root_cause_stage"] = "compile"
             logger.error("Compilation error: %s", exc)
+            if trace_collector:
+                trace_collector.stage_failed(
+                    "compile",
+                    started_at_mono=_tc_cmp_mono,
+                    summary=f"Compilation error: {exc}",
+                    payload={"ok": False, "error": str(exc)},
+                )
             return OrchestrationResult(
                 validation=validation,
                 failed_phase=ErrorPhase.COMPILATION,
@@ -267,6 +323,13 @@ class Orchestrator:
                 self._last_trace["current_stage_at_failure"] = "compile"
                 self._last_trace["root_cause_stage"] = "compile"
                 logger.error("Safe-mode recompilation error: %s", exc)
+                if trace_collector:
+                    trace_collector.stage_failed(
+                        "compile",
+                        started_at_mono=_tc_cmp_mono,
+                        summary=f"Safe-mode recompilation error: {exc}",
+                        payload={"ok": False, "error": str(exc)},
+                    )
                 return OrchestrationResult(
                     validation=validation,
                     failed_phase=ErrorPhase.COMPILATION,
@@ -283,6 +346,18 @@ class Orchestrator:
                 "bind_summary": bind_summary(execution_compiled),
                 "latency_ms": int((time.perf_counter() - compile_started) * 1000),
             }
+
+        if trace_collector and self._last_trace.get("compile", {}).get("ok"):
+            from app.services.trace_serializer import build_compile_payload
+
+            compile_trace = self._last_trace["compile"]
+            trace_collector.stage_completed(
+                "compile",
+                started_at_mono=_tc_cmp_mono,
+                summary=f"SQL compiled — table={compile_trace.get('table')}, cols={len(compile_trace.get('selected_columns', []))}",
+                payload=build_compile_payload(compile_trace),
+                metadata={"fingerprint": compile_trace.get("executed_sql_fingerprint")},
+            )
 
         self._last_trace["pre_execution"] = {
             "pre_execution_risk_flags": list(precheck.pre_execution_risk_flags),
@@ -319,6 +394,14 @@ class Orchestrator:
                 "bind_summary": bind_summary(execution_compiled),
                 "latency_ms": 0,
             }
+            if trace_collector:
+                from app.services.trace_serializer import build_execute_payload
+
+                trace_collector.stage_skipped(
+                    "execute",
+                    summary=f"Execution skipped: {reason}",
+                    payload=build_execute_payload(self._last_trace["execute"]),
+                )
             return OrchestrationResult(
                 validation=validation,
                 compiled_query=execution_compiled,
@@ -333,6 +416,11 @@ class Orchestrator:
 
 
         # 4 – Execute
+        if trace_collector:
+            _tc_exe_mono = trace_collector.stage_started(
+                "execute",
+                summary="Executing SQL query…",
+            )
         execute_started = time.perf_counter()
         try:
             execution = await self._executor.execute(execution_compiled)
@@ -369,6 +457,31 @@ class Orchestrator:
             self._last_trace["root_cause_stage"] = "execute"
         else:
             self._last_trace["last_completed_stage"] = "execute"
+
+        if trace_collector:
+            from app.services.trace_serializer import build_execute_payload
+
+            execute_payload = build_execute_payload(self._last_trace.get("execute") or {})
+            execute_summary = (
+                f"Executed — {execution.row_count} rows, {len(execution.columns)} cols"
+                if execution.status != ExecutionStatus.ERROR
+                else f"Execution error: {execution.error_message or 'unknown'}"[:120]
+            )
+            if execution.status != ExecutionStatus.ERROR:
+                trace_collector.stage_completed(
+                    "execute",
+                    started_at_mono=_tc_exe_mono,
+                    summary=execute_summary,
+                    payload=execute_payload,
+                    metadata={"row_count": execution.row_count},
+                )
+            else:
+                trace_collector.stage_failed(
+                    "execute",
+                    started_at_mono=_tc_exe_mono,
+                    summary=execute_summary,
+                    payload=execute_payload,
+                )
 
         # 5 – Determine execution-phase failure and return.
         failed = (
@@ -415,21 +528,82 @@ class ChatOrchestrator:
         self._sessions = session_service
 
     async def handle_message(
-        self, session_id: str, message: str,
+        self,
+        session_id: str,
+        message: str,
+        *,
+        trace_collector: TraceCollector | None = None,
     ) -> ChatResult:
         """Process a single user turn end-to-end.
 
         Returns a ``ChatResult`` with status, answer, optional plan/SQL and
         rows preview.
         """
+        import time as _time
+
+        tc = trace_collector
+        _t0_mono = _time.monotonic()
+
         # 1 – Session bookkeeping
         self._sessions.get_or_create(session_id)
         self._sessions.append_user_message(session_id, message)
 
+        if tc:
+            from app.services.trace_serializer import (
+                build_catalog_readiness_payload,
+                build_question_payload,
+                build_runtime_context_payload,
+                build_semantic_registry_payload,
+                build_settings_snapshot,
+            )
+
+            tc.stage_completed(
+                "question",
+                summary=f"Question: {message[:100]}",
+                payload=build_question_payload(message, session_id),
+            )
+            tc.stage_completed(
+                "runtime_context",
+                summary="Request runtime context",
+                payload=build_runtime_context_payload(
+                    session_id=session_id,
+                    trace_id=tc.trace_id,
+                    settings_snapshot=build_settings_snapshot(),
+                ),
+            )
+            tc.stage_completed(
+                "metadata_catalog_load",
+                summary="Catalog metadata readiness",
+                payload=build_catalog_readiness_payload(),
+            )
+            tc.stage_completed(
+                "semantic_registry_load",
+                summary="Semantic registry readiness",
+                payload=build_semantic_registry_payload(),
+            )
+
         # 2 – Plan
+        if tc:
+            _plan_mono = tc.stage_started(
+                "planner_llm_request",
+                summary="Calling planner LLM (NL → QueryPlan)…",
+                metadata={"question_length": len(message)},
+            )
         try:
             plan = await self._planner.plan(message)
         except PlannerError as exc:
+            if tc:
+                tc.stage_failed(
+                    "planner_llm_request",
+                    started_at_mono=_plan_mono,
+                    summary=f"Planner error: {exc}",
+                    payload={"error": str(exc)[:300]},
+                )
+                tc.stage_completed(
+                    "final_verdict",
+                    summary="Pipeline failed at planner stage",
+                    payload={"status": "planner_error", "error_message": str(exc)[:300]},
+                )
             answer = f"Plan oluşturulurken hata: {exc}"
             self._sessions.append_assistant_message(session_id, answer)
             return ChatResult(
@@ -441,9 +615,28 @@ class ChatOrchestrator:
 
         self._sessions.set_last_plan(session_id, plan)
 
+        if tc:
+            self._emit_planner_trace_stages(tc, _plan_mono)
+
         # 3 – Clarification short-circuit
         if plan.needs_clarification:
+            if tc:
+                _narr_mono = tc.stage_started(
+                    "narrator_prompt",
+                    summary="Narrating clarification request…",
+                )
             answer = await self._narrator.narrate_clarification(plan)
+            if tc:
+                self._emit_narrator_trace_stages(tc, _narr_mono)
+                tc.stage_completed(
+                    "final_verdict",
+                    summary="Clarification requested",
+                    payload={
+                        "status": "clarification",
+                        "answer_preview": answer[:300],
+                        "total_elapsed_ms": int((_time.monotonic() - _t0_mono) * 1000),
+                    },
+                )
             self._sessions.append_assistant_message(session_id, answer)
             return ChatResult(
                 session_id=session_id,
@@ -453,13 +646,29 @@ class ChatOrchestrator:
             )
 
         # 4 – Deterministic pipeline (validate → compile → execute)
-        result = await self._orchestrator.run_plan(plan)
+        result = await self._orchestrator.run_plan(plan, trace_collector=tc)
 
         # 5a – Validation failure
         if result.failed_phase == ErrorPhase.VALIDATION:
+            if tc:
+                _narr_mono = tc.stage_started(
+                    "narrator_prompt",
+                    summary="Narrating validation error…",
+                )
             answer = await self._narrator.narrate_validation_error(
                 message, result.validation,
             )
+            if tc:
+                self._emit_narrator_trace_stages(tc, _narr_mono)
+                tc.stage_completed(
+                    "final_verdict",
+                    summary=f"Failed: validation error — {answer[:120]}",
+                    payload={
+                        "status": "validation_error",
+                        "answer_preview": answer[:300],
+                        "total_elapsed_ms": int((_time.monotonic() - _t0_mono) * 1000),
+                    },
+                )
             self._sessions.append_assistant_message(session_id, answer)
             error_codes = [e.code for e in result.validation.errors]
             return ChatResult(
@@ -475,9 +684,26 @@ class ChatOrchestrator:
 
         # 5b – Compilation / execution failure
         if result.failed_phase in (ErrorPhase.COMPILATION, ErrorPhase.EXECUTION):
+            if tc:
+                _narr_mono = tc.stage_started(
+                    "narrator_prompt",
+                    summary="Narrating execution/compilation error…",
+                )
             answer = await self._narrator.narrate_execution_error(
                 message, result,
             )
+            if tc:
+                self._emit_narrator_trace_stages(tc, _narr_mono)
+                _failed_phase_name = result.failed_phase.value if result.failed_phase else "unknown"
+                tc.stage_completed(
+                    "final_verdict",
+                    summary=f"Failed: {_failed_phase_name} — {answer[:120]}",
+                    payload={
+                        "status": "execution_error",
+                        "answer_preview": answer[:300],
+                        "total_elapsed_ms": int((_time.monotonic() - _t0_mono) * 1000),
+                    },
+                )
             self._sessions.append_assistant_message(session_id, answer)
             return ChatResult(
                 session_id=session_id,
@@ -499,7 +725,14 @@ class ChatOrchestrator:
             )
 
         # 6 – Success
+        if tc:
+            _narr_mono = tc.stage_started(
+                "narrator_prompt",
+                summary="Narrating successful result…",
+            )
         answer = await self._narrator.narrate_success(message, result)
+        if tc:
+            self._emit_narrator_trace_stages(tc, _narr_mono)
         self._sessions.append_assistant_message(session_id, answer)
 
         rows_preview = None
@@ -507,6 +740,24 @@ class ChatOrchestrator:
             rows_preview = result.execution_result.rows[
                 : settings.max_rows_preview
             ]
+
+        if tc:
+            from app.services.trace_serializer import build_final_verdict_payload
+
+            narrator_trace = self._narrator.last_trace
+            tc.stage_completed(
+                "final_verdict",
+                summary=f"Success — {answer[:120]}",
+                payload=build_final_verdict_payload(
+                    status="success",
+                    answer=answer,
+                    plan_snapshot=plan.model_dump(mode="json"),
+                    sql=result.compiled_query.sql if result.compiled_query else None,
+                    total_elapsed_ms=int((_time.monotonic() - _t0_mono) * 1000),
+                    orchestrator_trace=self._orchestrator.last_trace,
+                    narrator_trace=narrator_trace,
+                ),
+            )
 
         return ChatResult(
             session_id=session_id,
@@ -520,4 +771,232 @@ class ChatOrchestrator:
                 else None
             ),
             rows_preview=rows_preview,
+        )
+
+    def _emit_planner_trace_stages(
+        self,
+        tc: TraceCollector,
+        plan_request_mono: float,
+    ) -> None:
+        """Unpack planner trace into stage events for the live view."""
+        from app.services.trace_serializer import (
+            build_diff_payload,
+            build_filter_column_resolution_payload,
+            build_filter_value_resolution_payload,
+            build_llm_response_payload,
+            build_plan_payload,
+            build_prompt_payload,
+            build_query_understanding_payload,
+            build_retrieval_payload,
+            safe_payload,
+        )
+
+        pt = self._planner.last_trace or {}
+        planner_request_started = tc._started_at_mono.get("planner_llm_request", plan_request_mono)
+
+        qu = pt.get("query_understanding")
+        if qu is not None:
+            tc.stage_completed(
+                "query_understanding",
+                summary=f"Modules: {qu.get('inferred_modules', [])}  Entities: {qu.get('detected_entities', [])}",
+                payload=build_query_understanding_payload(qu),
+            )
+
+        retrieval = pt.get("retrieval")
+        if retrieval is not None:
+            tables = retrieval.get("schema_tables", [])
+            tc.stage_completed(
+                "schema_retrieval",
+                summary=f"Retrieved {len(tables)} table(s): {', '.join(tables[:5])}",
+                payload=build_retrieval_payload(retrieval),
+            )
+            docs = retrieval.get("schema_docs", [])
+            examples = retrieval.get("examples", [])
+            if docs or examples:
+                tc.stage_completed(
+                    "document_retrieval",
+                    summary=f"{len(docs)} doc(s), {len(examples)} example(s) retrieved",
+                    payload={
+                        "schema_docs": safe_payload(docs[:10]),
+                        "examples": safe_payload(examples[:10]),
+                    },
+                )
+            assessment = retrieval.get("retrieval_assessment") or retrieval.get("noisy")
+            if assessment is not None:
+                tc.stage_completed(
+                    "retrieval_assessment",
+                    summary=f"Retrieval assessment: {assessment}",
+                    payload={"assessment": assessment, "sufficiency": retrieval.get("sufficiency")},
+                )
+
+        prompt_trace = pt.get("prompt")
+        if prompt_trace is not None:
+            prompt_payload = build_prompt_payload(prompt_trace)
+            tc.stage_completed(
+                "prompt_assembly",
+                summary=f"Prompt assembled — {prompt_payload.get('full_prompt_char_count', 0)} chars",
+                payload=prompt_payload,
+            )
+            tc.stage_completed(
+                "planner_llm_request",
+                started_at_mono=planner_request_started,
+                summary="Planner LLM call in progress (prompt sent)",
+                payload={"prompt_char_count": prompt_payload.get("full_prompt_char_count", 0)},
+            )
+
+        llm_trace = pt.get("llm")
+        if llm_trace is not None:
+            raw_len = len(llm_trace.get("raw_response_text") or "")
+            tc.stage_completed(
+                "planner_llm_response",
+                summary=f"Planner LLM response received — {raw_len} chars",
+                payload=build_llm_response_payload(llm_trace),
+            )
+
+        parsed_plan = pt.get("parsed_plan")
+        if parsed_plan is not None:
+            tc.stage_completed(
+                "planner_parsed_plan",
+                summary=f"Parsed plan — table={parsed_plan.get('table')}, intent={parsed_plan.get('intent')}",
+                payload=build_plan_payload(parsed_plan),
+            )
+
+        normalize = pt.get("normalize")
+        if normalize is not None:
+            tc.stage_completed(
+                "normalize",
+                summary="Plan normalization complete",
+                payload=build_diff_payload(
+                    normalize.get("before"),
+                    normalize.get("after"),
+                    {
+                        "limit_clamped": normalize.get("limit_clamped"),
+                        "clarification_cleanup_applied": normalize.get("clarification_cleanup_applied"),
+                    },
+                ),
+            )
+
+        repair = pt.get("repair")
+        if repair is not None:
+            tc.stage_completed(
+                "repair",
+                summary="Structural repair complete",
+                payload=build_diff_payload(
+                    repair.get("before"),
+                    repair.get("after"),
+                    {
+                        "repair_applied": repair.get("repair_applied"),
+                        "repair_actions": repair.get("repair_actions"),
+                    },
+                ),
+            )
+
+        semantic = pt.get("semantic")
+        if semantic is not None:
+            tc.stage_completed(
+                "semantic",
+                summary="Semantic resolution complete",
+                payload=build_diff_payload(
+                    semantic.get("before"),
+                    semantic.get("after"),
+                    {
+                        "semantic_intent": semantic.get("semantic_intent"),
+                        "root_entity": semantic.get("root_entity"),
+                        "join_path_id": semantic.get("join_path_id"),
+                        "diagnostics": semantic.get("diagnostics"),
+                    },
+                ),
+            )
+
+        canonicalize = pt.get("canonicalize")
+        if canonicalize is not None:
+            tc.stage_completed(
+                "canonicalize",
+                summary="Column canonicalization complete",
+                payload=build_diff_payload(
+                    canonicalize.get("before"),
+                    canonicalize.get("after"),
+                    {"stats": canonicalize.get("stats")},
+                ),
+            )
+
+        filter_column_resolution = pt.get("filter_column_resolution") or {
+            "any_changed": False,
+            "total_filters": 0,
+            "total_filters_seen": 0,
+            "processed_filters": 0,
+            "skipped_filters": 0,
+            "changed_count": 0,
+            "actions": [],
+        }
+        tc.stage_completed(
+            "filter_column_resolution",
+            summary=(
+                f"Filter column grounding — seen={int(filter_column_resolution.get('total_filters_seen', 0))}, "
+                f"changed={int(filter_column_resolution.get('changed_filters', filter_column_resolution.get('changed_count', 0)))}"
+            ),
+            payload=build_filter_column_resolution_payload(filter_column_resolution),
+        )
+
+        filter_value_resolution = pt.get("filter_value_resolution") or {
+            "any_changed": False,
+            "clarification_required": False,
+            "total_filters_seen": 0,
+            "processed_filters": 0,
+            "skipped_filters": 0,
+            "changed_filters": 0,
+            "actions": [],
+        }
+        tc.stage_completed(
+            "filter_value_resolution",
+            summary=(
+                f"Filter value resolution — seen={int(filter_value_resolution.get('total_filters_seen', 0))}, "
+                f"changed={int(filter_value_resolution.get('changed_filters', filter_value_resolution.get('changed_count', 0)))}"
+            ),
+            payload=build_filter_value_resolution_payload(filter_value_resolution),
+        )
+
+    def _emit_narrator_trace_stages(
+        self,
+        tc: TraceCollector,
+        narrate_request_mono: float,
+    ) -> None:
+        """Unpack narrator trace into stage events for the live view."""
+        from app.services.trace_serializer import (
+            build_narrator_final_payload,
+            build_narrator_llm_response_payload,
+            build_narrator_prompt_payload,
+            build_narrator_sanitize_payload,
+        )
+
+        narrator_trace = self._narrator.last_trace or {}
+        tc.stage_completed(
+            "narrator_prompt",
+            started_at_mono=narrate_request_mono,
+            summary="Narrator prompt prepared",
+            payload=build_narrator_prompt_payload(narrator_trace),
+        )
+
+        if narrator_trace.get("raw_response") is not None or narrator_trace.get("error"):
+            tc.stage_completed(
+                "narrator_llm_response",
+                summary="Narrator LLM response received",
+                payload=build_narrator_llm_response_payload(narrator_trace),
+            )
+
+        if (
+            narrator_trace.get("sanitized_response") is not None
+            or narrator_trace.get("prompt_contract_violated")
+            or narrator_trace.get("narrator_used_fallback_template")
+        ):
+            tc.stage_completed(
+                "narrator_sanitize",
+                summary="Narrator sanitization applied",
+                payload=build_narrator_sanitize_payload(narrator_trace),
+            )
+
+        tc.stage_completed(
+            "narrator_final_response",
+            summary="Narrator final response ready",
+            payload=build_narrator_final_payload(narrator_trace),
         )

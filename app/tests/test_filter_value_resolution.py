@@ -124,6 +124,9 @@ class TestFilterValueResolutionService:
         assert resolved_plan.filters[0].value == "Bilgi Teknolojileri"
         assert trace["any_changed"] is True
         assert trace["changed_count"] == 1
+        assert trace["total_filters_seen"] == 1
+        assert trace["processed_filters"] == 1
+        assert trace["changed_filters"] == 1
         assert trace["actions"][0]["reason"] == "exact_alias_match"
 
     def test_location_surface_form_resolves_to_canonical_spelling(self) -> None:
@@ -195,6 +198,9 @@ class TestFilterValueResolutionService:
 
         assert resolved_plan is plan
         assert trace["actions"][0]["reason"] == "unsupported_operator_no_op"
+        assert trace["total_filters_seen"] == 1
+        assert trace["processed_filters"] == 1
+        assert trace["skipped_filters"] == 1
         assert trace["actions"][0]["resolved_value"] == "Ist"
         assert plan.filters[0].op == FilterOp.LIKE
 
@@ -222,9 +228,17 @@ class TestBuildFilterValueResolutionPayload:
     def test_payload_with_clarification(self) -> None:
         trace = {
             "any_changed": False,
+            "total_filters_seen": 1,
+            "processed_filters": 1,
+            "skipped_filters": 1,
+            "changed_filters": 0,
             "changed_count": 0,
             "total_filters": 1,
             "clarification_required": True,
+            "skip_reasons": {"ambiguous_candidate_clarification": 1},
+            "changed_items": [],
+            "original_filters": [{"column": "UNVAN", "operator": "=", "value": "yonetici", "table": None}],
+            "final_filters": [{"column": "UNVAN", "operator": "=", "value": "yonetici", "table": None}],
             "actions": [
                 {
                     "column": "UNVAN",
@@ -244,6 +258,8 @@ class TestBuildFilterValueResolutionPayload:
 
         assert payload["clarification_required"] is True
         assert payload["total_filters"] == 1
+        assert payload["total_filters_seen"] == 1
+        assert payload["processed_filters"] == 1
         assert payload["changed_count"] == 0
         assert payload["actions"][0]["original_value"] == "yonetici"
         assert payload["actions"][0]["candidate_values"] == ["Proje Yöneticisi", "Sistem Yöneticisi"]
@@ -251,9 +267,17 @@ class TestBuildFilterValueResolutionPayload:
     def test_payload_with_change(self) -> None:
         trace = {
             "any_changed": True,
+            "total_filters_seen": 1,
+            "processed_filters": 1,
+            "skipped_filters": 0,
+            "changed_filters": 1,
             "changed_count": 1,
             "total_filters": 1,
             "clarification_required": False,
+            "skip_reasons": {},
+            "changed_items": [{"column": "BIRIM_ADI", "original_value": "IT", "resolved_value": "Bilgi Teknolojileri", "reason": "exact_alias_match"}],
+            "original_filters": [{"column": "BIRIM_ADI", "operator": "=", "value": "IT", "table": None}],
+            "final_filters": [{"column": "BIRIM_ADI", "operator": "=", "value": "Bilgi Teknolojileri", "table": None}],
             "actions": [
                 {
                     "column": "BIRIM_ADI",
@@ -273,4 +297,5 @@ class TestBuildFilterValueResolutionPayload:
 
         assert payload["any_changed"] is True
         assert payload["changed_count"] == 1
+        assert payload["processed_filters"] == 1
         assert payload["actions"][0]["resolved_value"] == "Bilgi Teknolojileri"

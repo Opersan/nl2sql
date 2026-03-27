@@ -54,6 +54,8 @@ from app.providers.llm.base import LLMProvider
 from app.services.catalog_service import CatalogService
 from app.services.clarification_decision_service import ClarificationDecisionService
 from app.services.document_retrieval_service import DocumentRetrievalService
+from app.services.filter_column_resolution_service import FilterColumnResolutionService
+from app.services.filter_value_resolution_service import FilterValueResolutionService
 from app.services.plan_generation_service import PlanGenerationService
 from app.services.plan_normalization_service import PlanNormalizationService
 from app.services.plan_repair_service import PlanRepairService
@@ -173,6 +175,8 @@ class PlannerService:
             )
         )
         self._clarification_decision_service = ClarificationDecisionService()
+        self._filter_column_resolution_service = FilterColumnResolutionService()
+        self._filter_value_resolution_service = FilterValueResolutionService()
         self._logged_sensitive_pattern_load_failure = False
         self._logged_sensitive_pattern_missing = False
 
@@ -259,6 +263,9 @@ class PlannerService:
             "repair": None,
             "semantic": None,
             "canonicalize": None,
+            "filter_column_resolution": None,
+            "filter_value_resolution": None,
+            "intent_guard": None,
             "final_plan": None,
         })
         # Keep a local reference so concurrent tasks cannot overwrite it.
@@ -423,9 +430,36 @@ class PlannerService:
             "stats": self._last_canonicalization_stats.as_dict() if self._last_canonicalization_stats else {},
         }
 
-        # Deterministic filter-intent preservation guard (false-success prevention)
-        trace["intent_guard"] = post_process.clarification.trace
+        # Filter grounding stages must run on the canonicalized semantic plan
+        # before clarification / intent-guard, otherwise clarification cleanup
+        # can erase real filters before Sprint 1 / Sprint 2 see them.
+        query_plan = semantic_result.canonicalized_plan
 
+        filter_column_resolution = self._filter_column_resolution_service.resolve(
+            query_plan,
+            user_message,
+            query_understanding=planning_context.query_understanding,
+        )
+        query_plan = filter_column_resolution.resolved_plan
+        trace["filter_column_resolution"] = filter_column_resolution.as_trace_dict()
+
+        query_plan, filter_value_resolution = self._filter_value_resolution_service.resolve(query_plan)
+        trace["filter_value_resolution"] = filter_value_resolution
+
+        clarification = self._clarification_decision_service.apply(
+            user_message,
+            planner_plan_snapshot,
+            query_plan,
+            query_understanding=planning_context.query_understanding,
+            retrieval_diagnostics=planning_context.retrieval_diagnostics,
+            semantic_diagnostics=semantic_result.diagnostics,
+            parse_error_taxonomy=generation_result.parse_error_taxonomy,
+            salvage_applied=generation_result.salvage_applied,
+            catalog_snapshot=planning_context.retrieved_snapshot,
+        )
+        query_plan = clarification.plan
+
+        trace["intent_guard"] = clarification.trace
         trace["final_plan"] = self._snapshot_plan(query_plan)
 
         logger.info(

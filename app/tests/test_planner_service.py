@@ -68,6 +68,46 @@ class TestBasicPlanning:
         assert len(plan.select_columns) > 0
         assert plan.needs_clarification is False
 
+    @pytest.mark.asyncio
+    async def test_grounding_stages_process_real_filters_before_intent_guard(
+        self,
+        planner: PlannerService,
+    ) -> None:
+        planner_plan = QueryPlan(
+            intent="employee_list",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["SICIL_NO"],
+            filters=[FilterSpec(column="ORGANIZATION_ADI", op=FilterOp.EQ, value="IT")],
+        )
+
+        async def _fake_generate(_prompt: str):
+            from app.services.planning_models import PlanGenerationResult
+
+            return PlanGenerationResult(
+                plan=planner_plan,
+                raw_response_text="{...}",
+                parse_error=None,
+                parse_error_taxonomy=None,
+                salvage_applied=False,
+            )
+
+        planner._plan_generation_service.generate = _fake_generate  # type: ignore[method-assign]
+
+        plan = await planner.plan("IT departmanindaki çalışanları listele")
+        trace = planner.last_trace or {}
+
+        assert plan.filters[0].column == "BIRIM_ADI"
+        assert plan.filters[0].value == "Bilgi Teknolojileri"
+        assert trace["filter_column_resolution"]["total_filters_seen"] >= 1
+        assert trace["filter_column_resolution"]["processed_filters"] >= 1
+        assert trace["filter_value_resolution"]["total_filters_seen"] >= 1
+        assert trace["filter_value_resolution"]["processed_filters"] >= 1
+
+        stage_order = list(trace.keys())
+        assert stage_order.index("canonicalize") < stage_order.index("filter_column_resolution")
+        assert stage_order.index("filter_column_resolution") < stage_order.index("filter_value_resolution")
+        assert stage_order.index("filter_value_resolution") < stage_order.index("intent_guard")
+
 
 # ---------------------------------------------------------------------------
 # Clarification

@@ -20,7 +20,7 @@
       "supported_ops": ["=", "!="],
       "canonical_values": [
         {
-          "value": "Bilgi Teknolojileri",
+          "value": "YAZILIM GELİŞTİRME",
           "aliases": ["it", "bt", "bilgi teknolojileri", "bilgi teknolojileri birimi", "bilgi islem"]
         },
         {

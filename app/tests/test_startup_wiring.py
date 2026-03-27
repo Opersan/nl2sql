@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -284,3 +285,68 @@ class TestLifespanIntegration:
             resp = client.get("/health")
             assert resp.status_code == 200
             assert app.state.chat_orchestrator._planner._doc_retrieval is None
+
+    def test_lifespan_shutdown_closes_executor_resources(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Shutdown must close the executor so worker threads do not keep the app alive."""
+
+        calls: list[str] = []
+
+        class _FakeExecutor:
+            async def close(self) -> None:
+                calls.append("closed")
+
+        fake_chat_orchestrator = SimpleNamespace(
+            _planner=SimpleNamespace(_doc_retrieval=None),
+            _orchestrator=SimpleNamespace(_executor=_FakeExecutor()),
+        )
+
+        monkeypatch.setattr("app.api.main.build_document_retrieval", _fake_build_document_retrieval)
+        monkeypatch.setattr(
+            "app.api.main.build_chat_orchestrator",
+            lambda *, doc_retrieval=None: fake_chat_orchestrator,
+        )
+
+        app = create_app()
+        with TestClient(app) as client:
+            resp = client.get("/health")
+            assert resp.status_code == 200
+
+        assert calls == ["closed"]
+
+    def test_lifespan_startup_initializes_executor_resources(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Startup must initialise the executor pool when the executor supports it."""
+
+        calls: list[str] = []
+
+        class _FakeExecutor:
+            async def init_pool(self) -> None:
+                calls.append("init")
+
+            async def close(self) -> None:
+                calls.append("close")
+
+        fake_chat_orchestrator = SimpleNamespace(
+            _planner=SimpleNamespace(_doc_retrieval=None),
+            _orchestrator=SimpleNamespace(_executor=_FakeExecutor()),
+        )
+
+        monkeypatch.setattr("app.api.main.build_document_retrieval", _fake_build_document_retrieval)
+        monkeypatch.setattr(
+            "app.api.main.build_chat_orchestrator",
+            lambda *, doc_retrieval=None: fake_chat_orchestrator,
+        )
+
+        app = create_app()
+        with TestClient(app) as client:
+            resp = client.get("/health")
+            assert resp.status_code == 200
+
+        assert calls == ["init", "close"]
+
+
+async def _fake_build_document_retrieval() -> None:
+    return None

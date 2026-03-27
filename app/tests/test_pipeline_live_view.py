@@ -320,13 +320,19 @@ class TestPlannerSubstages:
         payload = fcr_events[-1].payload
         assert "any_changed" in payload
         assert "total_filters" in payload
+        assert "total_filters_seen" in payload
+        assert "processed_filters" in payload
+        assert "skipped_filters" in payload
         assert "changed_count" in payload
+        assert "original_filters" in payload
+        assert "final_filters" in payload
         assert "actions" in payload
 
         if payload["actions"]:
             action = payload["actions"][0]
             assert "original_column" in action
             assert "resolved_column" in action
+            assert "operator" in action
             assert "reason" in action
             assert "confidence" in action
 
@@ -366,7 +372,12 @@ class TestPlannerSubstages:
         assert "any_changed" in payload
         assert "clarification_required" in payload
         assert "total_filters" in payload
+        assert "total_filters_seen" in payload
+        assert "processed_filters" in payload
+        assert "skipped_filters" in payload
         assert "changed_count" in payload
+        assert "original_filters" in payload
+        assert "final_filters" in payload
         assert "actions" in payload
 
         if payload["actions"]:
