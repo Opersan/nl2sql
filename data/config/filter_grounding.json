@@ -1,0 +1,70 @@
+{
+  "_comment": "Sprint 1 — Grounding Hardening: Filter Column Resolution Config. Single source of truth for dimension-to-column mappings used by filter_column_resolution_service. Edit this file to add/adjust dimensions or column mappings — do not modify the service code.",
+  "schema_version": "1.0",
+
+  "dimensions": {
+    "cost_center": {
+      "preferred_column": "MASRAF_MERKEZI",
+      "priority": 1,
+      "keywords": ["masraf", "maliyet"],
+      "phrases": ["masraf merkezi", "cost center"],
+      "confusable_columns": ["MASRAF_MERKEZI", "COST_CENTER", "CC_NAME"]
+    },
+    "department": {
+      "preferred_column": "BIRIM_ADI",
+      "priority": 2,
+      "keywords": ["departman", "birim", "bolum", "department"],
+      "phrases": [
+        "birimindeki", "biriminde", "bolumundeki", "bolumunde",
+        "departmanindaki", "departmaninda"
+      ],
+      "confusable_columns": [
+        "BIRIM_ADI", "ORGANIZATION_ADI", "DEPARTMENT_NAME", "DEPT_NAME", "DEPARTMENT"
+      ]
+    },
+    "location": {
+      "preferred_column": "LOCATION_ADI",
+      "priority": 3,
+      "keywords": ["lokasyon", "sehir", "ofis", "location", "city"],
+      "phrases": [],
+      "confusable_columns": ["LOCATION_ADI", "LOKASYON_ADI", "LOCATION", "CITY", "SEHIR"]
+    },
+    "title": {
+      "preferred_column": "UNVAN",
+      "priority": 4,
+      "keywords": ["unvan", "title", "gorev", "pozisyon"],
+      "phrases": ["unvanli", "unvanina sahip", "gorev tanimi"],
+      "confusable_columns": ["UNVAN", "GOREV_TANIMI", "JOB_TITLE", "POSITION", "POZISYON"]
+    },
+    "organization": {
+      "preferred_column": "ORGANIZATION_ADI",
+      "priority": 5,
+      "keywords": ["organizasyon", "organization"],
+      "phrases": [],
+      "confusable_columns": ["ORGANIZATION_ADI", "BIRIM_ADI", "ORG_NAME"]
+    }
+  },
+
+  "_comment_non_dimension_columns": "Boolean flags, temporal sentinels, surrogate IDs, and system/credential columns that must never be remapped regardless of dimension signals. The catalog 'restricted' flag is the primary source; these supplement it for non-catalog-flagged columns.",
+  "non_dimension_columns": [
+    "BORDROLU",
+    "STAJYER",
+    "CALISAN_TIPI",
+    "CIKIS_TARIHI",
+    "ISE_GIRIS_TARIHI",
+    "EMAIL",
+    "USER_NAME",
+    "SICIL_NO",
+    "PERSON_ID",
+    "FULL_NAME",
+    "ORG_ID",
+    "AUTHORIZATION_STATUS",
+    "APPROVED_FLAG",
+    "CANCEL_FLAG",
+    "CLOSED_CODE",
+    "TYPE_LOOKUP_CODE",
+    "VENDOR_ID",
+    "PO_HEADER_ID",
+    "PO_LINE_ID"
+  ]
+}

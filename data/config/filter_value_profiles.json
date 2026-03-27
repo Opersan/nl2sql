@@ -1,0 +1,121 @@
+{
+  "_comment": "Sprint 2 — Grounding Hardening: Filter Value Resolution Profiles. Central bounded profile source for canonical DB values and aliases. This lives under existing data/config and is intentionally narrow in scope.",
+  "schema_version": "1.0",
+  "matching_policy": {
+    "candidate_preview_limit": 5,
+    "min_select_score": 0.88,
+    "min_score_gap": 0.08,
+    "min_fuzzy_ratio": 0.76,
+    "exact_canonical_score": 1.0,
+    "exact_alias_score": 0.96,
+    "token_subset_score": 0.86,
+    "token_overlap_score": 0.8,
+    "fuzzy_score_base": 0.7,
+    "fuzzy_score_scale": 0.25
+  },
+  "profiles": {
+    "XXBT_PDKS_PER_DETAILS_V.BIRIM_ADI": {
+      "table": "XXBT_PDKS_PER_DETAILS_V",
+      "column": "BIRIM_ADI",
+      "supported_ops": ["=", "!="],
+      "canonical_values": [
+        {
+          "value": "Bilgi Teknolojileri",
+          "aliases": ["it", "bt", "bilgi teknolojileri", "bilgi teknolojileri birimi", "bilgi islem"]
+        },
+        {
+          "value": "İnsan Kaynakları",
+          "aliases": ["ik", "hr", "insan kaynaklari"]
+        },
+        {
+          "value": "Muhasebe",
+          "aliases": ["muhasebe", "accounting"]
+        }
+      ]
+    },
+    "XXBT_PDKS_PER_DETAILS_V.LOCATION_ADI": {
+      "table": "XXBT_PDKS_PER_DETAILS_V",
+      "column": "LOCATION_ADI",
+      "supported_ops": ["=", "!="],
+      "canonical_values": [
+        {
+          "value": "İstanbul",
+          "aliases": ["istanbul", "istanbul buro", "merkez ofis"]
+        },
+        {
+          "value": "Ankara",
+          "aliases": ["ankara"]
+        },
+        {
+          "value": "İzmir",
+          "aliases": ["izmir"]
+        }
+      ]
+    },
+    "XXBT_PDKS_PER_DETAILS_V.ORGANIZATION_ADI": {
+      "table": "XXBT_PDKS_PER_DETAILS_V",
+      "column": "ORGANIZATION_ADI",
+      "supported_ops": ["=", "!="],
+      "canonical_values": [
+        {
+          "value": "Genel Müdürlük",
+          "aliases": ["genel mudurluk", "merkez", "head office"]
+        }
+      ]
+    },
+    "XXBT_PDKS_PER_DETAILS_V.UNVAN": {
+      "table": "XXBT_PDKS_PER_DETAILS_V",
+      "column": "UNVAN",
+      "supported_ops": ["=", "!="],
+      "canonical_values": [
+        {
+          "value": "Yazılım Uzmanı",
+          "aliases": ["yazilim uzmani", "developer", "uzman"]
+        },
+        {
+          "value": "İK Uzmanı",
+          "aliases": ["ik uzmani", "hr specialist", "uzman"]
+        },
+        {
+          "value": "Muhasebe Uzmanı",
+          "aliases": ["muhasebe uzmani", "accountant", "uzman"]
+        },
+        {
+          "value": "Proje Yöneticisi",
+          "aliases": ["proje yoneticisi", "yonetici", "manager"]
+        },
+        {
+          "value": "Sistem Yöneticisi",
+          "aliases": ["sistem yoneticisi", "yonetici", "sysadmin"]
+        },
+        {
+          "value": "İK Müdürü",
+          "aliases": ["ik muduru", "mudur", "manager"]
+        }
+      ]
+    },
+    "XXBT_PDKS_PER_DETAILS_V.MASRAF_MERKEZI": {
+      "table": "XXBT_PDKS_PER_DETAILS_V",
+      "column": "MASRAF_MERKEZI",
+      "supported_ops": ["=", "!="],
+      "canonical_values": [
+        {
+          "value": "BT-01",
+          "aliases": ["bt01", "bt 01"]
+        },
+        {
+          "value": "BT-02",
+          "aliases": ["bt02", "bt 02"]
+        },
+        {
+          "value": "IK-01",
+          "aliases": ["ik01", "ik 01"]
+        },
+        {
+          "value": "MUH-01",
+          "aliases": ["muh01", "muh 01"]
+        }
+      ]
+    }
+  }
+}

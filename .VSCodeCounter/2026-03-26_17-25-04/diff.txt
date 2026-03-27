@@ -1,0 +1,113 @@
+Date : 2026-03-26 17:25:04
+Directory : c:\Users\furkan.kiraz\Desktop\nl2sql\app
+Total : 75 files,  8253 codes, 844 comments, 1503 blanks, all 10600 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| Python   |         74 |      7,478 |        842 |      1,407 |      9,727 |
+| HTML     |          1 |        775 |          2 |         96 |        873 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++-----------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                    | files      | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                       |         75 |      8,253 |        844 |      1,503 |     10,600 |
+| api                                                                                     |          3 |        134 |         51 |         39 |        224 |
+| core                                                                                    |          2 |         72 |         14 |         28 |        114 |
+| domain                                                                                  |          3 |        162 |         44 |         27 |        233 |
+| providers                                                                               |         10 |        449 |         85 |         73 |        607 |
+| providers\catalog                                                                       |          1 |       -172 |         -7 |         -6 |       -185 |
+| providers\executor                                                                      |          1 |         22 |          0 |          0 |         22 |
+| providers\llm                                                                           |          3 |        399 |          3 |         47 |        449 |
+| providers\retrieval                                                                     |          5 |        200 |         89 |         32 |        321 |
+| semantic                                                                                |          3 |         58 |         10 |          6 |         74 |
+| services                                                                                |         24 |      3,530 |        386 |        519 |      4,435 |
+| static                                                                                  |          1 |        775 |          2 |         96 |        873 |
+| tests                                                                                   |         27 |      2,930 |        240 |        683 |      3,853 |
+| utils                                                                                   |          2 |        143 |         12 |         32 |        187 |
++-----------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++-----------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                                | language | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\api\deps.py                                    | Python   |         19 |         -1 |          0 |         18 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\api\main.py                                    | Python   |         16 |          1 |          1 |         18 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\api\routes_trace.py                            | Python   |         99 |         51 |         38 |        188 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\core\config.py                                 | Python   |          9 |          0 |          1 |         10 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\core\data_paths.py                             | Python   |         63 |         14 |         27 |        104 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\domain\execution_models.py                     | Python   |          3 |          0 |          0 |          3 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\domain\semantic_models.py                      | Python   |         31 |          4 |          5 |         40 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\domain\trace_models.py                         | Python   |        128 |         40 |         22 |        190 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\catalog\in_memory.py                 | Python   |       -172 |         -7 |         -6 |       -185 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\executor\oracle_executor.py          | Python   |         22 |          0 |          0 |         22 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\llm\mock_llm.py                      | Python   |          5 |          0 |          0 |          5 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\llm\openai_compatible.py             | Python   |        321 |          0 |         40 |        361 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\llm\prompts.py                       | Python   |         73 |          3 |          7 |         83 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\retrieval\embedding_retriever.py     | Python   |         18 |          7 |          1 |         26 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\retrieval\gating_policy.py           | Python   |         45 |         72 |         15 |        132 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\retrieval\hybrid_retriever.py        | Python   |         15 |         10 |          3 |         28 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\retrieval\in_memory_doc_retriever.py | Python   |         20 |          0 |          3 |         23 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\providers\retrieval\in_memory_retriever.py     | Python   |        102 |          0 |         10 |        112 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\semantic\models.py                             | Python   |          6 |          8 |          4 |         18 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\semantic\registry.py                           | Python   |         22 |          2 |          2 |         26 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\semantic\repository.py                         | Python   |         30 |          0 |          0 |         30 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\catalog_embedding_indexer.py          | Python   |          0 |          7 |          0 |          7 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\catalog_service.py                    | Python   |          5 |          0 |          1 |          6 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\clarification_decision_service.py     | Python   |        160 |          0 |         12 |        172 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\document_retrieval_service.py         | Python   |        134 |          0 |         13 |        147 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\example_embedding_indexer.py          | Python   |        164 |          6 |         31 |        201 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\execution_risk.py                     | Python   |         70 |          0 |         10 |         80 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\filter_column_resolution_service.py   | Python   |        205 |        131 |         51 |        387 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\grounding_config_provider.py          | Python   |        120 |         87 |         47 |        254 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\intent_guard.py                       | Python   |        120 |          0 |         17 |        137 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\narrator_service.py                   | Python   |         88 |          1 |          6 |         95 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\orchestrator.py                       | Python   |        526 |         32 |         31 |        589 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\plan_normalizer.py                    | Python   |         21 |          1 |          2 |         24 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\planner_service.py                    | Python   |        153 |          3 |         13 |        169 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\planning_context_service.py           | Python   |         69 |          5 |          9 |         83 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\planning_models.py                    | Python   |         13 |          0 |          0 |         13 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\prompt_assembly_service.py            | Python   |         39 |          6 |          3 |         48 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\query_understanding.py                | Python   |        142 |         28 |         20 |        190 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\schema_retrieval_service.py           | Python   |          9 |          0 |          1 |         10 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\semantic_embedding_indexer.py         | Python   |        253 |          6 |         37 |        296 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\semantic_planning.py                  | Python   |        598 |          0 |         97 |        695 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\semantic_resolution_service.py        | Python   |         29 |          0 |          0 |         29 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\sql_compiler.py                       | Python   |         -5 |          0 |         -2 |         -7 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\trace_serializer.py                   | Python   |        319 |         51 |         75 |        445 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\services\validation_repair_service.py          | Python   |        298 |         22 |         45 |        365 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\static\pipeline_view.html                      | HTML     |        775 |          2 |         96 |        873 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_config_sprint3.py                   | Python   |          9 |          0 |          0 |          9 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_document_retrieval_service.py       | Python   |         67 |          0 |          6 |         73 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_execution_risk.py                   | Python   |        144 |          0 |         32 |        176 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_filter_column_resolution.py         | Python   |        282 |         71 |         81 |        434 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_index_build_scripts.py              | Python   |         15 |          0 |          9 |         24 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_narrator_leakage.py                 | Python   |         20 |          0 |          8 |         28 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_narrator_service.py                 | Python   |         61 |          0 |         17 |         78 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_oracle_executor.py                  | Python   |         88 |          0 |         27 |        115 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_orchestrator_execution_guard.py     | Python   |        115 |          0 |         20 |        135 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_orchestrator_smoke.py               | Python   |         68 |          0 |         16 |         84 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_pipeline_live_view.py               | Python   |        479 |         77 |        138 |        694 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_plan_normalizer.py                  | Python   |         28 |          0 |          3 |         31 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_planner_service.py                  | Python   |        106 |         -4 |         24 |        126 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_planning_stages.py                  | Python   |        112 |          0 |         10 |        122 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_prompt_budget.py                    | Python   |         44 |          0 |          4 |         48 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_query_understanding.py              | Python   |        127 |         31 |         27 |        185 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_retrieval_artifact_separation.py    | Python   |        112 |          0 |         34 |        146 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_retrieval_upgrade.py                | Python   |        289 |         64 |         84 |        437 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_schema_retrieval.py                 | Python   |         97 |          0 |         11 |        108 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_select_columns_defaults.py          | Python   |         31 |          0 |          3 |         34 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_semantic_planning.py                | Python   |        260 |          0 |         39 |        299 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_semantic_registry.py                | Python   |          5 |          0 |          2 |          7 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_sprint_c.py                         | Python   |         40 |          0 |          7 |         47 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_sql_compiler.py                     | Python   |         69 |          0 |         18 |         87 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_structured_output_firewall.py       | Python   |        107 |          0 |         35 |        142 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_validation_repair_service.py        | Python   |        156 |          0 |         28 |        184 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\tests\test_validation_service.py               | Python   |         -1 |          1 |          0 |          0 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\utils\date_literals.py                         | Python   |        132 |          1 |         30 |        163 |
+| c:\Users\furkan.kiraz\Desktop\nl2sql\app\utils\turkish.py                               | Python   |         11 |         11 |          2 |         24 |
+| Total                                                                                   |          |      8,253 |        844 |      1,503 |     10,600 |
++-----------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
