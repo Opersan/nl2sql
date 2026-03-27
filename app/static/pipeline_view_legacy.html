@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NL2SQL Conversation Trace</title>
+<style>
+  :root {
+    --bg: #f4ecdf;
+    --bg-strong: #e7d8c4;
+    --panel: rgba(252, 248, 242, 0.9);
+    --panel-strong: rgba(255, 252, 247, 0.96);
+    --ink: #132634;
+    --ink-soft: #5d6f7b;
+    --heading: #102331;
+    --line: rgba(20, 38, 52, 0.12);
+    --line-strong: rgba(20, 38, 52, 0.22);
+    --accent: #0f766e;
+    --accent-strong: #0b5b55;
+    --warning: #a16207;
+    --danger: #b42318;
+    --ok: #18794e;
+    --ok-soft: rgba(24, 121, 78, 0.12);
+    --warning-soft: rgba(161, 98, 7, 0.12);
+    --danger-soft: rgba(180, 35, 24, 0.12);
+    --shadow: 0 20px 50px rgba(33, 42, 47, 0.12);
+    --radius-xl: 26px;
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --font-body: Aptos, "Segoe UI Variable", "Trebuchet MS", sans-serif;
+    --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    --font-mono: "Cascadia Code", Consolas, monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--font-body);
+    color: var(--ink);
+    background:
+      radial-gradient(circle at top left, rgba(15, 118, 110, 0.16), transparent 26%),
+      radial-gradient(circle at 85% 18%, rgba(188, 120, 56, 0.14), transparent 24%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-strong) 100%);
+  }
+
+  .shell {
+    width: min(100%, 1600px);
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 20px 26px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(249, 243, 234, 0.78);
+    backdrop-filter: blur(18px);
+  }
+
+  .brand {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .brand-kicker {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--accent-strong);
+    font-weight: 700;
+  }
+
+  .brand h1 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 28px;
+    color: var(--heading);
+    line-height: 1;
+  }
+
+  .brand p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .topbar-spacer {
+    flex: 1;
+  }
+
+  .header-tools {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .field-inline,
+  .toggle-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+  }
+
+  .field-inline span,
+  .toggle-inline span {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-soft);
+    font-weight: 700;
+  }
+
+  .field-inline input {
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--heading);
+    min-width: 180px;
+    font-size: 13px;
+  }
+
+  .toggle-inline input {
+    accent-color: var(--accent);
+  }
+
+  .workspace {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(360px, 0.86fr) minmax(480px, 1.14fr);
+    gap: 22px;
+    padding: 24px;
+  }
+
+  .chat-panel,
+  .trace-panel {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl);
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+    overflow: hidden;
+  }
+
+  .panel-head {
+    padding: 20px 22px 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .panel-head h2 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 25px;
+    color: var(--heading);
+  }
+
+  .panel-head p {
+    margin: 6px 0 0;
+    color: var(--ink-soft);
+    font-size: 13px;
+    line-height: 1.55;
+    max-width: 58ch;
+  }
+
+  .pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .pill {
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.7);
+    color: var(--ink-soft);
+  }
+
+  .outcome-running {
+    background: rgba(15, 118, 110, 0.12);
+    color: var(--accent-strong);
+    border-color: rgba(15, 118, 110, 0.2);
+  }
+
+  .outcome-success {
+    background: var(--ok-soft);
+    color: var(--ok);
+    border-color: rgba(24, 121, 78, 0.2);
+  }
+
+  .outcome-clarification {
+    background: var(--warning-soft);
+    color: var(--warning);
+    border-color: rgba(161, 98, 7, 0.24);
+  }
+
+  .outcome-error {
+    background: var(--danger-soft);
+    color: var(--danger);
+    border-color: rgba(180, 35, 24, 0.18);
+  }
+
+  .chat-intro {
+    margin: 18px 22px 0;
+    padding: 16px 18px;
+    border-radius: var(--radius-lg);
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(255, 247, 238, 0.94)),
+      linear-gradient(160deg, rgba(15, 118, 110, 0.06), transparent 48%);
+    border: 1px solid rgba(20, 38, 52, 0.08);
+  }
+
+  .chat-intro strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--heading);
+    font-size: 14px;
+  }
+
+  .chat-intro span {
+    display: block;
+    color: var(--ink-soft);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .quick-prompts {
+    margin: 16px 22px 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .quick-prompts button,
+  .composer-actions button,
+  .trace-actions button,
+  .clar-option-btn,
+  .clar-delegate-btn {
+    border: 0;
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    font: inherit;
+  }
+
+  .quick-prompts button:hover,
+  .composer-actions button:hover,
+  .trace-actions button:hover,
+  .clar-option-btn:hover,
+  .clar-delegate-btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .quick-prompts button {
+    min-height: 68px;
+    padding: 14px;
+    text-align: left;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(20, 38, 52, 0.08);
+    color: var(--heading);
+    line-height: 1.45;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+
+  .quick-prompts button span {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .chat-thread {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .chat-empty {
+    border: 1px dashed rgba(20, 38, 52, 0.16);
+    border-radius: var(--radius-lg);
+    padding: 26px 20px;
+    text-align: center;
+    color: var(--ink-soft);
+    line-height: 1.6;
+    background: rgba(255, 255, 255, 0.44);
+  }
+
+  .chat-msg {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: min(92%, 700px);
+    animation: rise 180ms ease;
+  }
+
+  .chat-msg.user {
+    align-self: flex-end;
+  }
+
+  .chat-msg-role {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+
+  .chat-bubble {
+    border-radius: 20px;
+    padding: 14px 16px;
+    line-height: 1.65;
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border: 1px solid rgba(20, 38, 52, 0.08);
+    background: rgba(255, 255, 255, 0.84);
+    color: var(--ink);
+  }
+
+  .chat-msg.user .chat-bubble {
+    background: linear-gradient(135deg, #0f766e 0%, #15847d 100%);
+    color: #fff;
+    border-color: transparent;
+  }
+
+  .chat-msg.clarification .chat-bubble {
+    background: linear-gradient(180deg, rgba(255, 249, 239, 0.98), rgba(252, 244, 232, 0.96));
+    border-color: rgba(161, 98, 7, 0.18);
+  }
+
+  .clar-meta {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(161, 98, 7, 0.06);
+    color: var(--warning);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .clar-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .clar-option-btn,
+  .clar-delegate-btn {
+    width: 100%;
+    text-align: left;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(20, 38, 52, 0.12);
+    background: rgba(255, 255, 255, 0.86);
+    color: var(--heading);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .clar-option-btn small,
+  .clar-delegate-btn small {
+    color: var(--ink-soft);
+    font-size: 12px;
+  }
+
+  .clar-delegate-btn {
+    background: rgba(15, 118, 110, 0.08);
+    border-color: rgba(15, 118, 110, 0.18);
+  }
+
+  .clar-option-btn:disabled,
+  .clar-delegate-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .clar-lifecycle {
+    margin-top: 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+
+  .typing-indicator {
+    margin: 0 22px 14px;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  .typing-indicator.visible {
+    display: flex;
+  }
+
+  .typing-dots {
+    display: inline-flex;
+    gap: 4px;
+  }
+
+  .typing-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(15, 118, 110, 0.5);
+    animation: pulse 1s infinite ease-in-out;
+  }
+
+  .typing-dots span:nth-child(2) {
+    animation-delay: 120ms;
+  }
+
+  .typing-dots span:nth-child(3) {
+    animation-delay: 240ms;
+  }
+
+  .composer {
+    padding: 0 22px 22px;
+    border-top: 1px solid rgba(20, 38, 52, 0.06);
+    background: rgba(255, 252, 247, 0.82);
+  }
+
+  .composer textarea {
+    width: 100%;
+    min-height: 68px;
+    max-height: 180px;
+    resize: none;
+    margin-top: 18px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid var(--line-strong);
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--heading);
+    font: inherit;
+    line-height: 1.55;
+    outline: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+
+  .composer textarea:focus,
+  .field-inline input:focus {
+    border-color: rgba(15, 118, 110, 0.38);
+    box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.08);
+  }
+
+  .composer-actions,
+  .trace-actions {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .hint {
+    color: var(--ink-soft);
+    font-size: 12px;
+  }
+
+  .primary-btn,
+  .ghost-btn {
+    padding: 12px 16px;
+    border-radius: 999px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .primary-btn {
+    background: linear-gradient(135deg, var(--accent) 0%, #15847d 100%);
+    color: #fff;
+  }
+
+  .ghost-btn {
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--heading);
+    border: 1px solid rgba(20, 38, 52, 0.1);
+  }
+
+  .trace-toolbar {
+    margin: 18px 22px 0;
+    padding: 14px 16px;
+    border: 1px solid rgba(20, 38, 52, 0.08);
+    border-radius: 18px;
+    background: var(--panel-strong);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .trace-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .trace-status strong {
+    color: var(--heading);
+    font-size: 14px;
+  }
+
+  .trace-status span {
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  .trace-id-badge {
+    display: none;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(20, 38, 52, 0.1);
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  .timeline {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 18px 22px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .trace-placeholder {
+    border: 1px dashed rgba(20, 38, 52, 0.16);
+    border-radius: var(--radius-lg);
+    padding: 34px 20px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.46);
+    color: var(--ink-soft);
+    line-height: 1.65;
+  }
+
+  .trace-placeholder strong {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--heading);
+  }
+
+  .stage-group-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ink-soft);
+    font-weight: 700;
+    padding: 6px 2px 0;
+  }
+
+  .stage-card {
+    border-radius: 18px;
+    border: 1px solid rgba(20, 38, 52, 0.08);
+    background: rgba(255, 255, 255, 0.82);
+    overflow: hidden;
+  }
+
+  .stage-card.status-running {
+    border-color: rgba(15, 118, 110, 0.22);
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.06);
+  }
+
+  .stage-card.status-passed {
+    border-color: rgba(24, 121, 78, 0.18);
+  }
+
+  .stage-card.status-failed {
+    border-color: rgba(180, 35, 24, 0.18);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .stage-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--heading);
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-family: var(--font-mono);
+  }
+
+  .badge-running,
+  .badge-pending {
+    background: rgba(15, 118, 110, 0.1);
+    color: var(--accent-strong);
+  }
+
+  .badge-passed {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+
+  .badge-failed {
+    background: var(--danger-soft);
+    color: var(--danger);
+  }
+
+  .badge-skipped {
+    background: rgba(20, 38, 52, 0.08);
+    color: var(--ink-soft);
+  }
+
+  .elapsed {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+
+  .chevron {
+    color: var(--ink-soft);
+    transition: transform 120ms ease;
+  }
+
+  .chevron.open {
+    transform: rotate(90deg);
+  }
+
+  .stage-summary {
+    padding: 0 16px 12px;
+    color: var(--ink-soft);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .card-body {
+    display: none;
+    border-top: 1px solid rgba(20, 38, 52, 0.06);
+    background: rgba(19, 39, 52, 0.98);
+  }
+
+  .card-body.open {
+    display: block;
+  }
+
+  .payload-block pre {
+    margin: 0;
+    padding: 14px;
+    color: #d7e6f4;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow: auto;
+  }
+
+  .text-field-block + .text-field-block {
+    margin-top: 10px;
+  }
+
+  .text-field-label {
+    padding: 12px 14px 0;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #8fb0cb;
+    font-weight: 700;
+  }
+
+  .text-field-value {
+    margin: 8px 14px 14px;
+    border-radius: 14px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #eef5fb;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 280px;
+    overflow: auto;
+  }
+
+  .char-count {
+    color: #8fb0cb;
+    font-weight: 400;
+    margin-left: 6px;
+  }
+
+  .hl-key { color: #7dd3fc; }
+  .hl-str { color: #86efac; }
+  .hl-num { color: #fdba74; }
+  .hl-bool { color: #c084fc; }
+  .hl-null { color: #fca5a5; }
+
+  @keyframes pulse {
+    0%, 80%, 100% { transform: scale(0.85); opacity: 0.55; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 1180px) {
+    .workspace {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .topbar {
+      padding: 18px;
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .workspace {
+      padding: 16px;
+      gap: 16px;
+    }
+
+    .quick-prompts {
+      grid-template-columns: 1fr;
+    }
+
+    .chat-msg {
+      max-width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-kicker">Legacy Trace Rebuilt</div>
+      <h1>Conversation + Pipeline Trace</h1>
+      <p>Left side is the real chat surface. Right side streams the technical execution lifecycle, including clarification creation and resume stages.</p>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="header-tools">
+      <label class="field-inline">
+        <span>Session</span>
+        <input id="sessionInput" type="text" value="chat-session-1" />
+      </label>
+      <label class="toggle-inline">
+        <span>Payloads</span>
+        <input id="payloadToggle" type="checkbox" checked />
+      </label>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <section class="chat-panel">
+      <div class="panel-head">
+        <div>
+          <h2>Conversation</h2>
+          <p>Ask a business question, then resolve ambiguity directly in the conversation with structured options instead of raw text prompts.</p>
+        </div>
+        <div class="pill-row">
+          <div id="outcomeBadge" class="pill">Idle</div>
+        </div>
+      </div>
+
+      <div class="chat-intro">
+        <strong>Clarification UX contract</strong>
+        <span>When the planner pauses on filter-value ambiguity, the assistant renders candidate choices, lets the user type a reply, pick a numbered option, or delegate with a single click.</span>
+      </div>
+
+      <div class="quick-prompts">
+        <button type="button" onclick="applyPrompt('Mekanik dizayn birimindeki personelleri listele')">List employees in a unit<span>Good for testing filter value grounding.</span></button>
+        <button type="button" onclick="applyPrompt('Son 6 aydaki satin alma siparislerini say')">Count recent purchase orders<span>Useful for aggregation and date filters.</span></button>
+        <button type="button" onclick="applyPrompt('Acilan faturalarin toplam tutari nedir')">Total invoice amount<span>Tests metric style narration.</span></button>
+        <button type="button" onclick="applyPrompt('Mekanik birimindeki kayitlari getir')">Trigger possible clarification<span>Try an intentionally ambiguous unit phrase.</span></button>
+      </div>
+
+      <div id="chatThread" class="chat-thread">
+        <div id="chatEmpty" class="chat-empty">
+          <strong>The conversation surface is ready</strong>
+          Send a question to start the pipeline. If the system needs a clarification, it will stay in-chat and wait for your reply.
+        </div>
+      </div>
+
+      <div id="typingIndicator" class="typing-indicator">
+        <div class="typing-dots"><span></span><span></span><span></span></div>
+        <div>Assistant is processing the next pipeline step...</div>
+      </div>
+
+      <div class="composer">
+        <textarea id="chatInput" placeholder="Ask a business question or reply to a clarification..."></textarea>
+        <div class="composer-actions">
+          <div class="hint">Use Ctrl+Enter to send. Numeric replies, labels, and delegation all route through the clarification state engine.</div>
+          <button id="sendBtn" class="primary-btn" type="button" onclick="sendChatMessage()">Send message</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="trace-panel">
+      <div class="panel-head">
+        <div>
+          <h2>Pipeline Trace</h2>
+          <p>The trace remains technical. Every stage card reflects the exact planner, grounding, validation, compilation, and execution lifecycle from the traced request.</p>
+        </div>
+        <div class="pill-row">
+          <div id="traceIdBadge" class="trace-id-badge"></div>
+        </div>
+      </div>
+
+      <div class="trace-toolbar">
+        <div class="trace-status">
+          <strong>Status</strong>
+          <span id="traceStatusText">Idle</span>
+        </div>
+        <div class="trace-actions">
+          <button type="button" class="ghost-btn" onclick="expandAll()">Expand all</button>
+          <button type="button" class="ghost-btn" onclick="collapseAll()">Collapse all</button>
+          <button type="button" class="ghost-btn" onclick="clearTrace()">Clear</button>
+        </div>
+      </div>
+
+      <div id="timeline" class="timeline">
+        <div id="placeholder" class="trace-placeholder">
+          <strong>Trace stream is ready</strong>
+          Run a chat request to populate the stage timeline and inspect clarification lifecycle events.
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const chatState = {
+  sessionId: 'chat-session-1',
+  pendingClarification: null,
+};
+
+const STAGE_LABELS = {
+  question: 'Question',
+  runtime_context: 'Runtime Context',
+  metadata_catalog_load: 'Catalog Metadata',
+  semantic_registry_load: 'Semantic Registry',
+  document_corpus_load: 'Document Corpus',
+  embedding_index_ready: 'Embedding Index',
+  query_understanding: 'Query Understanding',
+  embedding_request: 'Embedding Request',
+  embedding_response: 'Embedding Response',
+  schema_retrieval: 'Schema Retrieval',
+  document_retrieval: 'Document Retrieval',
+  retrieval_fusion: 'Retrieval Fusion',
+  retrieval_assessment: 'Retrieval Assessment',
+  prompt_assembly: 'Prompt Assembly',
+  planner_llm_request: 'Planner LLM Request',
+  planner_llm_stream: 'Planner LLM Streaming',
+  planner_llm_response: 'Planner LLM Response',
+  planner_parsed_plan: 'Parsed QueryPlan',
+  normalize: 'Normalize Plan',
+  repair: 'Structural Repair',
+  semantic: 'Semantic Resolution',
+  canonicalize: 'Canonicalize Columns',
+  filter_column_resolution: 'Filter Column Grounding',
+  filter_value_resolution: 'Filter Value Grounding',
+  pending_clarification_created: 'Clarification Pending',
+  clarification_reply_received: 'Clarification Reply',
+  user_selected_candidate: 'User Selected Candidate',
+  user_deferred_to_system: 'User Deferred To System',
+  pipeline_resumed_after_clarification: 'Pipeline Resumed',
+  validation: 'Validation',
+  compile: 'SQL Compile',
+  execute: 'Execute',
+  narrator_prompt: 'Narrator Prompt',
+  narrator_llm_stream: 'Narrator Streaming',
+  narrator_llm_response: 'Narrator LLM Response',
+  narrator_sanitize: 'Narrator Sanitize',
+  narrator_final_response: 'Narrator Final',
+  final_verdict: 'Final Verdict',
+};
+
+const STAGE_GROUPS = {
+  question: 'Input',
+  runtime_context: 'Input',
+  metadata_catalog_load: 'Environment',
+  semantic_registry_load: 'Environment',
+  document_corpus_load: 'Environment',
+  embedding_index_ready: 'Embedding',
+  query_understanding: 'Understanding',
+  embedding_request: 'Embedding',
+  embedding_response: 'Embedding',
+  schema_retrieval: 'Retrieval',
+  document_retrieval: 'Retrieval',
+  retrieval_fusion: 'Retrieval',
+  retrieval_assessment: 'Retrieval',
+  prompt_assembly: 'Planning',
+  planner_llm_request: 'Planning',
+  planner_llm_stream: 'Planning',
+  planner_llm_response: 'Planning',
+  planner_parsed_plan: 'Planning',
+  normalize: 'Plan Transform',
+  repair: 'Plan Transform',
+  semantic: 'Plan Transform',
+  canonicalize: 'Plan Transform',
+  filter_column_resolution: 'Grounding',
+  filter_value_resolution: 'Grounding',
+  pending_clarification_created: 'Grounding',
+  clarification_reply_received: 'Grounding',
+  user_selected_candidate: 'Grounding',
+  user_deferred_to_system: 'Grounding',
+  pipeline_resumed_after_clarification: 'Grounding',
+  validation: 'Execution',
+  compile: 'Execution',
+  execute: 'Execution',
+  narrator_prompt: 'Narration',
+  narrator_llm_stream: 'Narration',
+  narrator_llm_response: 'Narration',
+  narrator_sanitize: 'Narration',
+  narrator_final_response: 'Narration',
+  final_verdict: 'Result',
+};
+
+const TEXT_FIELD_KEYS = new Set([
+  'full_prompt_preview',
+  'prompt_preview',
+  'raw_response_preview',
+  'sanitized_response_preview',
+  'question',
+]);
+
+const CHAR_COUNT_PAIRS = {
+  full_prompt_preview: 'full_prompt_char_count',
+  prompt_preview: 'prompt_char_count',
+  raw_response_preview: 'raw_response_char_count',
+};
+
+let traceAbortController = null;
+let stageCards = {};
+let lastGroup = null;
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function autoResizeTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+}
+
+function applyPrompt(text) {
+  const input = document.getElementById('chatInput');
+  input.value = text;
+  autoResizeTextarea(input);
+  input.focus();
+}
+
+function setTyping(visible) {
+  document.getElementById('typingIndicator').classList.toggle('visible', visible);
+}
+
+function setOutcomeBadge(status) {
+  const badge = document.getElementById('outcomeBadge');
+  badge.className = 'pill';
+  const mapping = {
+    idle: ['Idle', ''],
+    running: ['Running', 'outcome-running'],
+    success: ['Success', 'outcome-success'],
+    clarification: ['Clarification', 'outcome-clarification'],
+    validation_error: ['Validation error', 'outcome-error'],
+    planner_error: ['Planner error', 'outcome-error'],
+    execution_error: ['Execution error', 'outcome-error'],
+  };
+  const entry = mapping[status] || [status, ''];
+  badge.textContent = entry[0];
+  if (entry[1]) {
+    badge.classList.add(entry[1]);
+  }
+}
+
+function hideChatEmpty() {
+  const empty = document.getElementById('chatEmpty');
+  if (empty) {
+    empty.style.display = 'none';
+  }
+}
+
+function appendChatMessage(role, text, extraHtml = '') {
+  hideChatEmpty();
+  const labels = {
+    user: 'User',
+    assistant: 'Assistant',
+    clarification: 'Assistant clarification',
+  };
+  const item = document.createElement('div');
+  item.className = 'chat-msg ' + role;
+  item.innerHTML = '<div class="chat-msg-role">' + escapeHtml(labels[role] || role) + '</div>' +
+    '<div class="chat-bubble">' + escapeHtml(text) + extraHtml + '</div>';
+  const thread = document.getElementById('chatThread');
+  thread.appendChild(item);
+  thread.scrollTop = thread.scrollHeight;
+  return item;
+}
+
+function updateClarificationLifecycle(clarificationId, state) {
+  const el = document.getElementById('clar-lifecycle-' + clarificationId);
+  if (el) {
+    el.textContent = 'lifecycle: ' + state;
+  }
+}
+
+function disableClarificationButtons(clarificationId) {
+  document.querySelectorAll('[data-clarification-id="' + clarificationId + '"]').forEach(el => {
+    el.disabled = true;
+  });
+}
+
+function clarificationMetaHtml(payload) {
+  const bits = [];
+  if (payload.target_table) {
+    bits.push('table=' + payload.target_table);
+  }
+  if (payload.target_column) {
+    bits.push('column=' + payload.target_column);
+  }
+  if (payload.original_filter_value) {
+    bits.push('original=' + payload.original_filter_value);
+  }
+  if (!bits.length) {
+    return '';
+  }
+  return '<div class="clar-meta">' + escapeHtml(bits.join(' | ')) + '</div>';
+}
+
+function appendClarificationMessage(message, payload) {
+  hideChatEmpty();
+  let optionsHtml = '<div class="clar-options">';
+  payload.options.forEach(option => {
+    const scoreText = option.score === null || option.score === undefined
+      ? ''
+      : '<small>score ' + escapeHtml((option.score * 100).toFixed(0) + '%') + '</small>';
+    optionsHtml += '<button type="button" class="clar-option-btn" data-clarification-id="' + escapeHtml(payload.clarification_id) + '" onclick="submitClarificationOption(' + option.index + ')">' +
+      '<strong>' + escapeHtml(String(option.index) + '. ' + option.label) + '</strong>' +
+      (scoreText ? '<br />' + scoreText : '') +
+      '</button>';
+  });
+  optionsHtml += '<button type="button" class="clar-delegate-btn" data-clarification-id="' + escapeHtml(payload.clarification_id) + '" onclick="submitClarificationDelegation()">' +
+    '<strong>Let the system decide</strong><br /><small>Sends the phrase sen karar ver through the clarification resume flow.</small>' +
+    '</button>';
+  optionsHtml += '</div>';
+  optionsHtml += '<div class="clar-lifecycle" id="clar-lifecycle-' + escapeHtml(payload.clarification_id) + '">lifecycle: clarification_rendered</div>';
+  appendChatMessage('clarification', message, clarificationMetaHtml(payload) + optionsHtml);
+  chatState.pendingClarification = payload;
+}
+
+async function sendClarificationReply(rawMessage, echoLabel) {
+  const pending = chatState.pendingClarification;
+  if (!pending) {
+    return;
+  }
+
+  disableClarificationButtons(pending.clarification_id);
+  updateClarificationLifecycle(pending.clarification_id, 'clarification_reply_received');
+  appendChatMessage('user', echoLabel || rawMessage);
+  setTyping(true);
+  setOutcomeBadge('running');
+
+  try {
+    const response = await fetch('/chat/clarify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: chatState.sessionId,
+        clarification_id: pending.clarification_id,
+        message: rawMessage,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+
+    const data = await response.json();
+    setTyping(false);
+    updateClarificationLifecycle(pending.clarification_id, 'pipeline_resumed_after_clarification');
+    chatState.pendingClarification = null;
+    renderAssistantResponse(data);
+    runTraceStream(chatState.sessionId, rawMessage, true);
+  } catch (error) {
+    setTyping(false);
+    setOutcomeBadge('execution_error');
+    appendChatMessage('assistant', 'Clarification reply failed: ' + error.message);
+  }
+}
+
+function submitClarificationOption(index) {
+  const pending = chatState.pendingClarification;
+  if (!pending) {
+    return;
+  }
+  const option = pending.options.find(item => item.index === index);
+  if (!option) {
+    return;
+  }
+  sendClarificationReply(option.value, option.label);
+}
+
+function submitClarificationDelegation() {
+  sendClarificationReply('sen karar ver', 'Let the system decide');
+}
+
+function renderAssistantResponse(data) {
+  setOutcomeBadge(data.status || 'idle');
+  if (data.status === 'clarification' && data.clarification_payload) {
+    appendClarificationMessage(data.answer, data.clarification_payload);
+    return;
+  }
+  appendChatMessage('assistant', data.answer || 'No response returned.');
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const message = input.value.trim();
+  if (!message) {
+    return;
+  }
+
+  chatState.sessionId = document.getElementById('sessionInput').value.trim() || 'chat-session-1';
+  input.value = '';
+  autoResizeTextarea(input);
+
+  if (chatState.pendingClarification) {
+    await sendClarificationReply(message, message);
+    return;
+  }
+
+  appendChatMessage('user', message);
+  setTyping(true);
+  setOutcomeBadge('running');
+  clearTrace();
+
+  try {
+    const response = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: chatState.sessionId,
+        message,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+
+    const data = await response.json();
+    setTyping(false);
+    renderAssistantResponse(data);
+    runTraceStream(chatState.sessionId, message, false);
+  } catch (error) {
+    setTyping(false);
+    setOutcomeBadge('execution_error');
+    appendChatMessage('assistant', 'Request failed: ' + error.message);
+  }
+}
+
+function getLabel(stageName) {
+  return STAGE_LABELS[stageName] || stageName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function getGroup(stageName) {
+  return STAGE_GROUPS[stageName] || '';
+}
+
+function badgeHtml(status) {
+  const icons = {
+    running: 'RUN',
+    passed: 'OK',
+    failed: 'ERR',
+    skipped: 'SKIP',
+    pending: 'WAIT',
+  };
+  return '<span class="badge badge-' + escapeHtml(status) + '">' + escapeHtml(icons[status] || status) + ' ' + escapeHtml(status) + '</span>';
+}
+
+function elapsedHtml(ms) {
+  if (ms === null || ms === undefined) {
+    return '';
+  }
+  const label = ms >= 1000 ? ((ms / 1000).toFixed(2) + 's') : (String(ms) + 'ms');
+  return '<span class="elapsed">' + escapeHtml(label) + '</span>';
+}
+
+function syntaxHighlight(json) {
+  const str = typeof json === 'string' ? json : JSON.stringify(json, null, 2);
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+\.?\d*([eE][+-]?\d+)?)/g, match => {
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) {
+          return '<span class="hl-key">' + match + '</span>';
+        }
+        return '<span class="hl-str">' + match + '</span>';
+      }
+      if (/true|false/.test(match)) {
+        return '<span class="hl-bool">' + match + '</span>';
+      }
+      if (/null/.test(match)) {
+        return '<span class="hl-null">' + match + '</span>';
+      }
+      return '<span class="hl-num">' + match + '</span>';
+    });
+}
+
+function payloadHtml(payload) {
+  if (!payload || !Object.keys(payload).length) {
+    return '';
+  }
+
+  const textEntries = [];
+  const jsonPayload = {};
+
+  Object.keys(payload).forEach(key => {
+    if (TEXT_FIELD_KEYS.has(key) && typeof payload[key] === 'string' && payload[key].length > 0) {
+      const charCountKey = CHAR_COUNT_PAIRS[key] || null;
+      textEntries.push({ key, value: payload[key], charCountKey });
+    } else {
+      jsonPayload[key] = payload[key];
+    }
+  });
+
+  let html = '';
+  if (Object.keys(jsonPayload).length) {
+    html += '<div class="payload-block"><pre>' + syntaxHighlight(jsonPayload) + '</pre></div>';
+  }
+
+  textEntries.forEach(entry => {
+    const count = entry.charCountKey ? (payload[entry.charCountKey] ?? entry.value.length) : entry.value.length;
+    const label = entry.key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace(' Preview', '');
+    html += '<div class="text-field-block">' +
+      '<div class="text-field-label">' + escapeHtml(label) + '<span class="char-count">' + escapeHtml(String(count)) + ' chars</span></div>' +
+      '<div class="text-field-value">' + escapeHtml(entry.value) + '</div>' +
+      '</div>';
+  });
+
+  return html;
+}
+
+function clearTrace() {
+  if (traceAbortController) {
+    traceAbortController.abort();
+    traceAbortController = null;
+  }
+  stageCards = {};
+  lastGroup = null;
+  document.getElementById('timeline').innerHTML = '<div id="placeholder" class="trace-placeholder"><strong>Trace stream is ready</strong>Run a chat request to populate the stage timeline and inspect clarification lifecycle events.</div>';
+  document.getElementById('traceStatusText').textContent = 'Idle';
+  document.getElementById('traceIdBadge').style.display = 'none';
+}
+
+function ensureGroupLabel(stageName) {
+  const group = getGroup(stageName);
+  if (!group || group === lastGroup) {
+    return;
+  }
+  lastGroup = group;
+  const el = document.createElement('div');
+  el.className = 'stage-group-label';
+  el.textContent = group;
+  document.getElementById('timeline').appendChild(el);
+}
+
+function getOrCreateTraceCard(stageName) {
+  if (stageCards[stageName]) {
+    return stageCards[stageName];
+  }
+
+  const placeholder = document.getElementById('placeholder');
+  if (placeholder) {
+    placeholder.remove();
+  }
+
+  ensureGroupLabel(stageName);
+  const safeId = stageName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const card = document.createElement('div');
+  card.className = 'stage-card status-pending';
+  card.innerHTML = '<div class="card-header" data-stage-name="' + escapeHtml(stageName) + '">' +
+    '<span class="stage-title">' + escapeHtml(getLabel(stageName)) + '</span>' +
+    badgeHtml('pending') +
+    '<span class="elapsed"></span>' +
+    '<span class="chevron" id="chev-' + safeId + '">></span>' +
+    '</div>' +
+    '<div class="stage-summary" id="sum-' + safeId + '"></div>' +
+    '<div class="card-body" id="body-' + safeId + '"></div>';
+  card.querySelector('.card-header').addEventListener('click', () => toggleTraceCard(stageName));
+  document.getElementById('timeline').appendChild(card);
+  stageCards[stageName] = { card, safeId };
+  return stageCards[stageName];
+}
+
+function updateTraceCard(event) {
+  const item = getOrCreateTraceCard(event.stage_name);
+  const card = item.card;
+  const safeId = item.safeId;
+  const status = event.status || 'pending';
+  card.className = 'stage-card status-' + status;
+  const header = card.querySelector('.card-header');
+  header.innerHTML = '<span class="stage-title">' + escapeHtml(getLabel(event.stage_name)) + '</span>' +
+    badgeHtml(status) +
+    elapsedHtml(event.elapsed_ms) +
+    '<span class="chevron" id="chev-' + safeId + '">></span>';
+  header.addEventListener('click', () => toggleTraceCard(event.stage_name));
+
+  const summaryEl = document.getElementById('sum-' + safeId);
+  if (summaryEl) {
+    summaryEl.textContent = event.summary || '';
+  }
+
+  const bodyEl = document.getElementById('body-' + safeId);
+  if (bodyEl && document.getElementById('payloadToggle').checked && event.payload && Object.keys(event.payload).length) {
+    bodyEl.innerHTML = payloadHtml(event.payload);
+    if (status !== 'skipped') {
+      bodyEl.classList.add('open');
+      const chev = document.getElementById('chev-' + safeId);
+      if (chev) {
+        chev.classList.add('open');
+      }
+    }
+  }
+
+  if (event.stage_name === 'final_verdict' && event.payload && event.payload.status) {
+    setOutcomeBadge(event.payload.status);
+  }
+}
+
+function toggleTraceCard(stageName) {
+  const item = stageCards[stageName];
+  if (!item) {
+    return;
+  }
+  const body = document.getElementById('body-' + item.safeId);
+  const chev = document.getElementById('chev-' + item.safeId);
+  if (!body) {
+    return;
+  }
+  const open = body.classList.toggle('open');
+  if (chev) {
+    chev.classList.toggle('open', open);
+  }
+}
+
+function expandAll() {
+  document.querySelectorAll('.card-body').forEach(el => el.classList.add('open'));
+  document.querySelectorAll('.chevron').forEach(el => el.classList.add('open'));
+}
+
+function collapseAll() {
+  document.querySelectorAll('.card-body').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('.chevron').forEach(el => el.classList.remove('open'));
+}
+
+async function runTraceStream(sessionId, question, clearFirst) {
+  if (traceAbortController) {
+    traceAbortController.abort();
+  }
+  if (clearFirst) {
+    clearTrace();
+  }
+  traceAbortController = new AbortController();
+  document.getElementById('traceStatusText').textContent = 'Connecting';
+
+  try {
+    const response = await fetch('/chat/trace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        message: question,
+        include_payloads: document.getElementById('payloadToggle').checked,
+      }),
+      signal: traceAbortController.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+
+    const traceId = response.headers.get('X-Trace-Id');
+    if (traceId) {
+      const badge = document.getElementById('traceIdBadge');
+      badge.textContent = 'trace: ' + traceId;
+      badge.style.display = 'inline-flex';
+    }
+
+    document.getElementById('traceStatusText').textContent = 'Running';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) {
+        break;
+      }
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      lines.forEach(line => {
+        if (!line.startsWith('data: ')) {
+          return;
+        }
+        const raw = line.slice(6).trim();
+        if (!raw) {
+          return;
+        }
+        try {
+          updateTraceCard(JSON.parse(raw));
+        } catch (error) {
+          console.warn('SSE parse error', error);
+        }
+      });
+    }
+
+    document.getElementById('traceStatusText').textContent = 'Done';
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      document.getElementById('traceStatusText').textContent = 'Error: ' + error.message;
+    }
+  } finally {
+    traceAbortController = null;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('chatInput');
+  autoResizeTextarea(input);
+  input.addEventListener('input', () => autoResizeTextarea(input));
+  input.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      sendChatMessage();
+    }
+  });
+  document.getElementById('sessionInput').addEventListener('change', event => {
+    chatState.sessionId = event.target.value.trim() || 'chat-session-1';
+  });
+  setOutcomeBadge('idle');
+});
+</script>
+</body>
+</html>

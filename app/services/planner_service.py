@@ -153,10 +153,14 @@ class PlannerService:
         catalog: CatalogService,
         *,
         doc_retrieval: DocumentRetrievalService | None = None,
+        clarification_manager: Any | None = None,
+        executor: Any | None = None,
     ) -> None:
         self._llm = llm
         self._catalog = catalog
         self._doc_retrieval = doc_retrieval
+        self._clarification_manager = clarification_manager
+        self._executor = executor
         self._last_canonicalization_stats: NormalizationStats | None = None
         self._last_repair_result: RepairResult | None = None
         self._last_trace: dict[str, Any] | None = None
@@ -176,7 +180,11 @@ class PlannerService:
         )
         self._clarification_decision_service = ClarificationDecisionService()
         self._filter_column_resolution_service = FilterColumnResolutionService()
-        self._filter_value_resolution_service = FilterValueResolutionService()
+        self._filter_value_resolution_service = FilterValueResolutionService(
+            llm=llm,
+            clarification_manager=clarification_manager,
+            executor=executor,
+        )
         self._logged_sensitive_pattern_load_failure = False
         self._logged_sensitive_pattern_missing = False
 
@@ -215,7 +223,7 @@ class PlannerService:
             return self._last_trace_by_task[id(task)]
         return self._last_trace
 
-    async def plan(self, user_message: str) -> QueryPlan:
+    async def plan(self, user_message: str, *, session_id: str | None = None) -> QueryPlan:
         """Produce a ``QueryPlan`` from *user_message*.
 
         Steps
@@ -443,7 +451,11 @@ class PlannerService:
         query_plan = filter_column_resolution.resolved_plan
         trace["filter_column_resolution"] = filter_column_resolution.as_trace_dict()
 
-        query_plan, filter_value_resolution = self._filter_value_resolution_service.resolve(query_plan)
+        query_plan, filter_value_resolution = await self._filter_value_resolution_service.resolve(
+            query_plan,
+            session_id=session_id,
+            original_question=user_message,
+        )
         trace["filter_value_resolution"] = filter_value_resolution
 
         clarification = self._clarification_decision_service.apply(

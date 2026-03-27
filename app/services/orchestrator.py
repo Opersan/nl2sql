@@ -45,6 +45,7 @@ from app.providers.executor.base import ExecutorProvider
 from app.services.narrator_service import NarratorService
 from app.services.planner_service import PlannerService
 from app.services.session_service import SessionService
+from app.services.clarification_state_manager import ClarificationStateManager
 from app.services.sql_compiler import SQLCompiler
 from app.services.validation_repair_service import ValidationRepairService
 from app.services.execution_risk import assess_pre_execution_risk, bind_summary, sql_fingerprint
@@ -521,11 +522,13 @@ class ChatOrchestrator:
         orchestrator: Orchestrator,
         narrator: NarratorService,
         session_service: SessionService,
+        clarification_manager: ClarificationStateManager | None = None,
     ) -> None:
         self._planner = planner
         self._orchestrator = orchestrator
         self._narrator = narrator
         self._sessions = session_service
+        self._clarification_manager = clarification_manager
 
     async def handle_message(
         self,
@@ -582,6 +585,21 @@ class ChatOrchestrator:
                 payload=build_semantic_registry_payload(),
             )
 
+        # 1b – Check for pending clarification reply
+        clarification_reply = None
+        if self._clarification_manager is not None:
+            from app.services.filter_value_profile_provider import FilterValueProfileProvider
+
+            min_auto = FilterValueProfileProvider().policy().min_select_score
+            clarification_reply = self._clarification_manager.interpret_reply(
+                session_id, message, min_auto_resolve_score=min_auto,
+            )
+        if clarification_reply is not None:
+            return await self._handle_clarification_resume(
+                session_id, message, clarification_reply,
+                trace_collector=tc, t0_mono=_t0_mono,
+            )
+
         # 2 – Plan
         if tc:
             _plan_mono = tc.stage_started(
@@ -590,7 +608,7 @@ class ChatOrchestrator:
                 metadata={"question_length": len(message)},
             )
         try:
-            plan = await self._planner.plan(message)
+            plan = await self._planner.plan(message, session_id=session_id)
         except PlannerError as exc:
             if tc:
                 tc.stage_failed(
@@ -599,6 +617,9 @@ class ChatOrchestrator:
                     summary=f"Planner error: {exc}",
                     payload={"error": str(exc)[:300]},
                 )
+                tc.stage_skipped("validation", summary="Skipped — planner failed")
+                tc.stage_skipped("compile", summary="Skipped — planner failed")
+                tc.stage_skipped("execute", summary="Skipped — planner failed")
                 tc.stage_completed(
                     "final_verdict",
                     summary="Pipeline failed at planner stage",
@@ -621,6 +642,21 @@ class ChatOrchestrator:
         # 3 – Clarification short-circuit
         if plan.needs_clarification:
             if tc:
+                # Emit validation/compile/execute as skipped so the full pipeline
+                # shape is always visible in the live view, even when we exit early.
+                clarification_reason = plan.clarification_message or "clarification_required"
+                tc.stage_skipped(
+                    "validation",
+                    summary=f"Skipped — pipeline paused for clarification: {clarification_reason[:80]}",
+                )
+                tc.stage_skipped(
+                    "compile",
+                    summary="Skipped — pipeline paused for clarification",
+                )
+                tc.stage_skipped(
+                    "execute",
+                    summary="Skipped — pipeline paused for clarification",
+                )
                 _narr_mono = tc.stage_started(
                     "narrator_prompt",
                     summary="Narrating clarification request…",
@@ -638,11 +674,38 @@ class ChatOrchestrator:
                     },
                 )
             self._sessions.append_assistant_message(session_id, answer)
+
+            # Build structured clarification payload if a filter-value
+            # clarification was persisted in the state manager during planning.
+            clar_payload = None
+            if self._clarification_manager is not None:
+                from app.domain.models import ClarificationOption, ClarificationPayload
+
+                pending = self._clarification_manager.get_pending(session_id)
+                if pending is not None:
+                    clar_payload = ClarificationPayload(
+                        clarification_id=pending.clarification_id,
+                        message=answer,
+                        options=[
+                            ClarificationOption(
+                                index=idx + 1,
+                                label=candidate.value,
+                                value=candidate.value,
+                                score=candidate.score,
+                            )
+                            for idx, candidate in enumerate(pending.candidates)
+                        ],
+                        target_column=pending.target_column,
+                        target_table=pending.target_table,
+                        original_filter_value=pending.original_filter_value,
+                    )
+
             return ChatResult(
                 session_id=session_id,
                 status="clarification",
                 answer=answer,
                 plan=plan,
+                clarification_payload=clar_payload,
             )
 
         # 4 – Deterministic pipeline (validate → compile → execute)
@@ -770,6 +833,176 @@ class ChatOrchestrator:
                 and settings.enable_sql_in_api_response
                 else None
             ),
+            rows_preview=rows_preview,
+        )
+
+    async def _handle_clarification_resume(
+        self,
+        session_id: str,
+        message: str,
+        reply: Any,
+        *,
+        trace_collector: TraceCollector | None = None,
+        t0_mono: float = 0.0,
+    ) -> ChatResult:
+        """Resume the pipeline after the user answers a clarification.
+
+        The ``reply`` is a ``ClarificationReply`` from the state manager.
+        We reconstruct the partial plan, apply the resolved filter value,
+        then run the downstream deterministic pipeline.
+        """
+        import time as _time
+        from app.services.trace_serializer import safe_payload as _safe_payload
+
+        tc = trace_collector
+
+        if tc:
+            tc.stage_completed(
+                "clarification_reply_received",
+                summary=f"Clarification reply: {reply.resolution_method} → {reply.chosen_value}",
+                payload={
+                    "clarification_id": reply.clarification_id,
+                    "chosen_value": reply.chosen_value,
+                    "resolution_method": reply.resolution_method,
+                    "target_column": reply.target_column,
+                    "original_question": reply.original_question[:200] if reply.original_question else "",
+                },
+            )
+
+        # Reconstruct the partial plan and apply the resolved value
+        plan_json = reply.partial_grounded_plan_json
+        try:
+            partial_plan = QueryPlan(**plan_json)
+        except Exception:
+            answer = "Beklemedik bir hata olustu, lutfen sorunuzu tekrar sorun."
+            self._sessions.append_assistant_message(session_id, answer)
+            return ChatResult(session_id=session_id, status="execution_error", answer=answer)
+
+        # Apply the resolved canonical value to the matching filter
+        updated_filters = []
+        value_applied = False
+        for f in partial_plan.filters:
+            if f.column == reply.target_column and not value_applied:
+                updated_filters.append(f.model_copy(update={"value": reply.chosen_value}))
+                value_applied = True
+            else:
+                updated_filters.append(f)
+
+        resumed_plan = partial_plan.model_copy(
+            update={
+                "filters": updated_filters,
+                "needs_clarification": False,
+                "clarification_message": None,
+            }
+        )
+
+        if tc:
+            stage_name = (
+                "user_deferred_to_system"
+                if reply.resolution_method == "user_deferred_to_system"
+                else "user_selected_candidate"
+            )
+            tc.stage_completed(
+                stage_name,
+                summary=f"Resumed with {reply.target_column} = '{reply.chosen_value}'",
+                payload={
+                    "target_column": reply.target_column,
+                    "chosen_value": reply.chosen_value,
+                    "resolution_method": reply.resolution_method,
+                },
+            )
+            tc.stage_completed(
+                "pipeline_resumed_after_clarification",
+                summary="Pipeline resuming from grounding stage",
+                payload={"resumed_plan_filters": _safe_payload(
+                    [{"column": f.column, "op": f.op.value, "value": f.value} for f in resumed_plan.filters]
+                )},
+            )
+
+        self._sessions.set_last_plan(session_id, resumed_plan)
+
+        # 4 – Deterministic pipeline (validate → compile → execute)
+        result = await self._orchestrator.run_plan(resumed_plan, trace_collector=tc)
+
+        # 5a – Validation failure
+        if result.failed_phase == ErrorPhase.VALIDATION:
+            if tc:
+                _narr_mono = tc.stage_started("narrator_prompt", summary="Narrating validation error…")
+            answer = await self._narrator.narrate_validation_error(
+                reply.original_question or message, result.validation,
+            )
+            if tc:
+                self._emit_narrator_trace_stages(tc, _narr_mono)
+                tc.stage_completed(
+                    "final_verdict",
+                    summary=f"Failed after clarification: validation — {answer[:120]}",
+                    payload={"status": "validation_error", "total_elapsed_ms": int((_time.monotonic() - t0_mono) * 1000)},
+                )
+            self._sessions.append_assistant_message(session_id, answer)
+            return ChatResult(
+                session_id=session_id,
+                status="validation_error",
+                answer=answer,
+                plan=resumed_plan,
+                error_message="; ".join(e.message for e in result.validation.errors),
+            )
+
+        # 5b – Compilation / execution failure
+        if result.failed_phase in (ErrorPhase.COMPILATION, ErrorPhase.EXECUTION):
+            if tc:
+                _narr_mono = tc.stage_started("narrator_prompt", summary="Narrating execution error…")
+            answer = await self._narrator.narrate_execution_error(
+                reply.original_question or message, result,
+            )
+            if tc:
+                self._emit_narrator_trace_stages(tc, _narr_mono)
+                tc.stage_completed(
+                    "final_verdict",
+                    summary=f"Failed after clarification: execution — {answer[:120]}",
+                    payload={"status": "execution_error", "total_elapsed_ms": int((_time.monotonic() - t0_mono) * 1000)},
+                )
+            self._sessions.append_assistant_message(session_id, answer)
+            return ChatResult(
+                session_id=session_id,
+                status="execution_error",
+                answer=answer,
+                plan=resumed_plan,
+                sql=result.compiled_query.sql if result.compiled_query and settings.enable_sql_in_api_response else None,
+                error_message=result.compilation_error or (result.execution_result.error_message if result.execution_result else None),
+            )
+
+        # 6 – Success
+        if tc:
+            _narr_mono = tc.stage_started("narrator_prompt", summary="Narrating result after clarification…")
+        answer = await self._narrator.narrate_success(reply.original_question or message, result)
+        if tc:
+            self._emit_narrator_trace_stages(tc, _narr_mono)
+        self._sessions.append_assistant_message(session_id, answer)
+        rows_preview = None
+        if result.execution_result and result.execution_result.rows:
+            rows_preview = result.execution_result.rows[:settings.max_rows_preview]
+        if tc:
+            from app.services.trace_serializer import build_final_verdict_payload
+
+            tc.stage_completed(
+                "final_verdict",
+                summary=f"Success after clarification — {answer[:120]}",
+                payload=build_final_verdict_payload(
+                    status="success",
+                    answer=answer,
+                    plan_snapshot=resumed_plan.model_dump(mode="json"),
+                    sql=result.compiled_query.sql if result.compiled_query else None,
+                    total_elapsed_ms=int((_time.monotonic() - t0_mono) * 1000),
+                    orchestrator_trace=self._orchestrator.last_trace,
+                    narrator_trace=self._narrator.last_trace,
+                ),
+            )
+        return ChatResult(
+            session_id=session_id,
+            status="success",
+            answer=answer,
+            plan=resumed_plan,
+            sql=result.compiled_query.sql if result.compiled_query and settings.enable_sql_in_api_response else None,
             rows_preview=rows_preview,
         )
 
@@ -947,14 +1180,27 @@ class ChatOrchestrator:
             "changed_filters": 0,
             "actions": [],
         }
+        fvr_summary_parts = [
+            f"Filter value resolution — seen={int(filter_value_resolution.get('total_filters_seen', 0))}",
+            f"changed={int(filter_value_resolution.get('changed_filters', filter_value_resolution.get('changed_count', 0)))}",
+        ]
+        if filter_value_resolution.get("llm_tiebreak_used"):
+            fvr_summary_parts.append("llm_tiebreak=yes")
+        if filter_value_resolution.get("clarification_required"):
+            fvr_summary_parts.append("clarification_required=yes")
         tc.stage_completed(
             "filter_value_resolution",
-            summary=(
-                f"Filter value resolution — seen={int(filter_value_resolution.get('total_filters_seen', 0))}, "
-                f"changed={int(filter_value_resolution.get('changed_filters', filter_value_resolution.get('changed_count', 0)))}"
-            ),
+            summary=", ".join(fvr_summary_parts),
             payload=build_filter_value_resolution_payload(filter_value_resolution),
         )
+
+        # Emit pending clarification stage if filter value resolution created one
+        if filter_value_resolution.get("clarification_required") and filter_value_resolution.get("pending_clarification"):
+            tc.stage_completed(
+                "pending_clarification_created",
+                summary="Pending clarification created — awaiting user reply",
+                payload=safe_payload(filter_value_resolution.get("pending_clarification")),
+            )
 
     def _emit_narrator_trace_stages(
         self,

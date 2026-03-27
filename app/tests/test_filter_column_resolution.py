@@ -85,6 +85,7 @@ def _minimal_grounding_json() -> dict[str, Any]:
                     "DEPARTMENT_NAME",
                     "DEPT_NAME",
                     "DEPARTMENT",
+                    "BOLUM",
                 ],
             },
             "location": {
@@ -242,6 +243,15 @@ class TestFilterColumnResolutionService:
         result = self.svc.resolve(plan, "Yazilim bolumundeki calisanlari getir")
         assert result.any_changed is True
         assert result.resolved_plan.filters[0].column == "BIRIM_ADI"
+
+    def test_department_corrects_bolum_column_with_like(self) -> None:
+        """LLM picks BOLUM column + LIKE for 'dizayn bölümü' → corrected to BIRIM_ADI."""
+        plan = _make_plan([_filter("BOLUM", FilterOp.LIKE, "%dizayn%")])
+        result = self.svc.resolve(plan, "dizayn bolumunde calisanlari listele")
+        assert result.any_changed is True
+        assert result.resolved_plan.filters[0].column == "BIRIM_ADI"
+        assert result.resolved_plan.filters[0].op == FilterOp.LIKE
+        assert result.resolved_plan.filters[0].value == "%dizayn%"
 
     def test_location_already_correct_no_change(self) -> None:
         plan = _make_plan([_filter("LOCATION_ADI", FilterOp.EQ, "Istanbul")])
@@ -648,7 +658,8 @@ class TestBuildFilterColumnResolutionPayload:
 
 
 class TestFilterColumnResolutionAccounting:
-    def test_real_filter_is_counted_even_when_not_changed(self) -> None:
+    def test_real_filter_is_counted_and_bolum_corrected(self) -> None:
+        """BOLUM is now confusable for department → corrected to BIRIM_ADI."""
         service = FilterColumnResolutionService(provider=_provider_from_dict(_minimal_grounding_json()))
         plan = _make_plan([_filter("BOLUM", FilterOp.EQ, "IT")])
 
@@ -657,9 +668,10 @@ class TestFilterColumnResolutionAccounting:
 
         assert trace["total_filters_seen"] == 1
         assert trace["processed_filters"] == 1
-        assert trace["changed_filters"] == 0
-        assert trace["skipped_filters"] == 1
-        assert trace["actions"][0]["reason"] == "column_not_confusable_for_department"
+        assert trace["changed_filters"] == 1
+        assert trace["skipped_filters"] == 0
+        assert trace["actions"][0]["reason"] == "dimension_department_keyword_detected_in_question"
+        assert trace["actions"][0]["resolved_column"] == "BIRIM_ADI"
 
     def test_like_filter_is_counted_and_explained(self) -> None:
         service = FilterColumnResolutionService(provider=_provider_from_dict(_minimal_grounding_json()))

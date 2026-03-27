@@ -17,6 +17,15 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+def _elapsed_ms_from(started_at_mono: float | None) -> int | None:
+    if started_at_mono is None:
+        return None
+    elapsed_seconds = time.monotonic() - started_at_mono
+    if elapsed_seconds <= 0:
+        return 0
+    return max(1, round(elapsed_seconds * 1000))
+
+
 class StageStatus(str, Enum):
     """Lifecycle status for a pipeline stage."""
 
@@ -43,6 +52,8 @@ class StageEvent(BaseModel):
     trace_id: str
     stage_name: str
     status: StageStatus
+    event_index: int | None = None
+    trace_elapsed_ms: int | None = None
     started_at: float | None = None
     completed_at: float | None = None
     elapsed_ms: int | None = None
@@ -65,6 +76,8 @@ class TraceCollector:
         self._queue: asyncio.Queue[StageEvent | None] = asyncio.Queue()
         self._closed = False
         self._started_at_mono: dict[str, float] = {}
+        self._trace_started_mono = time.monotonic()
+        self._event_index = 0
 
     # ------------------------------------------------------------------
     # Stage lifecycle helpers
@@ -105,7 +118,7 @@ class TraceCollector:
     ) -> None:
         """Emit a PASSED event."""
         mono_start = started_at_mono or self._started_at_mono.get(stage_name)
-        elapsed = int((time.monotonic() - mono_start) * 1000) if mono_start is not None else None
+        elapsed = _elapsed_ms_from(mono_start)
         self.emit(
             StageEvent(
                 trace_id=self.trace_id,
@@ -130,7 +143,7 @@ class TraceCollector:
     ) -> None:
         """Emit a FAILED event."""
         mono_start = started_at_mono or self._started_at_mono.get(stage_name)
-        elapsed = int((time.monotonic() - mono_start) * 1000) if mono_start is not None else None
+        elapsed = _elapsed_ms_from(mono_start)
         self.emit(
             StageEvent(
                 trace_id=self.trace_id,
@@ -172,7 +185,36 @@ class TraceCollector:
     def emit(self, event: StageEvent) -> None:
         """Put an event on the queue (non-blocking, fire-and-forget)."""
         if not self._closed:
-            self._queue.put_nowait(event)
+            self._event_index += 1
+            event_index = event.event_index if event.event_index is not None else self._event_index
+            trace_elapsed_ms = (
+                event.trace_elapsed_ms
+                if event.trace_elapsed_ms is not None
+                else int((time.monotonic() - self._trace_started_mono) * 1000)
+            )
+            self._queue.put_nowait(
+                event.model_copy(
+                    update={
+                        "event_index": event_index,
+                        "trace_elapsed_ms": trace_elapsed_ms,
+                    }
+                )
+            )
+
+    async def get_event(
+        self,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> tuple[bool, StageEvent | None]:
+        """Return ``(timed_out, event)`` for the next queued event."""
+        try:
+            if timeout_seconds is None:
+                event = await self._queue.get()
+            else:
+                event = await asyncio.wait_for(self._queue.get(), timeout_seconds)
+            return False, event
+        except asyncio.TimeoutError:
+            return True, None
 
     def close(self) -> None:
         """Signal end-of-stream. Idempotent."""

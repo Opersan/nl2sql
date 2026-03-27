@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.core.config import APP_VERSION
 from app.core.types import ChatStatus
-from app.domain.models import ChatResult
+from app.domain.models import ChatResult, ClarificationPayload
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +43,11 @@ class ChatResponse(BaseModel):
     rows_preview: list[dict[str, Any]] | None = None
     error_code: str | None = None
     error_message: str | None = None
+    clarification_payload: ClarificationPayload | None = None
+    """Structured clarification contract.  Non-null only when
+    ``status == 'clarification'`` and a filter-value clarification is
+    pending.  The frontend must render this as selectable options, not
+    plain text."""
 
     @classmethod
     def from_chat_result(cls, result: ChatResult) -> ChatResponse:
@@ -56,6 +61,7 @@ class ChatResponse(BaseModel):
             rows_preview=result.rows_preview,
             error_code=result.error_code,
             error_message=result.error_message,
+            clarification_payload=result.clarification_payload,
         )
 
 

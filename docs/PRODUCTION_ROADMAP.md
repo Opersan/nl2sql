@@ -1,313 +1,338 @@
-# NL2SQL Production Roadmap (Master + Immediate Sprints)
+0. Executive Reality Check (Mevcut Sistem Durumu)
 
-## 1. Purpose
+Mevcut run’lardan çıkan net gerçekler:
 
-Bu dokümanın amacı:
+1. Sistem “çalışıyor ama doğru değil”
+success_rate ≈ %52
+user_visible_pass ≈ %96 (sanitizer kurtarıyor)
 
-- sistemi benchmark geçiren bir demo değil  
-- **production-grade, güvenli, açıklanabilir ve sürdürülebilir bir NL2SQL platformuna dönüştürmek**
+👉 Bu dangerous false confidence
 
-Başarı tanımı:
+2. Ana problem SQL değil → grounding + plan quality
 
-> “25 soruda %100” değil  
-> “yeni ve bilinmeyen sorularda sistematik olarak doğru ve güvenli davranış”
+Top root cause’lar:
 
----
+missing_filter → %24 civarı
+empty_result → canonical value mismatch
+planner_output hataları
+LIKE fallback → yanlış sonuç
 
-# 2. System North Star (Production Charter)
+👉 Sistem SQL üretiyor ama doğru business filtreyi bulamıyor
 
-## 2.1 Non-Negotiable Principles
+3. Kritik örnek (gerçek kırılma)
+"IT departmanındaki çalışanlar"
+→ BIRIM_ADI = 'IT'
+→ RESULT = EMPTY
 
-Bu kurallar hiçbir aşamada ihlal edilmez:
+👉 Root cause:
 
-1. SQL doğrudan üretilmez → her zaman **QueryPlan-first**
-2. Planner, validation, compiler, execution ayrımı korunur
-3. Yanlış ama executable plan = başarısızlık
-4. `empty_result` ≠ sistem hatası
-5. `clarification` bir failure değil → kontrollü davranış
-6. Semantic layer tek source-of-truth
-7. Prompt büyütme ile hatalar gizlenmez
-8. Narrator ile yanlış plan maskelenmez
+canonical value yok
+grounding yok
+disambiguation yok
+4. Clarification sistemi broken
+clarification_rate: %24
+ama çoğu anlamsız veya eksik
 
----
+5. Execution layer noisy
+timeout var
+unknown_execution_error yüksek
+root cause visibility düşük
+🎯 STRATEGIC GOAL
 
-## 2.2 Production Success Metrics
+Sistemi şu seviyeye taşımak:
 
-Tek bir metrik yok. Aşağıdakiler birlikte izlenir:
+FROM:
+"SQL üreten sistem"
 
-### Core Quality
-- business_success_rate
-- wrong_plan_rate
-- handled_safely_rate
-- clarification_precision / recall
+TO:
+"Semantic + grounded + controllable query system"
+🧠 TARGET ARCHITECTURE (FINAL)
+User Query
+   ↓
+[Query Understanding]
 
-### Pipeline Reliability
-- planner_parse_fail_rate
-- validation_failure_rate
-- compile_failure_rate
-- execution_error_rate
-- timeout_rate
+   ↓
+[Retrieval Layer]
+(schema + glossary + examples)
 
-### Semantics & Retrieval
-- root_entity_accuracy
-- join_path_accuracy
-- filter_ownership_accuracy
-- semantic_override_harm_rate
+   ↓
+[Planner]
+(QueryPlan)
 
-### Safety
-- policy_block_precision
-- unsafe_sql_count
-- restricted_field_escape_count
+   ↓
+[Normalization + Repair + Semantic]
 
-### Observability
-- trace_completeness_rate
-- unclassified_failure_rate
+   ↓
+[Filter Column Resolution]      ← Sprint 1 (DONE)
 
----
+   ↓
+[Filter Value Resolution]       ← Sprint 2 (NEW CORE)
 
-# 3. Current System State (Run2 Diagnosis)
+   ↓
+[Clarification Layer]           ← Sprint 2
 
-## Current metrics (özet):
-- success_rate ≈ 64%
-- business_success_rate ≈ 68%
-- clarification_rate ≈ 12%
-- planner_parse_fail ≈ düşük
-- validation/compile error ≈ 0
+   ↓
+[Validation Layer]
 
-## Ana darboğazlar:
+   ↓
+[SQL Compiler]
 
-### 1. Execution Layer
-- timeout (3)
-- oracle_date_type_error (2)
-- p95 latency çok yüksek
+   ↓
+[Execution Layer]
 
-### 2. Narrator
-- raw leak rate %40
-- sanitizer dependency yüksek
+   ↓
+[Narration Layer]
+🧩 ROADMAP PHASES
+🟢 PHASE 1 — FILTER COLUMN RESOLUTION (DONE)
 
-### 3. Empty Results
-- 6 vaka → data mı yok semantic mi belirsiz
+Ama korunmalı.
 
-### 4. Repair Layer
-- repair_apply_rate = 0
+Amaç:
+doğru kolon seçimi
+Örnek:
+"IT departmanı"
+→ BIRIM_ADI
+Risk:
+semantic override yanlışsa sistem sapar
+🔴 PHASE 2 — VALUE GROUNDING SYSTEM (CRITICAL CORE)
 
----
+Bu sistemin kalbi.
 
-# 4. Roadmap Structure
+2.1 Problem Tanımı
+
+Bugünkü sistem:
+
+BIRIM_ADI = 'IT'
+
+Ama DB’de:
 
-Bu roadmap iki katmandan oluşur:
-
-## A. Strategic Programs (Production Target)
-## B. Immediate Execution (Next 2 Sprints)
-
----
-
-# 5. A. Strategic Programs (Long-Term)
-
-### Program A — Observability & Failure Taxonomy
-- tüm failure’lar reason code ile sınıflanır
-- unclassified_failure_rate ≈ 0 hedeflenir
-
-### Program B — Planner Contracts
-- stage-based planner architecture (DONE ✔)
-
-### Program C — Semantic & Retrieval Hardening
-- root entity accuracy ↑
-- semantic override harm ↓
-
-### Program D — Validation & Repair Hardening
-- safe auto-healing
-- validation sonrası repair
-
-### Program E — Execution Reliability
-- Oracle edge cases
-- timeout handling
-- degrade strategies
-
-### Program F — Clarification Policy
-- gereksiz clarification ↓
-- ambiguity yönetimi ↑
-
-### Program G — Narration Quality
-- sanitizer bağımlılığı ↓
-- iş dili ↑
-
-### Program H — Evaluation Redesign
-- benchmark → domain-balanced + replay
-
-### Program I — Release Governance
-- canary
-- rollback
-- feature flags
-
----
-
-# 6. B. Immediate Execution Plan (CRITICAL)
-
-⚠️ Şu an odak:
-**Accuracy Uplift (Execution + Narrator + Data + Repair)**
-
----
-
-# 🚀 Sprint 1 (Highest ROI)
-
-## 1. Execution Stabilization (P0)
-
-### Hedef:
-- execution_error ↓
-- timeout ↓
-- date-type error ↓
-
-### İşler:
-- Oracle DATE/TIMESTAMP bind fix
-- date normalization helper
-- timeout-prone query detection
-- safer default execution
-- simple listing optimize
-
-### Başarı Kriteri:
-- timeout: 3 → ≤1
-- execution_error_rate ciddi düşmeli
-
----
-
-## 2. Narrator Raw Leak Reduction (P0)
-
-### Hedef:
-- raw leak ↓
-- sanitizer bağımlılığı ↓
-
-### İşler:
-- narrator prompt hardening
-- no thinking / no meta / no echo
-- empty response fallback iyileştirme
-- leak taxonomy
-
-### Başarı Kriteri:
-- raw leak %40 → %15 altı
-- sanitized_but_model_failed ↓
-
----
-
-# 🚀 Sprint 2
-
-## 3. Empty Result Diagnosis (P1)
-
-### Hedef:
-- false empty ↓
-- data vs semantic ayrımı
-
-### İşler:
-- empty_result classification:
-  - true_no_data
-  - semantic_mismatch
-- value encoding mapping (1/0, string vs code)
-- synonym mismatch fix
-- trace diagnosis flag
-
-### Başarı Kriteri:
-- yanlış empty sonuçlar azalmalı
-
----
-
-## 4. Repair Activation (P1)
-
-### Hedef:
-- repair gerçekten çalışsın
-
-### İşler:
-- alias → canonical mapping
-- invalid sort fix
-- validation feedback loop
-- safe repair rules
-
-### Başarı Kriteri:
-- repair_apply_rate > 10%
-- recoverable errors ↓
-
----
-
-# 7. Post-Sprint Target Metrics
-
-Sprint 1 + 2 sonrası hedef:
-
-- success_rate → **75–80%**
-- business_success_rate → **80%+**
-- execution_error_rate → **<10%**
-- timeout → ~0–1
-- raw_narrator_leak → <15%
-- repair_apply_rate → >10%
-- clarification_rate → stabil veya düşüş
-
----
-
-# 8. After Sprint 2 (Next Phase)
-
-## Devreye girer:
-- Program A (failure taxonomy)
-- Program H (evaluation redesign)
-- Program I (release governance)
-
----
-
-# 9. Release Gate (Future)
-
-Production release için minimum:
-
-- wrong_plan_rate ↓ trend
-- execution_error_rate düşük
-- policy violations = 0
-- trace_completeness yüksek
-- replay suite pass
-
----
-
-# 10. What We Explicitly Avoid
-
-❌ Benchmark’a özel hack  
-❌ Prompt büyüterek sorunu gizleme  
-❌ Narrator ile yanlış sonucu “anlatma”  
-❌ Sensitive query’leri executable yapma  
-❌ Empty result’ı failure sayma  
-
----
-
-# 11. Final Operating Model
-
-Pipeline sabit:
-
-→ NL
-→ query understanding
-→ retrieval
-→ semantic resolution
-→ QueryPlan
-→ validation
-→ compile
-→ execution guard
-→ execution
-→ narration
-→ trace + eval
-
-
-Bu pipeline:
-- **bozulmadan optimize edilir**
-- stage’ler karıştırılmaz
-- her değişiklik trace + eval ile doğrulanır
-
----
-
-# 12. Final Summary
-
-## Bu planın özü:
-
-- Agent planı → **doğru yön**
-- Accuracy uplift → **doğru sıra**
-
-## Şu an yapılacak:
-
-👉 Sprint 1: Execution + Narrator  
-👉 Sprint 2: Empty Result + Repair  
-
-## Sonra:
-
-👉 Observability + Evaluation + Governance  
+"Bilgi Teknolojileri Operasyon"
+"Yazılım Geliştirme"
+2.2 Çözüm: Multi-stage grounding pipeline
+A. Candidate Generation (MANDATORY)
+
+Kaynaklar:
+
+DISTINCT profile cache
+semantic mapping
+alias dictionary (config tabanlı)
+offline precomputed value index
+
+❌ Yasak:
+
+runtime SELECT DISTINCT
+hardcoded dict
+B. Deterministic Ranking
+
+Score =
+
+w1 * exact_match
+w2 * alias_match
+w3 * token_overlap
+w4 * fuzzy_score
+w5 * source_confidence
+C. LLM Tie-Break (LIMITED)
+
+Sadece:
+
+top_k ≤ 3
+D. Confidence Model
+if score_gap > threshold:
+    auto_resolve
+
+elif borderline:
+    LLM_tiebreak
+
+else:
+    clarification
+E. Clarification System
+IT ile hangi birimi kastediyorsunuz?
+
+1. Yazılım Geliştirme
+2. BT Operasyon
+3. BT Destek
+4. Sen karar ver
+F. “Sen karar ver” (IMPORTANT)
+if top_score ≥ safe_threshold:
+    select(top_candidate)
+else:
+    ask_again
+G. FINAL RULE
+WHERE BIRIM_ADI = 'Yazılım Geliştirme'
+
+❌ LIKE yasak (fallback hariç)
+
+🚨 Impact
+
+Bu layer çözülmeden:
+
+success_rate artmaz
+empty_result çözülmez
+business correctness gelmez
+🟡 PHASE 3 — CLARIFICATION STATE ENGINE
+
+Bugün eksik olan kritik katman.
+
+Problem
+system context tutmuyor
+user reply kayboluyor
+Solution
+Persistent Clarification Object
+{
+  "clarification_id": "...",
+  "question": "...",
+  "column": "BIRIM_ADI",
+  "candidates": [...],
+  "scores": [...],
+  "top_candidate": "...",
+  "state": "waiting_user"
+}
+Resume Logic
+
+User:
+
+"2"
+
+→ pipeline resume
+→ SQL generate
+
+Impact
+conversational intelligence
+user control
+correctness ↑
+🔵 PHASE 4 — EXECUTION INTELLIGENCE (Sprint C)
+4.1 Error Decomposition
+
+Map:
+
+ORA-00904 → invalid_identifier
+ORA-01722 → invalid_number
+ORA-018*  → date_error
+timeout   → timeout
+4.2 Trace Fields
+execution_error_subtype
+execution_error_message_normalized
+4.3 Impact
+debug hızlanır
+eval anlamlı olur
+🟣 PHASE 5 — VALIDATION HARDENING
+Problem
+"Istanbul" query → ORDER BY LAST_NAME error
+
+Solution
+column existence check
+alias resolution
+schema guardrail
+🟠 PHASE 6 — SQL SAFETY & COST CONTROL
+Rules
+LIMIT zorunlu
+full scan detect
+join depth limit
+explain cost threshold
+Oracle özel
+ROWNUM limit enforce
+index-aware hints (optional)
+⚫ PHASE 7 — PIPELINE LIVE VIEW (OBSERVABILITY)
+
+Yeni stage’ler:
+
+filter_column_resolution
+filter_value_resolution
+candidate_generation
+ranking
+llm_tiebreak
+clarification_required
+clarification_answered
+final_value_selected
+Gösterilecekler
+candidate list
+score breakdown
+confidence
+chosen value
+user decision
+⚪ PHASE 8 — EVALUATION SYSTEM (CRITICAL)
+Mevcut problem
+success_rate misleading
+sanitizer masking errors
+Yeni metricler
+business_success_rate
+grounding_success_rate
+filter_correctness_rate
+clarification_resolution_rate
+New failure classes
+wrong_value_mapping
+missing_filter
+over_broad_filter
+ambiguous_unresolved
+🧪 PHASE 9 — TEST STRATEGY
+Unit Tests
+candidate generation
+ranking correctness
+threshold behavior
+Integration Tests
+IT departmanı
+Istanbul lokasyonu
+ambiguous queries
+Regression Tests
+
+Korunacak:
+
+BORDROLU
+STAJYER
+NULL filters
+🧠 PHASE 10 — FUTURE (POST-PROD)
+10.1 Semantic Layer (VERY IMPORTANT)
+
+Oracle EBS için:
+
+semantic_dimension:
+  department
+  location
+  cost_center
+10.2 Agentic Query Planning
+decomposition
+multi-step reasoning
+self-correction
+10.3 Learned Ranking
+feedback loop
+user corrections → training data
+⚠️ NON-NEGOTIABLE RULES
+❌ Yapılmayacaklar
+hardcoded mapping
+direct SQL generation (no grounding)
+uncontrolled LIKE
+runtime DISTINCT scans
+planner redesign
+✅ Yapılacaklar
+metadata-first
+deterministic ranking
+controlled LLM usage
+validation-first execution
+trace-first debugging
+🧭 FINAL PRIORITY ORDER
+Tier 1 (BLOCKER)
+Value grounding
+Clarification state
+Deterministic ranking
+Tier 2
+Execution error decomposition
+Validation hardening
+Tier 3
+Observability
+Evaluation redesign
+Tier 4
+Semantic layer
+Agentic planning
+🔚 SONUÇ
+
+Bu roadmap seni şuraya götürür:
+
+Naive NL2SQL
+   ↓
+RAG NL2SQL
+   ↓
+Grounded NL2SQL
+   ↓
+Controlled Query System
+   ↓
+Enterprise Decision Assistant

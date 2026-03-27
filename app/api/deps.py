@@ -30,6 +30,7 @@ from app.services.semantic_planning import (
     validate_registry_against_catalog,
 )
 from app.services.session_service import SessionService
+from app.services.clarification_state_manager import ClarificationStateManager
 from app.services.sql_compiler import SQLCompiler
 from app.services.validation_service import ValidationService
 
@@ -253,11 +254,20 @@ def build_chat_orchestrator(
     orchestrator = Orchestrator(validator, compiler, executor)
 
     # Sprint 2 LLM services
-    planner = PlannerService(llm, catalog, doc_retrieval=doc_retrieval)
+    clarification_manager = ClarificationStateManager()
+    planner = PlannerService(
+        llm, catalog,
+        doc_retrieval=doc_retrieval,
+        clarification_manager=clarification_manager,
+        executor=executor,
+    )
     narrator = NarratorService(llm)
     sessions = SessionService()
 
-    return ChatOrchestrator(planner, orchestrator, narrator, sessions)
+    return ChatOrchestrator(
+        planner, orchestrator, narrator, sessions,
+        clarification_manager=clarification_manager,
+    )
 
 
 def _build_schema_retriever(catalog_provider: CatalogProvider) -> SchemaRetrievalService:

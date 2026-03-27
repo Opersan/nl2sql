@@ -185,9 +185,20 @@ def build_semantic_registry_payload() -> dict[str, Any]:
     try:
         from app.services.semantic_planning import _load_registry
         registry = _load_registry()
+        entities_raw = getattr(registry, "entities", None) or []
+        if isinstance(entities_raw, dict):
+            entity_names = list(entities_raw.keys())
+            entity_count = len(entities_raw)
+        else:
+            entity_names = [
+                str(getattr(entity, "entity_id", entity))
+                for entity in entities_raw
+            ]
+            entity_count = len(entities_raw)
+
         payload["loaded"] = True
-        payload["entity_count"] = len(getattr(registry, "entities", {}))
-        payload["entities"] = list(getattr(registry, "entities", {}).keys())[:20]
+        payload["entity_count"] = entity_count
+        payload["entities"] = entity_names[:20]
 
         glossary = getattr(registry, "glossary", None) or {}
         payload["glossary_term_count"] = len(glossary)
@@ -288,16 +299,20 @@ def build_validation_payload(validation_trace: dict[str, Any] | None) -> dict[st
 
 
 def build_compile_payload(compile_trace: dict[str, Any] | None) -> dict[str, Any]:
-    """Safe payload for SQL compilation — includes SQL but no bind params."""
+    """Safe payload for SQL compilation — includes SQL and bind param values."""
     if not compile_trace:
         return {}
     result = {}
     for k, v in compile_trace.items():
         if k == "params":
-            # Summarize bind params: count and key names, not values
+            # Show bind param count, keys, and actual values for Pipeline Live View debugging
             if isinstance(v, dict):
                 result["bind_param_count"] = len(v)
                 result["bind_param_keys"] = list(v.keys())[:20]
+                result["bind_param_values"] = {
+                    str(pk): str(pv) if not isinstance(pv, (int, float, bool, type(None))) else pv
+                    for pk, pv in list(v.items())[:20]
+                }
             elif isinstance(v, list):
                 result["bind_param_count"] = len(v)
         else:
@@ -324,7 +339,7 @@ def build_narrator_prompt_payload(narrator_trace: dict[str, Any] | None) -> dict
         return {}
     full = narrator_trace.get("full_prompt_text", "")
     return {
-        "prompt_preview": full if isinstance(full, str) else safe_text(full),
+        "prompt_preview": safe_text(full, max_len=_MAX_TEXT_FULL),
         "prompt_char_count": len(full) if isinstance(full, str) else 0,
         "summary_preview": safe_text(narrator_trace.get("summary", ""), max_len=600),
         "narration_shape": narrator_trace.get("narration_shape"),
@@ -429,7 +444,7 @@ def build_filter_value_resolution_payload(fvr_trace: dict[str, Any]) -> dict[str
     for action in actions_raw[:_MAX_LIST_ITEMS]:
         if not isinstance(action, dict):
             continue
-        action_summaries.append({
+        summary: dict[str, Any] = {
             "column": safe_text(str(action.get("column", "")), max_len=80),
             "operator": safe_text(str(action.get("operator", "")), max_len=20),
             "original_value": safe_text(str(action.get("original_value", "")), max_len=80),
@@ -439,9 +454,25 @@ def build_filter_value_resolution_payload(fvr_trace: dict[str, Any]) -> dict[str
             "reason": safe_text(str(action.get("reason", "")), max_len=120),
             "confidence": action.get("confidence"),
             "candidate_values": safe_payload(action.get("candidate_values", []), max_str=80),
-        })
+        }
+        # Sprint 2 expansion: ranking scores, LLM tie-break
+        if action.get("ranking_scores"):
+            summary["ranking_scores"] = safe_payload(action["ranking_scores"], max_str=80)
+        if action.get("llm_tiebreak_used"):
+            summary["llm_tiebreak_used"] = True
+            summary["llm_tiebreak_result"] = safe_payload(action.get("llm_tiebreak_result"), max_str=200)
+        # LIKE surface-value extraction diagnostics
+        if action.get("like_input"):
+            summary["like_input"] = True
+            summary["like_surface_value_extracted"] = safe_text(
+                str(action.get("like_surface_value_extracted", "")), max_len=80,
+            )
+            summary["operator_rewritten"] = bool(action.get("operator_rewritten", False))
+            if action.get("original_operator"):
+                summary["original_operator"] = safe_text(str(action["original_operator"]), max_len=20)
+        action_summaries.append(summary)
 
-    return {
+    result: dict[str, Any] = {
         "any_changed": bool(fvr_trace.get("any_changed", False)),
         "clarification_required": bool(fvr_trace.get("clarification_required", False)),
         "total_filters": total,
@@ -455,7 +486,13 @@ def build_filter_value_resolution_payload(fvr_trace: dict[str, Any]) -> dict[str
         "original_filters": safe_payload(fvr_trace.get("original_filters", []), max_str=80),
         "final_filters": safe_payload(fvr_trace.get("final_filters", []), max_str=80),
         "actions": action_summaries,
+        "llm_tiebreak_used": bool(fvr_trace.get("llm_tiebreak_used", False)),
     }
+    # Sprint 2: pending clarification trace
+    pending = fvr_trace.get("pending_clarification")
+    if pending is not None:
+        result["pending_clarification"] = safe_payload(pending, max_str=200)
+    return result
 
 
 def build_final_verdict_payload(

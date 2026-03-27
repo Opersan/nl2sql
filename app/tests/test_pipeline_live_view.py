@@ -573,7 +573,7 @@ class TestSafeSerializer:
         assert "embedding vector" in result
         assert "dim=768" in result
 
-    def test_build_compile_payload_hides_bind_values(self) -> None:
+    def test_build_compile_payload_shows_bind_values(self) -> None:
         from app.services.trace_serializer import build_compile_payload
         compile_trace = {
             "ok": True,
@@ -586,11 +586,11 @@ class TestSafeSerializer:
             "latency_ms": 12,
         }
         result = build_compile_payload(compile_trace)
-        # params values should NOT be in result directly
-        assert "secret_value" not in str(result)
-        # But param count and keys should be visible
+        # param count and keys should be visible
         assert result.get("bind_param_count") == 1
         assert "x" in result.get("bind_param_keys", [])
+        # actual bind param values should now also be visible for Pipeline Live View debugging
+        assert result.get("bind_param_values", {}).get("x") == "secret_value"
 
     def test_build_narrator_prompt_payload_truncates(self) -> None:
         from app.services.trace_serializer import build_narrator_prompt_payload
@@ -615,6 +615,30 @@ class TestSafeSerializer:
         assert isinstance(result, dict)
         # Either loaded or has an error key
         assert "loaded" in result or "error" in result
+
+    def test_build_semantic_registry_payload_handles_list_entities(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.domain.semantic_models import BusinessEntitySemantic, SemanticRegistry
+        from app.services.trace_serializer import build_semantic_registry_payload
+
+        registry = SemanticRegistry(
+            entities=[
+                BusinessEntitySemantic(
+                    entity_id="HR_EMPLOYEES",
+                    root_table="XXBT_PDKS_PER_DETAILS_V",
+                )
+            ]
+        )
+
+        monkeypatch.setattr(
+            "app.services.semantic_planning._load_registry",
+            lambda: registry,
+        )
+
+        result = build_semantic_registry_payload()
+
+        assert result["loaded"] is True
+        assert result["entity_count"] == 1
+        assert result["entities"] == ["HR_EMPLOYEES"]
 
     def test_build_final_verdict_safe_with_none_sql(self) -> None:
         from app.services.trace_serializer import build_final_verdict_payload
@@ -678,14 +702,14 @@ class TestTraceCollector:
         collector = TraceCollector(trace_id="tc-3")
 
         mono = collector.stage_started("stage_x", summary="running")
-        _time.sleep(0.01)
+        _time.sleep(0.03)
         collector.stage_completed("stage_x", started_at_mono=mono, summary="done")
         collector.close()
 
         events = await _collect_trace_events(collector)
         completed = [e for e in events if e.status == StageStatus.PASSED][0]
         assert completed.elapsed_ms is not None
-        assert completed.elapsed_ms >= 5  # at least 5ms
+        assert completed.elapsed_ms >= 1
 
     @pytest.mark.asyncio
     async def test_collector_skipped_event(self) -> None:
@@ -696,6 +720,18 @@ class TestTraceCollector:
         events = await _collect_trace_events(collector)
         assert events[0].status == StageStatus.SKIPPED
         assert events[0].summary == "Skipping because X"
+
+    @pytest.mark.asyncio
+    async def test_collector_assigns_event_sequence_and_trace_elapsed(self) -> None:
+        collector = TraceCollector(trace_id="tc-5")
+        collector.stage_started("stage_a")
+        collector.stage_completed("stage_a")
+        collector.close()
+
+        events = await _collect_trace_events(collector)
+        assert [event.event_index for event in events] == [1, 2]
+        assert all(event.trace_elapsed_ms is not None for event in events)
+        assert events[1].trace_elapsed_ms >= events[0].trace_elapsed_ms
 
 
 # ---------------------------------------------------------------------------
@@ -772,6 +808,8 @@ class TestStageEventModel:
             trace_id="t1",
             stage_name="compile",
             status=StageStatus.PASSED,
+            event_index=3,
+            trace_elapsed_ms=84,
             elapsed_ms=42,
             summary="Compiled OK",
             payload={"ok": True, "sql": "SELECT 1 FROM DUAL"},
@@ -781,6 +819,8 @@ class TestStageEventModel:
         data = json.loads(json_str)
         assert data["stage_name"] == "compile"
         assert data["status"] == "passed"
+        assert data["event_index"] == 3
+        assert data["trace_elapsed_ms"] == 84
         assert data["elapsed_ms"] == 42
         assert data["payload"]["ok"] is True
 

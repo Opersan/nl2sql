@@ -19,7 +19,7 @@
         "departmanindaki", "departmaninda"
       ],
       "confusable_columns": [
-        "BIRIM_ADI", "ORGANIZATION_ADI", "DEPARTMENT_NAME", "DEPT_NAME", "DEPARTMENT"
+        "BIRIM_ADI", "ORGANIZATION_ADI", "DEPARTMENT_NAME", "DEPT_NAME", "DEPARTMENT", "BOLUM"
       ]
     },
     "location": {

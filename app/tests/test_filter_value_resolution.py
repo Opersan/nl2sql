@@ -5,6 +5,7 @@ Sprint 2 — Correct Filter Value Resolution.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -48,7 +49,7 @@ def _minimal_value_profiles_json() -> dict[str, Any]:
             "XXBT_PDKS_PER_DETAILS_V.BIRIM_ADI": {
                 "table": "XXBT_PDKS_PER_DETAILS_V",
                 "column": "BIRIM_ADI",
-                "supported_ops": ["=", "!="],
+                "supported_ops": ["=", "!=", "LIKE"],
                 "canonical_values": [
                     {"value": "Bilgi Teknolojileri", "aliases": ["it", "bt", "bilgi teknolojileri"]},
                     {"value": "İnsan Kaynakları", "aliases": ["ik", "insan kaynaklari"]},
@@ -57,7 +58,7 @@ def _minimal_value_profiles_json() -> dict[str, Any]:
             "XXBT_PDKS_PER_DETAILS_V.LOCATION_ADI": {
                 "table": "XXBT_PDKS_PER_DETAILS_V",
                 "column": "LOCATION_ADI",
-                "supported_ops": ["=", "!="],
+                "supported_ops": ["=", "!=", "LIKE"],
                 "canonical_values": [
                     {"value": "İstanbul", "aliases": ["istanbul", "istanbul buro"]},
                     {"value": "Ankara", "aliases": ["ankara"]},
@@ -66,7 +67,7 @@ def _minimal_value_profiles_json() -> dict[str, Any]:
             "XXBT_PDKS_PER_DETAILS_V.UNVAN": {
                 "table": "XXBT_PDKS_PER_DETAILS_V",
                 "column": "UNVAN",
-                "supported_ops": ["=", "!="],
+                "supported_ops": ["=", "!=", "LIKE"],
                 "canonical_values": [
                     {"value": "Proje Yöneticisi", "aliases": ["yonetici", "manager"]},
                     {"value": "Sistem Yöneticisi", "aliases": ["yonetici", "sysadmin"]},
@@ -76,7 +77,7 @@ def _minimal_value_profiles_json() -> dict[str, Any]:
             "XXBT_PDKS_PER_DETAILS_V.MASRAF_MERKEZI": {
                 "table": "XXBT_PDKS_PER_DETAILS_V",
                 "column": "MASRAF_MERKEZI",
-                "supported_ops": ["=", "!="],
+                "supported_ops": ["=", "!=", "LIKE"],
                 "canonical_values": [
                     {"value": "BT-01", "aliases": ["bt01", "bt 01"]},
                     {"value": "BT-02", "aliases": ["bt02", "bt 02"]},
@@ -116,10 +117,10 @@ class TestFilterValueResolutionService:
     def setup_method(self) -> None:
         self.svc = FilterValueResolutionService(provider=_provider_from_dict(_minimal_value_profiles_json()))
 
-    def test_department_alias_resolves_to_canonical_value(self) -> None:
+    async def test_department_alias_resolves_to_canonical_value(self) -> None:
         plan = _make_plan([_filter("BIRIM_ADI", "IT")])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan.filters[0].value == "Bilgi Teknolojileri"
         assert trace["any_changed"] is True
@@ -129,28 +130,28 @@ class TestFilterValueResolutionService:
         assert trace["changed_filters"] == 1
         assert trace["actions"][0]["reason"] == "exact_alias_match"
 
-    def test_location_surface_form_resolves_to_canonical_spelling(self) -> None:
+    async def test_location_surface_form_resolves_to_canonical_spelling(self) -> None:
         plan = _make_plan([_filter("LOCATION_ADI", "Istanbul")])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan.filters[0].value == "İstanbul"
         assert trace["actions"][0]["resolved_value"] == "İstanbul"
         assert resolved_plan.filters[0].op == FilterOp.EQ
 
-    def test_already_canonical_value_is_no_change(self) -> None:
+    async def test_already_canonical_value_is_no_change(self) -> None:
         plan = _make_plan([_filter("BIRIM_ADI", "Bilgi Teknolojileri")])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan is plan
         assert trace["any_changed"] is False
         assert trace["actions"][0]["reason"] == "already_canonical_exact"
 
-    def test_ambiguous_title_requests_clarification(self) -> None:
+    async def test_ambiguous_title_requests_clarification(self) -> None:
         plan = _make_plan([_filter("UNVAN", "yonetici")])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan.needs_clarification is True
         assert trace["clarification_required"] is True
@@ -158,56 +159,63 @@ class TestFilterValueResolutionService:
         assert "Proje Yöneticisi" in (resolved_plan.clarification_message or "")
         assert "Sistem Yöneticisi" in (resolved_plan.clarification_message or "")
 
-    def test_unknown_value_requests_clarification(self) -> None:
+    async def test_unknown_value_requests_clarification(self) -> None:
         plan = _make_plan([_filter("BIRIM_ADI", "Satis")])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan.needs_clarification is True
         assert trace["actions"][0]["reason"] == "no_confident_candidate_clarification"
+        # No-match should present all available canonical values
+        assert len(trace["actions"][0]["candidate_values"]) > 0
+        # Clarification message should mention available values
+        msg = resolved_plan.clarification_message or ""
+        assert "eslesen bir deger bulunamadi" in msg
+        assert "Mevcut degerler" in msg
 
-    def test_out_of_scope_column_is_no_op(self) -> None:
+    async def test_out_of_scope_column_is_no_op(self) -> None:
         plan = _make_plan([_filter("BORDROLU", "E")])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan is plan
         assert trace["actions"][0]["reason"] == "out_of_scope_column_no_op"
         assert trace["actions"][0]["no_op"] is True
 
-    def test_non_string_value_is_no_op(self) -> None:
+    async def test_non_string_value_is_no_op(self) -> None:
         plan = _make_plan([_filter("PERSON_ID", 10)])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan is plan
         assert trace["actions"][0]["reason"] == "non_string_value_no_op"
 
-    def test_null_check_is_no_op(self) -> None:
+    async def test_null_check_is_no_op(self) -> None:
         plan = _make_plan([FilterSpec(column="CIKIS_TARIHI", op=FilterOp.IS_NULL)])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan is plan
         assert trace["actions"][0]["reason"] == "non_string_value_no_op"
 
-    def test_unsupported_operator_never_converts_to_like(self) -> None:
-        plan = _make_plan([_filter("LOCATION_ADI", "Ist", FilterOp.LIKE)])
+    async def test_like_on_in_scope_column_extracts_surface_value(self) -> None:
+        plan = _make_plan([_filter("LOCATION_ADI", "%istanbul%", FilterOp.LIKE)])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
-        assert resolved_plan is plan
-        assert trace["actions"][0]["reason"] == "unsupported_operator_no_op"
-        assert trace["total_filters_seen"] == 1
-        assert trace["processed_filters"] == 1
-        assert trace["skipped_filters"] == 1
-        assert trace["actions"][0]["resolved_value"] == "Ist"
-        assert plan.filters[0].op == FilterOp.LIKE
+        # LIKE should be rewritten to exact match on strong candidate
+        assert resolved_plan.filters[0].op == FilterOp.EQ
+        assert resolved_plan.filters[0].value == "İstanbul"
+        assert trace["actions"][0]["like_input"] is True
+        assert trace["actions"][0]["like_surface_value_extracted"] == "istanbul"
+        assert trace["actions"][0]["operator_rewritten"] is True
+        assert trace["actions"][0]["changed"] is True
+        assert trace["any_changed"] is True
 
-    def test_cost_center_alias_resolves_without_broad_fallback(self) -> None:
+    async def test_cost_center_alias_resolves_without_broad_fallback(self) -> None:
         plan = _make_plan([_filter("MASRAF_MERKEZI", "bt01")])
 
-        resolved_plan, trace = self.svc.resolve(plan)
+        resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan.filters[0].value == "BT-01"
         assert trace["actions"][0]["reason"] == "exact_alias_match"

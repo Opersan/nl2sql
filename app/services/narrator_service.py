@@ -27,7 +27,7 @@ from app.domain.execution_models import (
     OrchestrationResult,
     ValidationResult,
 )
-from app.domain.query_plan import QueryPlan
+from app.domain.query_plan import FilterOp, QueryPlan
 from app.providers.llm.base import LLMProvider
 from app.providers.llm.prompts import build_narrator_prompt
 
@@ -476,7 +476,13 @@ class NarratorService:
         group_by_hint = ""
         top_group_label = ""
         if plan is not None:
-            filters = [f"{f.column} {f.op.value}" for f in plan.filters[:4]]
+            for f in plan.filters[:4]:
+                if f.op in (FilterOp.IS_NULL, FilterOp.IS_NOT_NULL):
+                    filters.append(f"{f.column} {f.op.value}")
+                elif f.value is not None:
+                    filters.append(f"{f.column} {f.op.value} '{f.value}'")
+                else:
+                    filters.append(f"{f.column} {f.op.value}")
             sort = [f"{o.column} {o.direction.value}" for o in plan.order_by[:3]]
             row_limit_hit = bool(er.row_count >= plan.limit)
             if plan.group_by:

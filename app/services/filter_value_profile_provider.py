@@ -15,6 +15,7 @@ class ValueMatchingPolicy:
     min_select_score: float = 0.88
     min_score_gap: float = 0.08
     min_fuzzy_ratio: float = 0.76
+    min_auto_resolve_score: float = 0.80
     exact_canonical_score: float = 1.0
     exact_alias_score: float = 0.96
     token_subset_score: float = 0.86
@@ -95,6 +96,7 @@ class FilterValueProfileProvider:
                 min_select_score=float(policy.get("min_select_score", 0.88)),
                 min_score_gap=float(policy.get("min_score_gap", 0.08)),
                 min_fuzzy_ratio=float(policy.get("min_fuzzy_ratio", 0.76)),
+                min_auto_resolve_score=float(policy.get("min_auto_resolve_score", 0.80)),
                 exact_canonical_score=float(policy.get("exact_canonical_score", 1.0)),
                 exact_alias_score=float(policy.get("exact_alias_score", 0.96)),
                 token_subset_score=float(policy.get("token_subset_score", 0.86)),

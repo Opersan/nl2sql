@@ -13,7 +13,6 @@ GET  /chat/trace/schema  – Returns the StageEvent JSON schema (dev helper)
 from __future__ import annotations
 
 import asyncio
-import json
 import uuid
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -30,6 +29,7 @@ router = APIRouter(tags=["trace"])
 # Path to the Pipeline Live View single-page HTML
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 _PIPELINE_VIEW_HTML = _STATIC_DIR / "pipeline_view.html"
+_PIPELINE_VIEW_LEGACY_HTML = _STATIC_DIR / "pipeline_view_legacy.html"
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +53,17 @@ async def pipeline_view() -> HTMLResponse:
         return HTMLResponse(content=_PIPELINE_VIEW_HTML.read_text(encoding="utf-8"))
     return HTMLResponse(
         content="<h1>Pipeline Live View</h1><p>pipeline_view.html not found.</p>",
+        status_code=404,
+    )
+
+
+@router.get("/trace/legacy", response_class=HTMLResponse, include_in_schema=False)
+async def pipeline_view_legacy() -> HTMLResponse:
+    """Serve the legacy Pipeline Live View single-page application."""
+    if _PIPELINE_VIEW_LEGACY_HTML.exists():
+        return HTMLResponse(content=_PIPELINE_VIEW_LEGACY_HTML.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        content="<h1>Pipeline Live View</h1><p>pipeline_view_legacy.html not found.</p>",
         status_code=404,
     )
 
@@ -112,6 +123,7 @@ async def _event_stream(
 ) -> AsyncIterator[str]:
     """Async generator that yields SSE-formatted strings."""
     collector = TraceCollector(trace_id=trace_id)
+    heartbeat_interval_seconds = 8.0
 
     # Launch the pipeline as a background task
     pipeline_task = asyncio.create_task(
@@ -123,7 +135,16 @@ async def _event_stream(
     yield _sse_comment("stream=started")
 
     try:
-        async for event in collector:
+        while True:
+            timed_out, event = await collector.get_event(
+                timeout_seconds=heartbeat_interval_seconds,
+            )
+            if timed_out:
+                yield _sse_comment("heartbeat")
+                await asyncio.sleep(0)
+                continue
+            if event is None:
+                break
             # Optionally strip payloads for leaner streams
             if not include_payloads:
                 event = event.model_copy(update={"payload": {}})

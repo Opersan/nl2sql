@@ -7,6 +7,7 @@ import time
 import uuid
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, Field
 
 from app.api.schemas import (
     ChatRequest,
@@ -46,6 +47,43 @@ async def chat(
     orchestrator: ChatOrchestrator = Depends(_get_orchestrator),
 ) -> ChatResponse:
     """Accept a natural-language message and return a structured answer."""
+    result = await orchestrator.handle_message(body.session_id, body.message)
+    return ChatResponse.from_chat_result(result)
+
+
+# ---------------------------------------------------------------------------
+# Clarification reply endpoint
+# ---------------------------------------------------------------------------
+
+
+class ClarificationReplyRequest(BaseModel):
+    """POST /chat/clarify request body.
+
+    Carries the user's selection from a pending clarification interaction.
+    ``clarification_id`` binds the reply to the specific pending state;
+    ``message`` carries the raw user text (numeric, label, or delegation
+    phrase) so the orchestrator can route it through ``interpret_reply``.
+    """
+
+    session_id: str = Field(..., min_length=1)
+    clarification_id: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1)
+
+
+@router.post("/chat/clarify", response_model=ChatResponse)
+async def chat_clarify(
+    body: ClarificationReplyRequest,
+    orchestrator: ChatOrchestrator = Depends(_get_orchestrator),
+) -> ChatResponse:
+    """Submit a clarification reply for a pending filter-value ambiguity.
+
+    The frontend should call this endpoint when the user clicks a choice
+    button or types a clarification answer.  The ``clarification_id``
+    acts as an idempotency key – the orchestrator validates it against the
+    session's pending clarification state before resuming the pipeline.
+
+    This endpoint is additive and does not change ``/chat`` behavior.
+    """
     result = await orchestrator.handle_message(body.session_id, body.message)
     return ChatResponse.from_chat_result(result)
 

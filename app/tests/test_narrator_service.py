@@ -12,7 +12,7 @@ from app.domain.execution_models import (
     OrchestrationResult,
     ValidationResult,
 )
-from app.domain.query_plan import QueryPlan
+from app.domain.query_plan import FilterOp, FilterSpec, QueryPlan
 from app.providers.llm.mock_llm import MockLLMProvider
 from app.providers.llm.prompts import build_narrator_prompt
 from app.services.narrator_service import NarratorService
@@ -289,3 +289,64 @@ class TestNarratorDoesNotFabricateData:
         assert "SELECT" not in text
         assert "ROWNUM" not in text
         assert "FROM" not in text
+
+
+# ---------------------------------------------------------------------------
+# Filter values in narrator summary
+# ---------------------------------------------------------------------------
+
+
+class TestNarratorSummaryIncludesFilterValues:
+    """The success summary sent to the narrator must contain filter values
+    so the LLM can accurately describe which filters were applied."""
+
+    def test_eq_filter_value_in_summary(self) -> None:
+        plan = QueryPlan(
+            intent="employee_list",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            filters=[FilterSpec(column="BIRIM_ADI", op=FilterOp.EQ, value="ELEKTRİK DİZAYN")],
+        )
+        result = OrchestrationResult(
+            validation=ValidationResult(),
+            compiled_query=CompiledQuery(
+                sql="SELECT ...",
+                table="XXBT_PDKS_PER_DETAILS_V",
+                selected_columns=["AD", "SOYAD"],
+                debug_plan=plan,
+            ),
+            execution_result=ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                columns=["AD", "SOYAD"],
+                rows=[{"ad": "Ali", "soyad": "Veli"}],
+                row_count=1,
+            ),
+        )
+        summary = NarratorService._build_success_summary(result)
+        assert "ELEKTRİK DİZAYN" in summary
+        assert "BIRIM_ADI" in summary
+
+    def test_is_null_filter_has_no_value(self) -> None:
+        plan = QueryPlan(
+            intent="employee_list",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            filters=[FilterSpec(column="CIKIS_TARIHI", op=FilterOp.IS_NULL)],
+        )
+        result = OrchestrationResult(
+            validation=ValidationResult(),
+            compiled_query=CompiledQuery(
+                sql="SELECT ...",
+                table="XXBT_PDKS_PER_DETAILS_V",
+                selected_columns=["AD"],
+                debug_plan=plan,
+            ),
+            execution_result=ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                columns=["AD"],
+                rows=[{"ad": "Ali"}],
+                row_count=1,
+            ),
+        )
+        summary = NarratorService._build_success_summary(result)
+        assert "CIKIS_TARIHI IS_NULL" in summary
+        # IS_NULL should not have a trailing 'None'
+        assert "None" not in summary
