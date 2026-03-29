@@ -620,14 +620,14 @@ class TestLikeSurfaceValueExtraction:
         assert extract("  %  hello  %  ") == "hello"
 
     async def test_like_out_of_scope_column_remains_noop(self) -> None:
-        """LIKE on a non-grounding column stays no-op (out_of_scope)."""
+        """LIKE on a non-profiled column without executor stays no-op."""
         svc = _build_svc()
         plan = _make_plan([_filter("EMAIL", "%test%", FilterOp.LIKE)])
 
         resolved, trace = await svc.resolve(plan)
 
         assert resolved is plan
-        assert trace["actions"][0]["reason"] == "out_of_scope_column_no_op"
+        assert trace["actions"][0]["reason"] == "no_profile_no_executor_no_op"
 
     async def test_like_empty_surface_value_extraction_fails(self) -> None:
         """BIRIM_ADI LIKE '%%' → extraction fails → explicit reason."""
@@ -708,6 +708,141 @@ class TestDbFallbackResolution:
         assert action.get("db_fallback_used") is None  # not set
         assert action["reason"] == "no_confident_candidate_clarification"
         assert action["clarification_required"] is True
+
+
+# ── 8d. Fallback mode: no profile, with executor ─────────────────────
+
+class TestFallbackModeNoProfile:
+    """When a column has NO static profile but an executor is available,
+    the resolver should go directly to DB DISTINCT fallback instead of
+    returning out_of_scope_column_no_op."""
+
+    async def test_fallback_single_strong_match_auto_resolves(self) -> None:
+        """Unprofiled column + DB returns a strong fuzzy match → auto-resolved."""
+        executor = _make_mock_executor("DEPARTMAN", ["DT-Dizayn", "ELM-Dizayn", "Finans"])
+        svc = _build_svc(executor=executor)
+        plan = _make_plan([_filter("DEPARTMAN", "Finans")])
+
+        resolved, trace = await svc.resolve(plan)
+        action = trace["actions"][0]
+
+        assert action["resolver_mode"] == "fallback"
+        assert action.get("db_fallback_used") is True
+        assert action["source"] == "db_distinct"
+        assert resolved.filters[0].value == "Finans"
+        assert action["changed"] is False  # already canonical
+
+    async def test_fallback_ambiguous_triggers_clarification(self) -> None:
+        """Unprofiled column + DB returns two close matches → clarification."""
+        # Use values with equal-length prefixes so fuzzy scores are symmetric
+        executor = _make_mock_executor("DEPARTMAN", ["Dizayn-A", "Dizayn-B", "Finans"])
+        svc = _build_svc(executor=executor)
+        plan = _make_plan([_filter("DEPARTMAN", "dizayn")])
+
+        resolved, trace = await svc.resolve(plan)
+        action = trace["actions"][0]
+
+        assert action["resolver_mode"] == "fallback"
+        assert action.get("db_fallback_used") is True
+        # Two symmetric "dizayn" candidates should cause ambiguity
+        assert resolved.needs_clarification is True
+        assert "Dizayn-A" in action["candidate_values"]
+        assert "Dizayn-B" in action["candidate_values"]
+
+    async def test_fallback_no_db_match_shows_db_values(self) -> None:
+        """Unprofiled column + DB returns values but none match → clarification with DB values."""
+        executor = _make_mock_executor("DEPARTMAN", ["Pazarlama", "Üretim", "Lojistik"])
+        svc = _build_svc(executor=executor)
+        plan = _make_plan([_filter("DEPARTMAN", "zzz_nonexistent")])
+
+        resolved, trace = await svc.resolve(plan)
+        action = trace["actions"][0]
+
+        assert action["resolver_mode"] == "fallback"
+        assert action.get("db_fallback_used") is True
+        assert action["clarification_required"] is True
+        assert action["reason"] == "no_confident_candidate_clarification"
+        assert len(action["candidate_values"]) > 0
+
+    async def test_fallback_db_empty_returns_no_candidates_noop(self) -> None:
+        """Unprofiled column + DB returns empty → graceful no-op."""
+        from app.domain.execution_models import ExecutionResult, ExecutionStatus
+        executor = AsyncMock()
+        executor.execute.return_value = ExecutionResult(
+            status=ExecutionStatus.SUCCESS,
+            columns=["departman"],
+            rows=[],
+            row_count=0,
+            execution_time_ms=2,
+        )
+        svc = _build_svc(executor=executor)
+        plan = _make_plan([_filter("DEPARTMAN", "dizayn")])
+
+        resolved, trace = await svc.resolve(plan)
+        action = trace["actions"][0]
+
+        assert action["resolver_mode"] == "fallback"
+        assert action["reason"] == "no_candidates_available_no_op"
+        assert action["no_op"] is True
+        assert resolved is plan
+
+    async def test_fallback_like_pattern_works(self) -> None:
+        """LIKE pattern on unprofiled column → extract surface value → DB match."""
+        executor = _make_mock_executor("DEPARTMAN", ["Dizayn-A", "Dizayn-B", "Finans"])
+        svc = _build_svc(executor=executor)
+        plan = _make_plan([_filter("DEPARTMAN", "%dizayn%", FilterOp.LIKE)])
+
+        resolved, trace = await svc.resolve(plan)
+        action = trace["actions"][0]
+
+        assert action["resolver_mode"] == "fallback"
+        assert action.get("like_input") is True
+        assert action["like_surface_value_extracted"] == "dizayn"
+        assert action.get("db_fallback_used") is True
+        assert "Dizayn-A" in action["candidate_values"]
+        assert "Dizayn-B" in action["candidate_values"]
+
+    async def test_fallback_no_executor_no_profile_returns_noop(self) -> None:
+        """No profile AND no executor → clean no-op."""
+        svc = _build_svc(executor=None)
+        plan = _make_plan([_filter("DEPARTMAN", "dizayn")])
+
+        resolved, trace = await svc.resolve(plan)
+        action = trace["actions"][0]
+
+        assert resolved is plan
+        assert action["reason"] == "no_profile_no_executor_no_op"
+        assert action["no_op"] is True
+        assert action["resolver_mode"] == "fallback"
+
+    async def test_profiled_column_still_uses_profile_mode(self) -> None:
+        """A column WITH a profile should keep resolver_mode='profile'."""
+        svc = _build_svc()
+        plan = _make_plan([_filter("BIRIM_ADI", "IT")])
+
+        resolved, trace = await svc.resolve(plan)
+        action = trace["actions"][0]
+
+        assert action["resolver_mode"] == "profile"
+        assert resolved.filters[0].value == "Bilgi Teknolojileri"
+
+    async def test_fallback_with_clarification_manager(self) -> None:
+        """Fallback mode + ClarificationStateManager → structured pending state."""
+        executor = _make_mock_executor("BOLUM", ["Dizayn-A", "Dizayn-B"])
+        mgr = ClarificationStateManager()
+        svc = _build_svc(executor=executor, clarification_manager=mgr)
+        plan = _make_plan([_filter("BOLUM", "dizayn")])
+
+        resolved, trace = await svc.resolve(
+            plan, session_id="sess-fb", original_question="dizayn bölümü çalışanları"
+        )
+
+        assert resolved.needs_clarification is True
+        pending = mgr.get_pending("sess-fb")
+        assert pending is not None
+        candidate_vals = [c.value for c in pending.candidates]
+        assert "Dizayn-A" in candidate_vals
+        assert "Dizayn-B" in candidate_vals
 
 
 class TestLikeLiveViewPayload:

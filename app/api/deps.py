@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from app.core.config import settings
 from app.core.data_paths import (
     resolve_catalog_index_path,
@@ -189,6 +187,7 @@ def build_chat_orchestrator(
     *,
     doc_retrieval: DocumentRetrievalService | None = None,
     executor: ExecutorProvider | None = None,
+    run_store: "RunStore | None" = None,
 ) -> ChatOrchestrator:
     """Wire up the full dependency graph for the chat pipeline.
 
@@ -204,6 +203,10 @@ def build_chat_orchestrator(
         from application settings via ``_build_executor()``.  Pass an
         explicit executor (e.g. a pre-initialised ``OracleExecutor``) for
         eval scripts that need pool lifecycle control.
+    run_store:
+        Optional durable run/trace store.  When provided, all conversations,
+        messages, runs, stages, and clarifications are persisted for the
+        Pipeline Live View.
     """
     llm = build_llm_provider()
 
@@ -267,6 +270,7 @@ def build_chat_orchestrator(
     return ChatOrchestrator(
         planner, orchestrator, narrator, sessions,
         clarification_manager=clarification_manager,
+        run_store=run_store,
     )
 
 

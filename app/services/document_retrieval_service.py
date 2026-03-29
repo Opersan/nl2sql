@@ -277,7 +277,6 @@ class DocumentRetrievalService:
     ) -> tuple[DocumentRetrievalResult, dict[str, object]]:
         base_diag = getattr(result, "diagnostics", None)
         _ = base_diag
-        folded = casefold_tr(user_query)
         primary_module = query_understanding.primary_module() if query_understanding is not None else None
         retrieved_table_set = {table.upper() for table in retrieved_tables}
         root_table_name = retrieved_tables[0].upper() if retrieved_tables else None

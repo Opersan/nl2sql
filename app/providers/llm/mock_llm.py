@@ -116,6 +116,13 @@ _RE_SORT = re.compile(
     re.IGNORECASE,
 )
 
+# Narrow rule that lets the mock provider exercise the real clarification
+# state engine for title/position ambiguity in local dev and UI demos.
+_RE_TITLE_MANAGER = re.compile(
+    r"(unvan|unvanli|pozisyon).{0,24}yonetici|yonetici.{0,24}(unvan|pozisyon)",
+    re.IGNORECASE,
+)
+
 # ===================================================================
 # Multi-table constants (Sprint 5)
 # ===================================================================
@@ -819,6 +826,11 @@ def _build_plan_from_rules(user_msg: str) -> QueryPlan:
             intent_parts.append("Telefon dahili olanlar")
         matched = True
 
+    if _RE_TITLE_MANAGER.search(norm):
+        filters.append(FilterSpec(column="UNVAN", op=FilterOp.EQ, value="yonetici"))
+        intent_parts.append("Unvani yonetici olanlar")
+        matched = True
+
     # ── 7) Salary intent ───────────────────────────────────────
     # NOTE: XXBT_PDKS_PER_DETAILS_V has no salary column. Show BORDROLU flag instead.
     if _has_any(words, _SALARY_KW):
@@ -929,7 +941,7 @@ class MockLLMProvider(LLMProvider):
 
     # -- Free-form text (narrator) -------------------------------------------
 
-    async def generate_text(self, prompt: str) -> str:
+    async def generate_text(self, prompt: str, *, disable_thinking: bool = False) -> str:
         folded = casefold_tr(prompt)
         summary_folded = folded
         match = re.search(r"veri_ozeti<<<\s*(.*?)\s*>>>", folded, re.DOTALL)

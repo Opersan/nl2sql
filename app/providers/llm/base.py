@@ -29,9 +29,12 @@ class LLMProvider(ABC):
         ...
 
     @abstractmethod
-    async def generate_text(self, prompt: str) -> str:
+    async def generate_text(self, prompt: str, *, disable_thinking: bool = False) -> str:
         """Generate free-form text.
 
         Used by the narrator to produce Turkish-language summaries.
+        When *disable_thinking* is True, implementations should suppress
+        chain-of-thought generation at the API level (e.g. Qwen3
+        ``chat_template_kwargs``) to reduce latency.
         """
         ...

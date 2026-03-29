@@ -15,7 +15,6 @@ from app.services.planning_models import (
     PlanningContext,
     PromptAssemblyResult,
     PromptDiagnostics,
-    RetrievedContext,
     RetrievalDiagnostics,
 )
 

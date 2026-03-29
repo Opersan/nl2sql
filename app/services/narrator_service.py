@@ -124,9 +124,13 @@ class NarratorService:
     async def narrate_success(
         self, user_message: str, result: OrchestrationResult,
     ) -> str:
-        """Narrate a successful execution."""
+        """Narrate a successful execution, appending a Markdown result table."""
         summary = self._build_success_summary(result)
-        return await self._generate(user_message, summary)
+        narration = await self._generate(user_message, summary)
+        table = self._build_markdown_table(result)
+        if table:
+            return f"{narration}\n\n{table}"
+        return narration
 
     async def narrate_validation_error(
         self, user_message: str, validation: ValidationResult,
@@ -142,10 +146,12 @@ class NarratorService:
         summary = self._build_execution_error_summary(result)
         return await self._generate(user_message, summary)
 
-    async def narrate_clarification(self, plan: QueryPlan) -> str:
+    async def narrate_clarification(
+        self, plan: QueryPlan, user_message: str = "",
+    ) -> str:
         """Narrate a clarification request."""
         summary = self._build_clarification_summary(plan)
-        return await self._generate("", summary)
+        return await self._generate(user_message, summary)
 
     # -- Internal helpers ---------------------------------------------------
 
@@ -175,7 +181,7 @@ class NarratorService:
             "error": None,
         })
         try:
-            raw = await self._llm.generate_text(prompt)
+            raw = await self._llm.generate_text(prompt, disable_thinking=True)
             raw_reasons = self._classify_raw_response_issues(raw)
             cleaned = self._strip_leakage(raw)
             contract_violation = bool(raw_reasons)
@@ -444,6 +450,84 @@ class NarratorService:
         if not NarratorService._is_generic_low_value(text):
             score += 20
         return max(0, min(100, score))
+
+    # -- Markdown table renderer (deterministic, never goes through LLM) ---
+
+    _TABLE_MAX_ROWS = 50          # hard cap to avoid enormous messages
+    _TABLE_CELL_MAX_CHARS = 80    # truncate long cell values
+
+    @staticmethod
+    def _humanize_col(col: str) -> str:
+        """Turn a DB column name into a readable Turkish header.
+
+        Examples: UNVAN → Unvan, BIRIM_ADI → Birim Adı, EMPLOYEE_NUMBER → Employee Number
+        """
+        _SUFFIX_MAP = {
+            "ADI": "Adı", "SOYADI": "Soyadı", "ADI_SOYADI": "Adı Soyadı",
+            "NO": "No", "KODU": "Kodu", "TARIHI": "Tarihi",
+            "TURU": "Türü", "TANIMI": "Tanımı", "SAYISI": "Sayısı",
+        }
+        words = col.strip().upper().split("_")
+        result_words: list[str] = []
+        for w in words:
+            result_words.append(_SUFFIX_MAP.get(w, w.capitalize()))
+        return " ".join(result_words)
+
+    @classmethod
+    def _build_markdown_table(cls, result: OrchestrationResult) -> str | None:
+        """Return a GFM Markdown table from execution rows, or None if no data."""
+        er = result.execution_result
+        if er is None or er.row_count == 0 or not er.rows:
+            return None
+
+        # Prefer the executor-provided column order; fall back to first row keys
+        columns: list[str] = er.columns if er.columns else list(er.rows[0].keys())
+        if not columns:
+            return None
+
+        # Filter out columns that are purely internal (end with _ID, ROWNUM, etc.)
+        visible_cols = [
+            c for c in columns
+            if not re.search(r"^(ROWNUM|ROW_NUMBER|RN)$", c, re.IGNORECASE)
+        ] or columns
+
+        rows_to_show = er.rows[: cls._TABLE_MAX_ROWS]
+        total = er.row_count
+        shown = len(rows_to_show)
+
+        # -- Build header row --
+        headers = [cls._humanize_col(c) for c in visible_cols]
+        header_line = "| " + " | ".join(headers) + " |"
+        separator = "| " + " | ".join(["---"] * len(visible_cols)) + " |"
+
+        # -- Build data rows --
+        data_lines: list[str] = []
+        for row in rows_to_show:
+            cells: list[str] = []
+            for col in visible_cols:
+                # Case-insensitive lookup
+                val = row.get(col) if col in row else row.get(col.lower())
+                if val is None:
+                    cell = "—"
+                else:
+                    cell = str(val)
+                    # Escape pipe characters inside cells
+                    cell = cell.replace("|", "\\|")
+                    if len(cell) > cls._TABLE_CELL_MAX_CHARS:
+                        cell = cell[: cls._TABLE_CELL_MAX_CHARS] + "…"
+                cells.append(cell)
+            data_lines.append("| " + " | ".join(cells) + " |")
+
+        table_lines = [header_line, separator] + data_lines
+
+        # -- Footer note when rows are capped --
+        footer = ""
+        if shown < total:
+            footer = f"\n> _İlk **{shown}** kayıt gösteriliyor. Toplam **{total}** kayıt bulundu._"
+        elif total > 0:
+            footer = f"\n> _Toplam **{total}** kayıt._"
+
+        return "\n".join(table_lines) + footer
 
     @staticmethod
     def _build_success_summary(result: OrchestrationResult) -> str:

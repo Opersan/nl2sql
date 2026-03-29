@@ -200,11 +200,13 @@ def build_semantic_registry_payload() -> dict[str, Any]:
         payload["entity_count"] = entity_count
         payload["entities"] = entity_names[:20]
 
-        glossary = getattr(registry, "glossary", None) or {}
-        payload["glossary_term_count"] = len(glossary)
-
-        metrics = getattr(registry, "metrics", None) or {}
-        payload["metric_count"] = len(metrics)
+        # The planner SemanticRegistry doesn't carry glossary/metrics — those
+        # live in the canonical SemanticRepository.  Load it (cached singleton)
+        # to report accurate counts.
+        from app.semantic.repository import get_semantic_repository
+        repository = get_semantic_repository()
+        payload["glossary_term_count"] = len(repository.glossary)
+        payload["metric_count"] = len(repository.metrics)
 
         lookups = getattr(registry, "lookups", None) or {}
         payload["lookup_count"] = len(lookups)

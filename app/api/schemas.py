@@ -85,11 +85,45 @@ class HealthResponse(BaseModel):
 class OAIChatMessage(BaseModel):
     role: str
     content: str
+    metadata: "OAINL2SQLMetadata | None" = None
 
 
 class OAIChatRequest(BaseModel):
     model: str = "nl2sql"
     messages: list[OAIChatMessage]
+    stream: bool = False
+    # Enterprise mode flag — injected by the Open WebUI filter toggle.
+    enterprise_mode: bool = False
+    # Additive optional fields commonly available in Open WebUI integrations.
+    session_id: str | None = None
+    chat_id: str | None = None
+    conversation_id: str | None = None
+    clarification_id: str | None = None
+    clarification_reply: str | None = None
+    user: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class OAIClarificationAction(BaseModel):
+    """UI hint for quick-reply clarification actions."""
+
+    kind: str = "reply"
+    label: str
+    value: str
+    clarification_id: str | None = None
+
+
+class OAINL2SQLMetadata(BaseModel):
+    """Additive NL2SQL metadata for Open WebUI-like clients.
+
+    This keeps the chat response user-facing while preserving session and
+    clarification linkage in a structured side channel.
+    """
+
+    session_id: str
+    status: ChatStatus
+    clarification_id: str | None = None
+    actions: list[OAIClarificationAction] | None = None
 
 
 class OAIChatChoice(BaseModel):
@@ -111,3 +145,19 @@ class OAIChatResponse(BaseModel):
     model: str = "nl2sql"
     choices: list[OAIChatChoice]
     usage: OAIChatUsage = Field(default_factory=OAIChatUsage)
+    # Additive compatibility metadata (safe to ignore by strict OpenAI clients).
+    session_id: str | None = None
+    status: ChatStatus | None = None
+    clarification_payload: ClarificationPayload | None = None
+
+
+class OAIModelCard(BaseModel):
+    id: str
+    object: str = "model"
+    created: int
+    owned_by: str = "nl2sql-assistant"
+
+
+class OAIModelListResponse(BaseModel):
+    object: str = "list"
+    data: list[OAIModelCard]

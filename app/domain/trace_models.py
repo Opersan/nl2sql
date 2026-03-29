@@ -78,6 +78,7 @@ class TraceCollector:
         self._started_at_mono: dict[str, float] = {}
         self._trace_started_mono = time.monotonic()
         self._event_index = 0
+        self.collected_events: list[StageEvent] = []
 
     # ------------------------------------------------------------------
     # Stage lifecycle helpers
@@ -192,14 +193,14 @@ class TraceCollector:
                 if event.trace_elapsed_ms is not None
                 else int((time.monotonic() - self._trace_started_mono) * 1000)
             )
-            self._queue.put_nowait(
-                event.model_copy(
-                    update={
-                        "event_index": event_index,
-                        "trace_elapsed_ms": trace_elapsed_ms,
-                    }
-                )
+            enriched = event.model_copy(
+                update={
+                    "event_index": event_index,
+                    "trace_elapsed_ms": trace_elapsed_ms,
+                }
             )
+            self.collected_events.append(enriched)
+            self._queue.put_nowait(enriched)
 
     async def get_event(
         self,

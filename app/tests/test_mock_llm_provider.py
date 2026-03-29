@@ -207,6 +207,15 @@ class TestPhoneExtension:
             for f in plan.filters
         )
 
+    @pytest.mark.asyncio
+    async def test_title_manager_phrase_adds_unvan_filter(self, llm: MockLLMProvider) -> None:
+        plan = await _plan(llm, "Yonetici unvanli calisanlari goster")
+        assert plan.needs_clarification is False
+        assert any(
+            f.column == "UNVAN" and f.op == FilterOp.EQ and f.value == "yonetici"
+            for f in plan.filters
+        )
+
 
 # ===========================================================================
 # 11 – Bordrolu

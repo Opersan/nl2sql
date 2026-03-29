@@ -8,12 +8,14 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 
-from app.api.deps import build_chat_orchestrator, build_document_retrieval
+from app.api.deps import build_chat_orchestrator, build_document_retrieval, build_llm_provider
 from app.api.routes_chat import router as chat_router
 from app.api.routes_health import router as health_router
 from app.api.routes_trace import router as trace_router
+from app.api.routes_viewer import router as viewer_router
 from app.core.config import APP_VERSION, settings
 from app.core.logging import get_logger
+from app.providers.run_store import RunStore
 
 logger = get_logger(__name__)
 
@@ -28,8 +30,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     # -- Startup: async document retrieval + sync orchestrator wiring ----
     doc_retrieval = await build_document_retrieval()
+
+    # -- Startup: durable run store ----
+    run_store = RunStore(db_path="data/run_store.db")
+    await run_store.initialize()
+    app.state.run_store = run_store
+
+    # -- Startup: standalone LLM provider for direct forwarding ----
+    app.state.llm_provider = build_llm_provider()
+
     app.state.chat_orchestrator = build_chat_orchestrator(
         doc_retrieval=doc_retrieval,
+        run_store=run_store,
     )
     await _initialize_executor_resources(app)
 
@@ -40,6 +52,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # -- Shutdown: close resources that keep worker threads/process alive --
     await _close_executor_resources(app)
+    # -- Shutdown: close run store --
+    run_store_inst = getattr(app.state, "run_store", None)
+    if run_store_inst is not None:
+        await run_store_inst.close()
 
 
 def _resolve_inner_executor(app: FastAPI) -> object | None:
@@ -93,7 +109,7 @@ async def _validate_semantic_registry() -> None:
     Set ``STRICT_REGISTRY_VALIDATION=true`` in the environment to raise instead.
     """
     from app.providers.catalog.in_memory import InMemoryCatalogProvider
-    from app.services.registry_validator import RegistryValidationError, validate_registry_against_catalog
+    from app.services.registry_validator import validate_registry_against_catalog
     from app.services.semantic_planning import _load_registry
 
     registry = _load_registry()
@@ -107,7 +123,6 @@ async def _validate_semantic_registry() -> None:
         )
         return
 
-    strict = settings.model_config.get("env_prefix", "")  # safeguard check
     for issue in issues:
         logger.warning("[registry-validation] %s", issue)
     logger.warning(
@@ -127,6 +142,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(chat_router)
     app.include_router(trace_router)
+    app.include_router(viewer_router)
     return app
 
 

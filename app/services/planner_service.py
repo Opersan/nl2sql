@@ -45,7 +45,6 @@ from functools import lru_cache
 import re
 from typing import Any
 
-from app.core.config import settings
 from app.core.exceptions import PlannerError
 from app.core.logging import get_logger
 from app.domain.catalog_models import CatalogSnapshot

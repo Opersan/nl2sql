@@ -19,9 +19,8 @@ If there is a collision, a numeric suffix is appended.
 
 from __future__ import annotations
 
-import re
-from datetime import date
 from collections.abc import Callable
+import re
 
 from app.core.exceptions import CompilationError
 from app.domain.catalog_models import TableMetadata
@@ -31,9 +30,7 @@ from app.domain.query_plan import (
     AggregationSpec,
     FilterOp,
     FilterSpec,
-    JoinSpec,
     JoinType,
-    OrderSpec,
     QueryPlan,
 )
 from app.utils.date_literals import coerce_runtime_date_value

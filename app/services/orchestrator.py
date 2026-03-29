@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from app.core.config import settings
@@ -37,7 +38,6 @@ from app.domain.execution_models import (
     ExecutionResult,
     ExecutionStatus,
     OrchestrationResult,
-    ValidationResult,
 )
 from app.domain.models import ChatResult
 from app.domain.query_plan import QueryPlan
@@ -523,12 +523,116 @@ class ChatOrchestrator:
         narrator: NarratorService,
         session_service: SessionService,
         clarification_manager: ClarificationStateManager | None = None,
+        run_store: Any | None = None,
     ) -> None:
         self._planner = planner
         self._orchestrator = orchestrator
         self._narrator = narrator
         self._sessions = session_service
         self._clarification_manager = clarification_manager
+        self._run_store = run_store
+
+    async def _persist_stage_from_event(self, run_id: str, event: Any, order: int) -> None:
+        """Persist a StageEvent to the run store.
+
+        Raises on failure so the caller (_finalize_run) can collect warnings.
+        """
+        if self._run_store is None:
+            return
+        await self._run_store.persist_stage(
+            run_id,
+            stage_name=event.stage_name,
+            stage_order=order,
+            status=event.status.value if hasattr(event.status, "value") else str(event.status),
+            started_at=str(event.started_at) if event.started_at else None,
+            finished_at=str(event.completed_at) if event.completed_at else None,
+            elapsed_ms=event.elapsed_ms,
+            summary=event.summary,
+            payload=event.payload,
+        )
+
+    async def _finalize_run(
+        self,
+        run_id: str | None,
+        conversation_id: str,
+        *,
+        status: str,
+        answer: str,
+        tc: "TraceCollector | None" = None,
+        clarification_id: str | None = None,
+        clarification_options: Any = None,
+        clarification_question: str | None = None,
+    ) -> None:
+        """Persist assistant message, collected stages, and finish run.
+
+        Individual persistence steps are wrapped separately so one failure
+        does not prevent the remaining steps.  Failures are logged as
+        warnings and emitted as trace events for observability.
+        """
+        if self._run_store is None:
+            return
+        _warnings: list[str] = []
+
+        # 1 — assistant message
+        try:
+            await self._run_store.persist_message(
+                conversation_id, "assistant", answer, source="pipeline",
+            )
+        except Exception as exc:
+            _warnings.append(f"persist_message: {exc}")
+
+        if run_id is not None:
+            # 2 — stage events
+            if tc is not None:
+                for idx, event in enumerate(tc.collected_events):
+                    try:
+                        await self._persist_stage_from_event(run_id, event, idx)
+                    except Exception as exc:
+                        _warnings.append(f"persist_stage[{idx}]: {exc}")
+
+            # 3 — clarification record
+            if status == "clarification" and clarification_id:
+                try:
+                    await self._run_store.persist_clarification(
+                        run_id, conversation_id,
+                        clarification_id=clarification_id,
+                        question_text=clarification_question,
+                        options=clarification_options,
+                        status="pending",
+                    )
+                except Exception as exc:
+                    _warnings.append(f"persist_clarification: {exc}")
+
+            # 4 — finish run
+            try:
+                await self._run_store.finish_run(run_id, status=status)
+            except Exception as exc:
+                _warnings.append(f"finish_run: {exc}")
+
+        # 5 — conversation status
+        try:
+            await self._run_store.update_conversation_status(conversation_id, status)
+        except Exception as exc:
+            _warnings.append(f"update_conversation_status: {exc}")
+
+        # Surface warnings for observability
+        if _warnings:
+            for w in _warnings:
+                logger.warning("[run-store] finalize: %s", w)
+            if tc is not None:
+                tc.stage_completed(
+                    "persistence_warning",
+                    summary=f"{len(_warnings)} persistence warning(s) during finalize",
+                    payload={"warnings": _warnings, "phase": "finalize"},
+                )
+            if self._run_store is not None and run_id is not None:
+                try:
+                    await self._run_store.persist_event(
+                        run_id, event_type="persistence_warning",
+                        payload={"warnings": _warnings},
+                    )
+                except Exception:
+                    pass  # Cannot persist warning about persistence failure
 
     async def handle_message(
         self,
@@ -536,6 +640,7 @@ class ChatOrchestrator:
         message: str,
         *,
         trace_collector: TraceCollector | None = None,
+        openwebui_chat_id: str | None = None,
     ) -> ChatResult:
         """Process a single user turn end-to-end.
 
@@ -547,10 +652,69 @@ class ChatOrchestrator:
         tc = trace_collector
         _t0_mono = _time.monotonic()
 
-        # 1 – Session bookkeeping
+        # Auto-create a lightweight trace collector for stage persistence
+        # when run_store is active but caller didn't provide one (e.g. /chat,
+        # /v1/chat/completions).  This ensures stages are always persisted.
+        if tc is None and self._run_store is not None:
+            import uuid as _uuid
+            from app.domain.trace_models import TraceCollector as _TC
+            tc = _TC(trace_id=_uuid.uuid4().hex)
+
+        # 0 – Session bookkeeping (always, before persistence)
         self._sessions.get_or_create(session_id)
         self._sessions.append_user_message(session_id, message)
 
+        # 0a – Early clarification check: detect BEFORE creating initial run
+        #   to avoid duplicate messages and orphan runs.
+        _is_clarification_reply = False
+        clarification_reply = None
+        if self._clarification_manager is not None:
+            from app.services.filter_value_profile_provider import FilterValueProfileProvider
+
+            min_auto = FilterValueProfileProvider().policy().min_select_score
+            clarification_reply = self._clarification_manager.interpret_reply(
+                session_id, message, min_auto_resolve_score=min_auto,
+            )
+            _is_clarification_reply = clarification_reply is not None
+
+        if _is_clarification_reply:
+            # Clarification reply → delegate immediately. _handle_clarification_resume
+            # will persist the user message + create its own clarification_resume run.
+            return await self._handle_clarification_resume(
+                session_id, message, clarification_reply,
+                trace_collector=tc, t0_mono=_t0_mono,
+                openwebui_chat_id=openwebui_chat_id,
+            )
+
+        # 0b – Durable persistence: resolve conversation, persist user message, create run
+        _run_id: str | None = None
+        _user_msg_id: str | None = None
+        _conversation_id: str = session_id
+        if self._run_store is not None:
+            try:
+                _conversation_id = await self._run_store.resolve_conversation(
+                    session_id, openwebui_chat_id=openwebui_chat_id,
+                )
+                _user_msg_id = await self._run_store.persist_message(
+                    _conversation_id, "user", message, source="openwebui",
+                )
+                _run_id = await self._run_store.create_run(
+                    _conversation_id,
+                    source_message_id=_user_msg_id,
+                    trace_id=tc.trace_id if tc else None,
+                    run_type="initial",
+                )
+            except Exception as exc:
+                _w = f"[run-store] persistence init failed: {exc}"
+                logger.warning(_w)
+                if tc:
+                    tc.stage_completed(
+                        "persistence_warning",
+                        summary=_w,
+                        payload={"error": str(exc), "phase": "init"},
+                    )
+
+        # 1 – Trace: input context stages
         if tc:
             from app.services.trace_serializer import (
                 build_catalog_readiness_payload,
@@ -585,28 +749,8 @@ class ChatOrchestrator:
                 payload=build_semantic_registry_payload(),
             )
 
-        # 1b – Check for pending clarification reply
-        clarification_reply = None
-        if self._clarification_manager is not None:
-            from app.services.filter_value_profile_provider import FilterValueProfileProvider
-
-            min_auto = FilterValueProfileProvider().policy().min_select_score
-            clarification_reply = self._clarification_manager.interpret_reply(
-                session_id, message, min_auto_resolve_score=min_auto,
-            )
-        if clarification_reply is not None:
-            return await self._handle_clarification_resume(
-                session_id, message, clarification_reply,
-                trace_collector=tc, t0_mono=_t0_mono,
-            )
-
         # 2 – Plan
-        if tc:
-            _plan_mono = tc.stage_started(
-                "planner_llm_request",
-                summary="Calling planner LLM (NL → QueryPlan)…",
-                metadata={"question_length": len(message)},
-            )
+        _plan_mono = _time.monotonic()
         try:
             plan = await self._planner.plan(message, session_id=session_id)
         except PlannerError as exc:
@@ -627,6 +771,9 @@ class ChatOrchestrator:
                 )
             answer = f"Plan oluşturulurken hata: {exc}"
             self._sessions.append_assistant_message(session_id, answer)
+            await self._finalize_run(
+                _run_id, _conversation_id, status="failed", answer=answer, tc=tc,
+            )
             return ChatResult(
                 session_id=session_id,
                 status="execution_error",
@@ -661,7 +808,7 @@ class ChatOrchestrator:
                     "narrator_prompt",
                     summary="Narrating clarification request…",
                 )
-            answer = await self._narrator.narrate_clarification(plan)
+            answer = await self._narrator.narrate_clarification(plan, user_message=message)
             if tc:
                 self._emit_narrator_trace_stages(tc, _narr_mono)
                 tc.stage_completed(
@@ -700,6 +847,29 @@ class ChatOrchestrator:
                         original_filter_value=pending.original_filter_value,
                     )
 
+            _clar_id = clar_payload.clarification_id if clar_payload else None
+            _clar_options = (
+                [{"index": o.index, "label": o.label, "value": o.value, "score": o.score} for o in clar_payload.options]
+                if clar_payload else None
+            )
+
+            # Ensure LLM-level clarifications (no filter-value pending) still
+            # get a clarification record persisted.
+            if _clar_id is None:
+                _clar_id = f"llm-clar-{uuid.uuid4().hex[:12]}"
+                if plan.clarification_missing_dimensions:
+                    _clar_options = [
+                        {"index": i + 1, "label": dim, "value": dim, "score": None}
+                        for i, dim in enumerate(plan.clarification_missing_dimensions)
+                    ]
+            await self._finalize_run(
+                _run_id, _conversation_id,
+                status="clarification", answer=answer, tc=tc,
+                clarification_id=_clar_id,
+                clarification_options=_clar_options,
+                clarification_question=answer,
+            )
+
             return ChatResult(
                 session_id=session_id,
                 status="clarification",
@@ -734,6 +904,9 @@ class ChatOrchestrator:
                 )
             self._sessions.append_assistant_message(session_id, answer)
             error_codes = [e.code for e in result.validation.errors]
+            await self._finalize_run(
+                _run_id, _conversation_id, status="failed", answer=answer, tc=tc,
+            )
             return ChatResult(
                 session_id=session_id,
                 status="validation_error",
@@ -768,6 +941,9 @@ class ChatOrchestrator:
                     },
                 )
             self._sessions.append_assistant_message(session_id, answer)
+            await self._finalize_run(
+                _run_id, _conversation_id, status="failed", answer=answer, tc=tc,
+            )
             return ChatResult(
                 session_id=session_id,
                 status="execution_error",
@@ -822,6 +998,10 @@ class ChatOrchestrator:
                 ),
             )
 
+        await self._finalize_run(
+            _run_id, _conversation_id, status="success", answer=answer, tc=tc,
+        )
+
         return ChatResult(
             session_id=session_id,
             status="success",
@@ -844,6 +1024,7 @@ class ChatOrchestrator:
         *,
         trace_collector: TraceCollector | None = None,
         t0_mono: float = 0.0,
+        openwebui_chat_id: str | None = None,
     ) -> ChatResult:
         """Resume the pipeline after the user answers a clarification.
 
@@ -855,6 +1036,58 @@ class ChatOrchestrator:
         from app.services.trace_serializer import safe_payload as _safe_payload
 
         tc = trace_collector
+
+        # Auto-create trace collector for stage persistence when run_store
+        # is active but caller didn't provide one.
+        if tc is None and self._run_store is not None:
+            import uuid as _uuid
+            from app.domain.trace_models import TraceCollector as _TC
+            tc = _TC(trace_id=_uuid.uuid4().hex)
+
+        # Persistence: create child run for clarification resume
+        _resume_run_id: str | None = None
+        _conversation_id = session_id
+        if self._run_store is not None:
+            try:
+                _conversation_id = await self._run_store.resolve_conversation(
+                    session_id, openwebui_chat_id=openwebui_chat_id,
+                )
+                _user_msg_id = await self._run_store.persist_message(
+                    _conversation_id, "user", message, source="clarification",
+                )
+                # Find parent run (most recent run with clarification status)
+                runs = await self._run_store.list_runs(_conversation_id)
+                parent_run_id = None
+                for r in runs:
+                    if r["status"] == "clarification":
+                        parent_run_id = r["run_id"]
+                        break
+                _resume_run_id = await self._run_store.create_run(
+                    _conversation_id,
+                    source_message_id=_user_msg_id,
+                    parent_run_id=parent_run_id,
+                    trace_id=tc.trace_id if tc else None,
+                    run_type="clarification_resume",
+                )
+                # Resolve the clarification record
+                if reply.clarification_id:
+                    delegated = reply.resolution_method == "user_deferred_to_system"
+                    await self._run_store.resolve_clarification(
+                        reply.clarification_id,
+                        selected_option=reply.chosen_value,
+                        delegated_to_system=delegated,
+                        resolved_value=reply.chosen_value,
+                        status="delegated" if delegated else "answered",
+                    )
+            except Exception as exc:
+                _w = f"[run-store] clarification resume persist failed: {exc}"
+                logger.warning(_w)
+                if tc:
+                    tc.stage_completed(
+                        "persistence_warning",
+                        summary=_w,
+                        payload={"error": str(exc), "phase": "clarification_resume_init"},
+                    )
 
         if tc:
             tc.stage_completed(
@@ -876,6 +1109,9 @@ class ChatOrchestrator:
         except Exception:
             answer = "Beklemedik bir hata olustu, lutfen sorunuzu tekrar sorun."
             self._sessions.append_assistant_message(session_id, answer)
+            await self._finalize_run(
+                _resume_run_id, _conversation_id, status="failed", answer=answer, tc=tc,
+            )
             return ChatResult(session_id=session_id, status="execution_error", answer=answer)
 
         # Apply the resolved canonical value to the matching filter
@@ -939,6 +1175,9 @@ class ChatOrchestrator:
                     payload={"status": "validation_error", "total_elapsed_ms": int((_time.monotonic() - t0_mono) * 1000)},
                 )
             self._sessions.append_assistant_message(session_id, answer)
+            await self._finalize_run(
+                _resume_run_id, _conversation_id, status="failed", answer=answer, tc=tc,
+            )
             return ChatResult(
                 session_id=session_id,
                 status="validation_error",
@@ -962,6 +1201,9 @@ class ChatOrchestrator:
                     payload={"status": "execution_error", "total_elapsed_ms": int((_time.monotonic() - t0_mono) * 1000)},
                 )
             self._sessions.append_assistant_message(session_id, answer)
+            await self._finalize_run(
+                _resume_run_id, _conversation_id, status="failed", answer=answer, tc=tc,
+            )
             return ChatResult(
                 session_id=session_id,
                 status="execution_error",
@@ -997,6 +1239,9 @@ class ChatOrchestrator:
                     narrator_trace=self._narrator.last_trace,
                 ),
             )
+        await self._finalize_run(
+            _resume_run_id, _conversation_id, status="success", answer=answer, tc=tc,
+        )
         return ChatResult(
             session_id=session_id,
             status="success",

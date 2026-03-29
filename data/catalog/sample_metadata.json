@@ -189,7 +189,7 @@
           "name": "DOGUM_TARIHI",
           "data_type": "DATE",
           "nullable": true,
-          "restricted": true,
+          "restricted": false,
           "description": "Çalışanın doğum tarihidir.",
           "aliases": []
         },

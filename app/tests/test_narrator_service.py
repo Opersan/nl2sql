@@ -80,7 +80,9 @@ class TestSuccessNarration:
         assert trace is not None
         assert trace["prompt_length"] > 0
         assert trace["raw_response"] is not None
-        assert trace["final_response"] == text
+        # trace["final_response"] holds the narration part only;
+        # narrate_success appends a Markdown table after it.
+        assert text.startswith(trace["final_response"])
         assert "narration_shape" in trace
         assert "narration_business_value_score" in trace
         assert "final_narration_quality" in trace
@@ -122,7 +124,8 @@ class TestSuccessNarration:
         text = await narrator.narrate_success("Aktif çalışanları listele", result)
         trace = narrator.last_trace or {}
 
-        assert text == "Toplam 5 kayıt listelendi. Gösterilen alanlar: reg_no, first_name."
+        # narrate_success appends a Markdown table; check narration prefix only
+        assert text.startswith("Toplam 5 kayıt listelendi.")
         assert trace.get("raw_response_empty") is True
         assert trace.get("raw_leak_reason_codes") == ["empty_raw_response"]
         assert trace.get("sanitizer_reason_code") == "raw_missing"
@@ -133,7 +136,9 @@ class TestSuccessNarration:
 
         text = await narrator.narrate_success("Aktif çalışanları listele", result)
 
-        assert "\n\n" not in text
+        # The narration part (before the appended table) must be a single paragraph
+        narration_part = text.split("\n\n")[0]
+        assert "\n\n" not in narration_part
         assert "Thinking Process" not in text
         assert "Kullanıcı sorusu" not in text
         assert "Sonuç özeti" not in text

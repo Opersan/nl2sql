@@ -12,7 +12,6 @@ from app.providers.llm.base import LLMProvider
 from app.services.clarification_state_manager import (
     ClarificationCandidate,
     ClarificationStateManager,
-    PendingClarification,
 )
 from app.services.filter_value_profile_provider import (
     CanonicalValueEntry,
@@ -26,6 +25,7 @@ from app.utils.turkish import normalize_for_matching
 logger = get_logger(__name__)
 
 _DB_DISTINCT_LIMIT = 200
+_FALLBACK_SUPPORTED_OPS = frozenset({"=", "!=", "LIKE"})
 
 
 def _tokenize(value: str) -> tuple[str, ...]:
@@ -211,21 +211,35 @@ class FilterValueResolutionService:
             return base_action, filter_spec, False, None
 
         profile = self._provider.get_profile(filter_spec.table, filter_spec.column)
-        if profile is None:
-            base_action.update({"reason": "out_of_scope_column_no_op", "no_op": True})
+
+        # ── Determine resolver mode ──────────────────────────────────────
+        if profile is not None:
+            resolver_mode = "profile"
+        elif self._executor is not None:
+            resolver_mode = "fallback"
+        else:
+            base_action.update({
+                "reason": "no_profile_no_executor_no_op",
+                "no_op": True,
+                "resolver_mode": "fallback",
+            })
             return base_action, filter_spec, False, None
 
-        if filter_spec.op not in profile.supported_ops:
+        base_action["resolver_mode"] = resolver_mode
+
+        # ── Supported operator check ─────────────────────────────────────
+        supported_ops = profile.supported_ops if profile is not None else _FALLBACK_SUPPORTED_OPS
+        if filter_spec.op not in supported_ops:
             base_action.update(
                 {
                     "reason": "unsupported_operator_no_op",
-                    "source": "config_profile",
+                    "source": "config_profile" if profile else "fallback_defaults",
                     "no_op": True,
                 }
             )
             return base_action, filter_spec, False, None
 
-        # ── LIKE surface-value extraction for in-scope columns ──
+        # ── LIKE surface-value extraction ────────────────────────────────
         like_input = False
         like_surface_value: str | None = None
         effective_value = original_value
@@ -238,32 +252,36 @@ class FilterValueResolutionService:
             if not like_surface_value:
                 base_action.update({
                     "reason": "like_surface_extraction_failed",
-                    "source": "config_profile",
+                    "source": "config_profile" if profile else "db_distinct",
                     "no_op": True,
                 })
                 return base_action, filter_spec, False, None
             effective_value = like_surface_value
 
         normalized_value = normalize_for_matching(effective_value)
-        matches = self._match_candidates(profile, normalized_value, policy)
-        preview = [candidate.canonical_value for candidate in matches[: policy.candidate_preview_limit]]
-        ranking_scores = [
-            {"value": m.canonical_value, "score": round(m.score, 3), "reason": m.reason}
-            for m in matches[: policy.candidate_preview_limit]
-        ]
-        base_action.update({
-            "source": "config_profile",
-            "candidate_values": preview,
-            "ranking_scores": ranking_scores,
-        })
 
+        # ── Static profile matching (profile mode only) ──────────────────
+        matches: list[CandidateMatch] = []
+        if profile is not None:
+            matches = self._match_candidates(profile, normalized_value, policy)
+            preview = [candidate.canonical_value for candidate in matches[: policy.candidate_preview_limit]]
+            ranking_scores = [
+                {"value": m.canonical_value, "score": round(m.score, 3), "reason": m.reason}
+                for m in matches[: policy.candidate_preview_limit]
+            ]
+            base_action.update({
+                "source": "config_profile",
+                "candidate_values": preview,
+                "ranking_scores": ranking_scores,
+            })
+
+        # ── DB fallback: no profile OR profile had zero matches ──────────
         if not matches:
-            # ── DB fallback: fetch DISTINCT values from the actual database ──
             resolve_table = filter_spec.table or plan.table
             db_values = await self._fetch_db_distinct_values(resolve_table, filter_spec.column)
             if db_values:
                 db_profile = self._build_dynamic_profile(
-                    resolve_table, filter_spec.column, db_values, profile.supported_ops,
+                    resolve_table, filter_spec.column, db_values, supported_ops,
                 )
                 db_matches = self._match_candidates(db_profile, normalized_value, policy)
                 if db_matches:
@@ -304,8 +322,8 @@ class FilterValueResolutionService:
                         "db_distinct_count": len(db_values),
                     })
                     return base_action, filter_spec, False, clarification_info
-            else:
-                # No DB values available either — present static profile values
+            elif profile is not None and profile.canonical_values:
+                # No DB values available — present static profile values (profile mode only)
                 all_profile_values = [e.value for e in profile.canonical_values[: policy.candidate_preview_limit]]
                 all_as_candidates: list[CandidateMatch] | None = (
                     [
@@ -329,6 +347,16 @@ class FilterValueResolutionService:
                     "candidate_values": all_profile_values,
                 })
                 return base_action, filter_spec, False, clarification_info
+            else:
+                # No profile values and no DB values — nothing to match against
+                base_action.update({
+                    "reason": "no_candidates_available_no_op",
+                    "no_op": True,
+                    "db_fallback_used": True,
+                    "source": "db_distinct",
+                    "db_distinct_count": 0,
+                })
+                return base_action, filter_spec, False, None
 
         top_candidate = matches[0]
         runner_up = matches[1] if len(matches) > 1 else None

@@ -608,8 +608,8 @@ class OpenAICompatibleProvider(LLMProvider):
 
         return response_model.model_validate_json(content)
 
-    async def generate_text(self, prompt: str) -> str:
-        content = await self._chat_completion(prompt)
+    async def generate_text(self, prompt: str, *, disable_thinking: bool = False) -> str:
+        content = await self._chat_completion(prompt, disable_thinking=disable_thinking)
         self.last_text_response_text = content
         return content
 
@@ -621,6 +621,7 @@ class OpenAICompatibleProvider(LLMProvider):
         *,
         system: str | None = None,
         response_format: dict[str, Any] | None = None,
+        disable_thinking: bool = False,
     ) -> str:
         messages: list[dict[str, str]] = []
         if system:
@@ -633,6 +634,8 @@ class OpenAICompatibleProvider(LLMProvider):
         }
         if response_format:
             payload["response_format"] = response_format
+        if disable_thinking:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
 
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if self._api_key:

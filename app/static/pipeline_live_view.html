@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Live View — Read-Only Observability</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg-panel: #1a1d27;
+    --bg-card: #232733;
+    --bg-hover: #2a2e3d;
+    --border: #2e3347;
+    --text: #e1e4ed;
+    --text-dim: #8b90a5;
+    --accent: #6c8cff;
+    --accent-dim: #4a5f9e;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+    --purple: #a78bfa;
+    --cyan: #22d3ee;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+  }
+  /* ---- TOP BAR ---- */
+  .topbar {
+    height: 48px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+  }
+  .topbar h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .topbar .badge {
+    font-size: 10px;
+    background: var(--accent-dim);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .topbar .spacer { flex: 1; }
+  .topbar .info {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  /* ---- LAYOUT ---- */
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr 380px;
+    height: calc(100vh - 48px);
+  }
+  /* ---- LEFT SIDEBAR ---- */
+  .sidebar {
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-section {
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-section-header {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    padding: 10px 14px 6px;
+  }
+  .search-box {
+    padding: 6px 14px 10px;
+  }
+  .search-box input {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    outline: none;
+  }
+  .search-box input:focus {
+    border-color: var(--accent);
+  }
+  .list-scroll {
+    overflow-y: auto;
+    flex: 1;
+  }
+  .list-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    position: relative;
+  }
+  .list-item:hover { background: var(--bg-hover); }
+  .list-item.active { background: var(--accent-dim); }
+  .list-item .title {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 24px;
+  }
+  .list-item .meta {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+  .list-item .delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+  }
+  .list-item:hover .delete-btn { opacity: 1; }
+  .list-item .delete-btn:hover { background: rgba(248,113,113,0.2); color: var(--red); }
+  .msg-item {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .msg-item .role {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .msg-item .role.user { color: var(--accent); }
+  .msg-item .role.assistant { color: var(--green); }
+  .msg-item .content {
+    font-size: 12px;
+    margin-top: 3px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .run-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  .run-item:hover { background: var(--bg-hover); }
+  .run-item.active { background: var(--accent-dim); }
+  .run-item .run-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .run-item .run-type {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cyan);
+  }
+  .status-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .status-badge.success { background: rgba(74,222,128,0.15); color: var(--green); }
+  .status-badge.failed { background: rgba(248,113,113,0.15); color: var(--red); }
+  .status-badge.running { background: rgba(108,140,255,0.15); color: var(--accent); }
+  .status-badge.clarification { background: rgba(251,191,36,0.15); color: var(--yellow); }
+  .status-badge.cancelled { background: rgba(139,144,165,0.15); color: var(--text-dim); }
+  /* ---- CENTER ---- */
+  .center {
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    font-size: 14px;
+    gap: 8px;
+  }
+  .empty-state .icon { font-size: 40px; opacity: 0.3; }
+  .run-header-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .run-header-card h2 {
+    font-size: 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .run-header-card .run-meta {
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .run-header-card .run-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  /* Stage groups */
+  .stage-group {
+    margin-bottom: 16px;
+  }
+  .stage-group-header {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    padding: 8px 0 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+  }
+  .stage-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .stage-card:hover { border-color: var(--accent); }
+  .stage-card.active { border-color: var(--accent); background: var(--bg-hover); }
+  .stage-card .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .stage-card .status-dot.passed { background: var(--green); }
+  .stage-card .status-dot.failed { background: var(--red); }
+  .stage-card .status-dot.skipped { background: var(--text-dim); }
+  .stage-card .status-dot.running { background: var(--accent); animation: pulse 1.5s infinite; }
+  .stage-card .status-dot.pending { background: var(--border); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .stage-card .stage-info { flex: 1; min-width: 0; }
+  .stage-card .stage-name {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .stage-card .stage-summary {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+  .stage-card .stage-time {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    font-family: var(--mono);
+  }
+  /* Lineage */
+  .lineage-bar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .lineage-bar .arrow { color: var(--text-dim); }
+  .lineage-bar .lineage-run {
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.1s;
+  }
+  .lineage-bar .lineage-run:hover { border-color: var(--accent); }
+  .lineage-bar .lineage-run.current { border-color: var(--accent); background: var(--accent-dim); }
+  /* ---- RIGHT INSPECTOR ---- */
+  .inspector {
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .inspector-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .inspector-section {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .inspector-section h4 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .inspector-section pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 400px;
+    overflow-y: auto;
+    color: var(--text);
+  }
+  .inspector-kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+    font-size: 12px;
+  }
+  .inspector-kv .key {
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .inspector-kv .val {
+    word-break: break-all;
+  }
+  .sql-block {
+    background: #1e2030;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--cyan);
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .inspector-empty {
+    padding: 40px 16px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* Copy & action buttons */
+  .btn-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-card);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn-action:hover { background: var(--bg-hover); border-color: var(--accent); }
+  .btn-action.copied { border-color: var(--green); color: var(--green); }
+  .run-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    z-index: 9999;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Smart payload formatting */
+  .payload-tree .payload-key {
+    color: var(--accent);
+    margin-right: 4px;
+  }
+  .payload-tree .payload-str { color: var(--green); }
+  .payload-tree .payload-num { color: var(--orange); }
+  .payload-tree .payload-bool { color: var(--purple); }
+  .payload-tree .payload-null { color: var(--text-dim); }
+  .payload-tree details { margin-left: 16px; }
+  .payload-tree details summary {
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-bottom: 2px;
+  }
+  .payload-tree details summary:hover { color: var(--text); }
+  .payload-tree pre {
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Pipeline Live View</h1>
+  <span class="badge">Read-Only</span>
+  <span class="spacer"></span>
+  <span class="info" id="dbStatus">Connecting…</span>
+</div>
+
+<div class="layout">
+  <!-- LEFT SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-header">Conversations</div>
+      <div class="search-box">
+        <input type="text" id="convSearch" placeholder="Search conversations…" autocomplete="off">
+      </div>
+      <div class="list-scroll" id="convList" style="max-height: 200px;"></div>
+    </div>
+    <div class="sidebar-section" style="flex-shrink: 0;">
+      <div class="sidebar-section-header">Messages</div>
+      <div class="list-scroll" id="msgList" style="max-height: 200px;"></div>
+    </div>
+    <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column;">
+      <div class="sidebar-section-header">Runs</div>
+      <div class="list-scroll" id="runList" style="flex: 1;"></div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center" id="centerPanel">
+    <div class="empty-state">
+      <div class="icon">🔍</div>
+      <div>Select a conversation and run to inspect pipeline trace</div>
+      <div style="font-size:12px;color:var(--text-dim);">This view is read-only. No queries are executed.</div>
+    </div>
+  </div>
+
+  <!-- RIGHT INSPECTOR -->
+  <div class="inspector" id="inspectorPanel">
+    <div class="inspector-header">Inspector</div>
+    <div class="inspector-empty">Select a stage to inspect its details</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API_BASE = window.location.origin;
+let state = {
+  conversations: [],
+  selectedConv: null,
+  convDetail: null,
+  selectedRun: null,
+  runDetail: null,
+  selectedStageKey: null,  // e.g. 'stage-0', 'cl-1', 'ev-3'
+};
+
+// Indexed store: avoids JSON.stringify in onclick attributes
+let _stageStore = {};
+
+function _storeItem(key, obj) { _stageStore[key] = obj; }
+function _getItem(key) { return _stageStore[key]; }
+
+// ---- Toast ----
+let _toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ---- API helpers (read-only + delete) ----
+async function apiFetch(path, opts) {
+  const res = await fetch(API_BASE + path, opts);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+async function loadConversations(query) {
+  try {
+    const path = query
+      ? `/viewer/conversations/search?q=${encodeURIComponent(query)}&limit=30`
+      : `/viewer/conversations?limit=50`;
+    state.conversations = await apiFetch(path);
+    renderConvList();
+    document.getElementById('dbStatus').textContent = `${state.conversations.length} conversation(s)`;
+  } catch(e) {
+    document.getElementById('dbStatus').textContent = 'Error: ' + e.message;
+  }
+}
+
+async function loadConversation(convId) {
+  state.selectedConv = convId;
+  state.selectedRun = null;
+  state.runDetail = null;
+  state.selectedStageKey = null;
+  _stageStore = {};
+  try {
+    state.convDetail = await apiFetch(`/viewer/conversations/${encodeURIComponent(convId)}`);
+    renderConvList();
+    renderMessages();
+    renderRunList();
+    renderCenter();
+    renderInspector();
+  } catch(e) {
+    console.error('loadConversation error:', e);
+  }
+}
+
+async function loadRun(runId) {
+  state.selectedRun = runId;
+  state.selectedStageKey = null;
+  _stageStore = {};
+  try {
+    // Always load unified view (merges parent+child into one pipeline)
+    state.runDetail = await apiFetch(`/viewer/runs/${encodeURIComponent(runId)}/unified`);
+    renderRunList();
+    renderCenter();
+    renderInspector();
+  } catch(e) {
+    console.error('loadRun error:', e);
+  }
+}
+
+function selectStage(key) {
+  state.selectedStageKey = key;
+  renderCenter();
+  renderInspector();
+}
+
+async function deleteConversation(convId, event) {
+  event.stopPropagation();
+  if (!confirm('Bu conversation silinecek. Emin misiniz?')) return;
+  try {
+    await apiFetch(`/viewer/conversations/${encodeURIComponent(convId)}`, { method: 'DELETE' });
+    showToast('Conversation silindi');
+    if (state.selectedConv === convId) {
+      state.selectedConv = null;
+      state.convDetail = null;
+      state.selectedRun = null;
+      state.runDetail = null;
+      state.selectedStageKey = null;
+      renderCenter();
+      renderInspector();
+      document.getElementById('msgList').innerHTML = '';
+      document.getElementById('runList').innerHTML = '';
+    }
+    await loadConversations(document.getElementById('convSearch').value.trim() || null);
+  } catch(e) {
+    alert('Silme hatası: ' + e.message);
+  }
+}
+
+async function copyRunToClipboard() {
+  const rd = state.runDetail;
+  if (!rd) return;
+  try {
+    const text = JSON.stringify(rd, null, 2);
+    await navigator.clipboard.writeText(text);
+    showToast('📋 Run detayları panoya kopyalandı');
+    const btn = document.getElementById('copyRunBtn');
+    if (btn) {
+      btn.classList.add('copied');
+      btn.textContent = '✓ Kopyalandı';
+      setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '📋 Tümünü Kopyala'; }, 1500);
+    }
+  } catch(e) {
+    // Fallback for non-HTTPS contexts
+    const ta = document.createElement('textarea');
+    ta.value = JSON.stringify(rd, null, 2);
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('📋 Run detayları panoya kopyalandı');
+  }
+}
+
+// ---- Rendering ----
+function renderConvList() {
+  const el = document.getElementById('convList');
+  if (!state.conversations.length) {
+    el.innerHTML = '<div style="padding:14px;color:var(--text-dim);font-size:12px;">No conversations found</div>';
+    return;
+  }
+  el.innerHTML = state.conversations.map(c => {
+    const active = state.selectedConv === c.conversation_id ? 'active' : '';
+    const time = c.updated_at ? new Date(c.updated_at).toLocaleString('tr-TR') : '';
+    const title = c.title || c.conversation_id.slice(0, 20);
+    const status = c.latest_status || '';
+    return `<div class="list-item ${active}" onclick="loadConversation('${esc(c.conversation_id)}')">
+      <div class="title">${esc(title)}</div>
+      <div class="meta">${esc(time)} · ${esc(status)}</div>
+      <button class="delete-btn" onclick="deleteConversation('${esc(c.conversation_id)}', event)" title="Sil">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+function renderMessages() {
+  const el = document.getElementById('msgList');
+  const msgs = state.convDetail?.messages || [];
+  if (!msgs.length) {
+    el.innerHTML = '<div style="padding:14px;color:var(--text-dim);font-size:12px;">No messages</div>';
+    return;
+  }
+  el.innerHTML = msgs.map(m => `
+    <div class="msg-item">
+      <div class="role ${m.role}">${esc(m.role)}</div>
+      <div class="content">${esc((m.content || '').slice(0, 500))}</div>
+    </div>
+  `).join('');
+}
+
+function renderRunList() {
+  const el = document.getElementById('runList');
+  const runs = state.convDetail?.runs || [];
+  if (!runs.length) {
+    el.innerHTML = '<div style="padding:14px;color:var(--text-dim);font-size:12px;">No runs</div>';
+    return;
+  }
+
+  // Group runs into pipelines: root runs (no parent) absorb their children
+  const childRunIds = new Set();
+  for (const r of runs) {
+    if (r.parent_run_id) childRunIds.add(r.run_id);
+  }
+
+  // Only show root-level runs (children are merged via /unified endpoint)
+  const rootRuns = runs.filter(r => !childRunIds.has(r.run_id) && !r.parent_run_id);
+  // Also include orphan child runs whose parent doesn't exist in list
+  const parentIds = new Set(runs.map(r => r.run_id));
+  const orphanChildren = runs.filter(r => r.parent_run_id && !parentIds.has(r.parent_run_id));
+  const displayRuns = [...rootRuns, ...orphanChildren];
+
+  // For each root run, compute total stage count including children
+  const childrenOf = {};
+  for (const r of runs) {
+    if (r.parent_run_id) {
+      if (!childrenOf[r.parent_run_id]) childrenOf[r.parent_run_id] = [];
+      childrenOf[r.parent_run_id].push(r);
+    }
+  }
+
+  el.innerHTML = displayRuns.map(r => {
+    const children = childrenOf[r.run_id] || [];
+    const totalStages = (r.stage_count || 0) + children.reduce((s, c) => s + (c.stage_count || 0), 0);
+    const isChain = children.length > 0;
+    // Final status: last child's status or root status
+    const finalStatus = children.length ? children[children.length - 1].status : r.status;
+    const active = state.selectedRun === r.run_id ? 'active' : '';
+    const time = r.started_at ? new Date(r.started_at).toLocaleString('tr-TR') : '';
+    const statusCls = finalStatus === 'success' ? 'success' :
+                      finalStatus === 'failed' ? 'failed' :
+                      finalStatus === 'clarification' ? 'clarification' :
+                      finalStatus === 'running' ? 'running' : 'cancelled';
+    const label = isChain ? 'pipeline' : (r.run_type || 'initial');
+    const chainInfo = isChain ? ` · ${1 + children.length} phases` : '';
+    return `<div class="run-item ${active}" onclick="loadRun('${esc(r.run_id)}')">
+      <div class="run-header">
+        <span class="run-type">${esc(label)}</span>
+        <span class="status-badge ${statusCls}">${esc(finalStatus)}</span>
+      </div>
+      <div class="meta">${esc(time)} · ${totalStages} stages${chainInfo}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderCenter() {
+  const el = document.getElementById('centerPanel');
+  const rd = state.runDetail;
+  if (!rd) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="icon">🔍</div>
+      <div>Select a conversation and run to inspect pipeline trace</div>
+      <div style="font-size:12px;color:var(--text-dim);">This view is read-only. No queries are executed.</div>
+    </div>`;
+    return;
+  }
+
+  _stageStore = {};
+  let html = '';
+
+  // Run header
+  const statusCls = rd.status === 'success' ? 'success' :
+                    rd.status === 'failed' ? 'failed' :
+                    rd.status === 'clarification' ? 'clarification' : 'running';
+  const isUnified = rd.is_unified && rd.run_chain && rd.run_chain.length > 1;
+  const headerLabel = isUnified ? 'Pipeline' : `Run: ${esc(rd.run_type || 'initial')}`;
+  html += `<div class="run-header-card">
+    <h2>${headerLabel} <span class="status-badge ${statusCls}">${esc(rd.status)}</span></h2>
+    <div class="run-meta">
+      <span>🆔 ${esc(rd.run_id?.slice(0,12))}…</span>
+      <span>⏱ ${rd.started_at ? new Date(rd.started_at).toLocaleString('tr-TR') : '—'}</span>
+      ${rd.finished_at ? `<span>✅ ${new Date(rd.finished_at).toLocaleString('tr-TR')}</span>` : ''}
+      ${isUnified ? `<span>🔗 ${rd.run_chain.length} phase(s)</span>` : ''}
+      ${rd.trace_id ? `<span>🔗 trace: ${esc(rd.trace_id.slice(0,12))}…</span>` : ''}
+    </div>
+    <div class="run-actions">
+      <button class="btn-action" id="copyRunBtn" onclick="copyRunToClipboard()">📋 Tümünü Kopyala</button>
+    </div>
+  </div>`;
+
+  // Run chain bar (replaces old lineage bar for unified view)
+  if (isUnified) {
+    html += `<div class="lineage-bar">
+      <span style="color:var(--text-dim);font-size:11px;">Pipeline Phases:</span>`;
+    for (let i = 0; i < rd.run_chain.length; i++) {
+      if (i > 0) html += '<span class="arrow">→</span>';
+      const phaseName = i === 0 ? 'initial' : `resume #${i}`;
+      html += `<span class="lineage-run current">${esc(phaseName)}</span>`;
+    }
+    html += `</div>`;
+  } else if (rd.parent_run_id || (rd.child_runs && rd.child_runs.length)) {
+    html += `<div class="lineage-bar">
+      <span style="color:var(--text-dim);font-size:11px;">Lineage:</span>`;
+    if (rd.parent_run_id) {
+      html += `<span class="lineage-run" onclick="loadRun('${esc(rd.parent_run_id)}')">${esc(rd.parent_run_id.slice(0,10))}… (parent)</span>
+        <span class="arrow">→</span>`;
+    }
+    html += `<span class="lineage-run current">${esc(rd.run_id?.slice(0,10))}… (current)</span>`;
+    if (rd.child_runs) {
+      for (const c of rd.child_runs) {
+        html += `<span class="arrow">→</span>
+          <span class="lineage-run" onclick="loadRun('${esc(c.run_id)}')">${esc(c.run_id.slice(0,10))}… (${esc(c.run_type)})</span>`;
+      }
+    }
+    html += `</div>`;
+  }
+
+  // Clarifications
+  if (rd.clarifications && rd.clarifications.length) {
+    html += `<div class="stage-group">
+      <div class="stage-group-header">Clarifications</div>`;
+    rd.clarifications.forEach((cl, i) => {
+      const key = `cl-${i}`;
+      _storeItem(key, cl);
+      const clStatusCls = cl.status === 'answered' || cl.status === 'delegated' ? 'success' :
+                          cl.status === 'pending' ? 'clarification' : 'failed';
+      const isActive = state.selectedStageKey === key ? 'active' : '';
+      html += `<div class="stage-card ${isActive}" onclick="selectStage('${key}')">
+        <div class="status-dot ${cl.status === 'answered' || cl.status === 'delegated' ? 'passed' : cl.status === 'pending' ? 'running' : 'failed'}"></div>
+        <div class="stage-info">
+          <div class="stage-name">Clarification: ${esc(cl.reason_code || 'filter_value')}</div>
+          <div class="stage-summary">${esc((cl.question_text || '').slice(0, 100))}</div>
+        </div>
+        <span class="status-badge ${clStatusCls}">${esc(cl.status)}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Stage groups
+  const stages = rd.stages || [];
+  const groups = {};
+  const groupOrder = ['input','preparation','planning','grounding','clarification','execution','narration','verdict','other'];
+  // Index all stages by a global counter
+  stages.forEach((s, i) => {
+    const key = `stage-${i}`;
+    _storeItem(key, s);
+    s._key = key;
+  });
+  for (const s of stages) {
+    const g = s.stage_group || 'other';
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(s);
+  }
+  for (const g of groupOrder) {
+    if (!groups[g]) continue;
+    html += `<div class="stage-group">
+      <div class="stage-group-header">${esc(g)} (${groups[g].length})</div>`;
+    for (const s of groups[g]) {
+      const key = s._key;
+      const dotCls = s.status === 'passed' ? 'passed' :
+                     s.status === 'failed' ? 'failed' :
+                     s.status === 'skipped' ? 'skipped' :
+                     s.status === 'running' ? 'running' : 'pending';
+      const isActive = state.selectedStageKey === key ? 'active' : '';
+      const timeStr = s.elapsed_ms != null ? `${s.elapsed_ms}ms` : '';
+      html += `<div class="stage-card ${isActive}" onclick="selectStage('${key}')">
+        <div class="status-dot ${dotCls}"></div>
+        <div class="stage-info">
+          <div class="stage-name">${esc(s.stage_name)}</div>
+          <div class="stage-summary">${esc((s.summary || '').slice(0, 120))}</div>
+        </div>
+        <div class="stage-time">${esc(timeStr)}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Events
+  if (rd.events && rd.events.length) {
+    html += `<div class="stage-group">
+      <div class="stage-group-header">Events (${rd.events.length})</div>`;
+    rd.events.forEach((ev, i) => {
+      const key = `ev-${i}`;
+      _storeItem(key, ev);
+      const isActive = state.selectedStageKey === key ? 'active' : '';
+      html += `<div class="stage-card ${isActive}" onclick="selectStage('${key}')">
+        <div class="status-dot passed"></div>
+        <div class="stage-info">
+          <div class="stage-name">${esc(ev.event_type)}</div>
+          <div class="stage-summary">${esc(ev.event_ts || '')}</div>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ---- Smart payload rendering ----
+function renderPayloadValue(val, depth) {
+  if (depth === undefined) depth = 0;
+  if (val === null || val === undefined) {
+    return '<span class="payload-null">null</span>';
+  }
+  if (typeof val === 'boolean') {
+    return `<span class="payload-bool">${val}</span>`;
+  }
+  if (typeof val === 'number') {
+    return `<span class="payload-num">${val}</span>`;
+  }
+  if (typeof val === 'string') {
+    // Try to parse JSON strings and render them as nested objects
+    if (val.length > 2 && (val[0] === '{' || val[0] === '[')) {
+      try {
+        const parsed = JSON.parse(val);
+        if (typeof parsed === 'object' && parsed !== null) {
+          return renderPayloadValue(parsed, depth);
+        }
+      } catch(e) { /* not JSON, render as string */ }
+    }
+    // Multi-line string: render in a pre block
+    if (val.includes('\n') || val.length > 200) {
+      const displayVal = val.replace(/\\n/g, '\n');
+      return `<pre>${esc(displayVal)}</pre>`;
+    }
+    return `<span class="payload-str">"${esc(val)}"</span>`;
+  }
+  if (Array.isArray(val)) {
+    if (val.length === 0) return '<span class="payload-null">[]</span>';
+    const label = `Array [${val.length}]`;
+    let inner = '';
+    val.forEach((item, i) => {
+      inner += `<div style="margin-left:12px;">[${i}]: ${renderPayloadValue(item, depth + 1)}</div>`;
+    });
+    if (depth > 0) {
+      return `<details><summary>${esc(label)}</summary>${inner}</details>`;
+    }
+    return inner;
+  }
+  if (typeof val === 'object') {
+    const keys = Object.keys(val);
+    if (keys.length === 0) return '<span class="payload-null">{}</span>';
+    const label = `Object {${keys.length} keys}`;
+    let inner = '';
+    for (const k of keys) {
+      inner += `<div style="margin-left:12px;"><span class="payload-key">${esc(k)}:</span> ${renderPayloadValue(val[k], depth + 1)}</div>`;
+    }
+    if (depth > 1) {
+      return `<details><summary>${esc(label)}</summary>${inner}</details>`;
+    }
+    return inner;
+  }
+  return esc(String(val));
+}
+
+function renderSmartPayload(payload) {
+  if (!payload || (typeof payload === 'object' && Object.keys(payload).length === 0)) {
+    return '';
+  }
+  // If payload is a string, try to parse it
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch(e) {
+      return `<pre>${esc(payload)}</pre>`;
+    }
+  }
+  return `<div class="payload-tree">${renderPayloadValue(payload, 0)}</div>`;
+}
+
+function renderInspector() {
+  const el = document.getElementById('inspectorPanel');
+  const s = state.selectedStageKey ? _getItem(state.selectedStageKey) : null;
+  if (!s) {
+    el.innerHTML = `<div class="inspector-header">Inspector</div>
+      <div class="inspector-empty">Select a stage to inspect its details</div>`;
+    return;
+  }
+
+  let html = `<div class="inspector-header">${esc(s.stage_name || s.event_type || 'Detail')}</div>`;
+
+  // Key-value summary
+  html += `<div class="inspector-section"><h4>Summary</h4>
+    <div class="inspector-kv">`;
+  const kvPairs = [
+    ['Status', s.status],
+    ['Stage', s.stage_name || s.event_type],
+    ['Group', s.stage_group],
+    ['Elapsed', s.elapsed_ms != null ? s.elapsed_ms + 'ms' : null],
+    ['Summary', s.summary || s.question_text],
+  ];
+  // Clarification fields
+  if (s.clarification_id) {
+    kvPairs.push(['Clarification ID', s.clarification_id]);
+    kvPairs.push(['Reason', s.reason_code]);
+    kvPairs.push(['Selected', s.selected_option || s.resolved_value]);
+    kvPairs.push(['Delegated', s.delegated_to_system ? 'Yes' : 'No']);
+  }
+  for (const [k, v] of kvPairs) {
+    if (v == null) continue;
+    html += `<div class="key">${esc(k)}</div><div class="val">${esc(String(v))}</div>`;
+  }
+  html += `</div></div>`;
+
+  // Determine payload
+  let payload = s.payload || {};
+  if (typeof payload === 'string') {
+    try { payload = JSON.parse(payload); } catch(e) {}
+  }
+
+  // SQL block if present
+  if (payload.sql || payload.compiled_sql) {
+    html += `<div class="inspector-section"><h4>SQL</h4>
+      <div class="sql-block">${esc(payload.sql || payload.compiled_sql)}</div></div>`;
+  }
+
+  // Options (clarification)
+  if (s.options && Array.isArray(s.options)) {
+    html += `<div class="inspector-section"><h4>Options</h4>
+      <div class="payload-tree">${renderPayloadValue(s.options, 0)}</div></div>`;
+  }
+
+  // Diff
+  if (s.diff) {
+    html += `<div class="inspector-section"><h4>Diff</h4>
+      <div class="payload-tree">${renderPayloadValue(s.diff, 0)}</div></div>`;
+  }
+
+  // Full payload (smart render)
+  if (payload && typeof payload === 'object' && Object.keys(payload).length) {
+    html += `<div class="inspector-section"><h4>Payload</h4>
+      ${renderSmartPayload(payload)}</div>`;
+  } else if (typeof payload === 'string' && payload.length) {
+    html += `<div class="inspector-section"><h4>Payload</h4>
+      <pre>${esc(payload)}</pre></div>`;
+  }
+
+  // Copy stage button
+  html += `<div class="inspector-section">
+    <button class="btn-action" onclick="copyStageToClipboard()">📋 Stage Kopyala</button>
+  </div>`;
+
+  el.innerHTML = html;
+}
+
+function copyStageToClipboard() {
+  const s = state.selectedStageKey ? _getItem(state.selectedStageKey) : null;
+  if (!s) return;
+  const text = JSON.stringify(s, null, 2);
+  navigator.clipboard.writeText(text).then(
+    () => showToast('📋 Stage detayları panoya kopyalandı'),
+    () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('📋 Stage detayları panoya kopyalandı');
+    }
+  );
+}
+
+// ---- Helpers ----
+function esc(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ---- Search debounce ----
+let searchTimer = null;
+document.getElementById('convSearch').addEventListener('input', (e) => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    loadConversations(e.target.value.trim() || null);
+  }, 300);
+});
+
+// ---- Init ----
+loadConversations();
+</script>
+</body>
+</html>

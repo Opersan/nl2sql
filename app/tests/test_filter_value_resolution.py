@@ -173,13 +173,13 @@ class TestFilterValueResolutionService:
         assert "eslesen bir deger bulunamadi" in msg
         assert "Mevcut degerler" in msg
 
-    async def test_out_of_scope_column_is_no_op(self) -> None:
+    async def test_out_of_scope_column_is_no_op_without_executor(self) -> None:
         plan = _make_plan([_filter("BORDROLU", "E")])
 
         resolved_plan, trace = await self.svc.resolve(plan)
 
         assert resolved_plan is plan
-        assert trace["actions"][0]["reason"] == "out_of_scope_column_no_op"
+        assert trace["actions"][0]["reason"] == "no_profile_no_executor_no_op"
         assert trace["actions"][0]["no_op"] is True
 
     async def test_non_string_value_is_no_op(self) -> None:

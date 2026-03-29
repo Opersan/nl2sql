@@ -186,10 +186,25 @@ class ClarificationDecisionService:
         salvage_applied: bool,
         catalog_snapshot: CatalogSnapshot | None,
     ) -> QueryPlan:
-        if not plan.needs_clarification or parse_error_taxonomy or salvage_applied:
+        # Allow recovery for malformed_json (e.g. LLM returned {}) when
+        # query_understanding provides strong context.  Other taxonomies
+        # (multi_object_response, free_text_instead_of_json) stay blocked.
+        _recoverable_taxonomy = parse_error_taxonomy == "malformed_json"
+        if not plan.needs_clarification:
             return plan
-        if not plan.table or catalog_snapshot is None:
+        if parse_error_taxonomy and not _recoverable_taxonomy:
             return plan
+        if salvage_applied:
+            return plan
+
+        # When the planner returned {} the plan has no table.  Fall back to
+        # the root table identified by semantic resolution if available.
+        effective_table = plan.table
+        if not effective_table and semantic_diagnostics:
+            effective_table = semantic_diagnostics.get("selected_root_table")
+        if not effective_table or catalog_snapshot is None:
+            return plan
+
         if plan.select_columns or plan.filters or plan.aggregations or plan.group_by:
             return plan
         if self._is_restricted_clarification_message(plan.clarification_message):
@@ -201,7 +216,7 @@ class ClarificationDecisionService:
         ):
             return plan
 
-        default_projection = self._build_default_projection(plan.table, catalog_snapshot)
+        default_projection = self._build_default_projection(effective_table, catalog_snapshot)
         if not default_projection:
             return plan
 
@@ -213,6 +228,7 @@ class ClarificationDecisionService:
         return plan.model_copy(
             update={
                 "intent": intent,
+                "table": effective_table,
                 "select_columns": default_projection,
                 "needs_clarification": False,
                 "clarification_message": None,

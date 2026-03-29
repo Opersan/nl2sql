@@ -22,7 +22,6 @@ from app.domain.query_plan import (
     ComputedMeasureSpec,
     FilterOp,
     FilterSpec,
-    JoinSpec,
     OrderSpec,
     QueryPlan,
 )
