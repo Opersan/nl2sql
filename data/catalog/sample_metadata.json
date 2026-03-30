@@ -235,7 +235,7 @@
         },
         {
           "name": "BORDROLU",
-          "data_type": "NUMBER",
+          "data_type": "VARCHAR",
           "nullable": true,
           "restricted": false,
           "description": "Çalışanın bordrolu olduğunu gösteren bayraktır.",
@@ -267,7 +267,7 @@
         },
         {
           "name": "STAJYER",
-          "data_type": "NUMBER",
+          "data_type": "VARCHAR",
           "nullable": true,
           "restricted": false,
           "description": "Çalışanın stajyer olduğunu gösteren bayraktır.",

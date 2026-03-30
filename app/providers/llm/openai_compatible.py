@@ -498,6 +498,7 @@ class OpenAICompatibleProvider(LLMProvider):
                 "You are a structured output generator. "
                 "Respond ONLY with valid JSON matching the requested schema."
             ),
+            sampling_profile="planner",
             response_format={"type": "json_object"},
         )
         self.last_structured_response_text = content
@@ -609,7 +610,7 @@ class OpenAICompatibleProvider(LLMProvider):
         return response_model.model_validate_json(content)
 
     async def generate_text(self, prompt: str, *, disable_thinking: bool = False) -> str:
-        content = await self._chat_completion(prompt, disable_thinking=disable_thinking)
+        content = await self._chat_completion(prompt, disable_thinking=disable_thinking, sampling_profile="narrator")
         self.last_text_response_text = content
         return content
 
@@ -620,6 +621,7 @@ class OpenAICompatibleProvider(LLMProvider):
             "model": self._model,
             "messages": messages,
             "stream": True,
+            **self._sampling_params("narrator"),
         }
         if disable_thinking:
             payload["chat_template_kwargs"] = {"enable_thinking": False}
@@ -652,6 +654,29 @@ class OpenAICompatibleProvider(LLMProvider):
 
     # -- Internal ------------------------------------------------------------
 
+    @staticmethod
+    def _sampling_params(profile: str) -> dict[str, Any]:
+        """Return sampling hyperparameters for the given profile."""
+        from app.core.config import settings
+        if profile == "planner":
+            return {
+                "temperature": settings.planner_temperature,
+                "top_p": settings.planner_top_p,
+                "top_k": settings.planner_top_k,
+                "min_p": settings.planner_min_p,
+                "presence_penalty": settings.planner_presence_penalty,
+                "repetition_penalty": settings.planner_repetition_penalty,
+            }
+        # narrator / direct LLM
+        return {
+            "temperature": settings.narrator_temperature,
+            "top_p": settings.narrator_top_p,
+            "top_k": settings.narrator_top_k,
+            "min_p": settings.narrator_min_p,
+            "presence_penalty": settings.narrator_presence_penalty,
+            "repetition_penalty": settings.narrator_repetition_penalty,
+        }
+
     async def _chat_completion(
         self,
         prompt: str,
@@ -659,6 +684,7 @@ class OpenAICompatibleProvider(LLMProvider):
         system: str | None = None,
         response_format: dict[str, Any] | None = None,
         disable_thinking: bool = False,
+        sampling_profile: str = "narrator",
     ) -> str:
         messages: list[dict[str, str]] = []
         if system:
@@ -668,6 +694,7 @@ class OpenAICompatibleProvider(LLMProvider):
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
+            **self._sampling_params(sampling_profile),
         }
         if response_format:
             payload["response_format"] = response_format

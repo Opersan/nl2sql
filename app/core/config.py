@@ -101,6 +101,25 @@ class Settings(BaseSettings):
     week_start: str = "monday"
     system_currency: str = "TRY"
 
+    # --- LLM sampling parameters ---
+    # Planner (generate_structured): precise/deterministic — low temperature for
+    # stable JSON output, no presence penalty to avoid mangling JSON keys.
+    planner_temperature: float = 0.6
+    planner_top_p: float = 0.95
+    planner_top_k: int = 20
+    planner_min_p: float = 0.0
+    planner_presence_penalty: float = 0.0
+    planner_repetition_penalty: float = 1.0
+
+    # Narrator / direct LLM (generate_text / generate_stream): fluent Turkish
+    # prose with moderate diversity.
+    narrator_temperature: float = 0.7
+    narrator_top_p: float = 0.8
+    narrator_top_k: int = 20
+    narrator_min_p: float = 0.0
+    narrator_presence_penalty: float = 1.5
+    narrator_repetition_penalty: float = 1.0
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
