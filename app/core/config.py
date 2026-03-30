@@ -94,6 +94,13 @@ class Settings(BaseSettings):
     oracle_password: str = ""
     oracle_timeout: int = 30
 
+    # --- System context (date/time/fiscal) ---
+    system_timezone: str = "Europe/Istanbul"
+    fiscal_year_start: str = "2026-01-01"   # YYYY-MM-DD; year is advanced automatically
+    default_time_window: str = "last_30_days"
+    week_start: str = "monday"
+    system_currency: str = "TRY"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

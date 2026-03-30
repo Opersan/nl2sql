@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.context_builder import ContextBuilder
 from app.domain.catalog_models import CatalogSnapshot, TableMetadata
 from app.providers.documents.models import ExampleDocument, SchemaDocument
 
@@ -191,7 +192,11 @@ kabul edilmez.
 13. Zorunlu anahtarlar: intent, table, select_columns, filters, aggregations,
 group_by, order_by, joins, limit, needs_clarification, clarification_message.
 14. select_columns ve group_by yalnızca string listesi olmalı; object listesi yazma.
-15. filters içindeki value scalar, liste veya null olmalı; serbest şema object'i yazma.
+15. filters içindeki value scalar veya liste olmalı; serbest şema object'i yazma.
+15a. >=, <=, >, < operatörleri için value ASLA null olamaz — somut bir değer hesapla ve yaz.
+15b. Tarih filtreleri için sistem tarihini (system prompt'taki SYSTEM_DATE) baz alarak YYYY-MM-DD formatında somut tarih yaz.
+15c. MySQL DATE_SUB() veya "last_3_months_start" gibi placeholder değer yazma — hesaplanmış YYYY-MM-DD yaz.
+15d. "Son N ay" = SYSTEM_DATE'den N*30 gün geri; "Son N yıl" = SYSTEM_DATE'den N*365 gün geri.
 16. needs_clarification false ise clarification_message mutlaka null olmalı.
 17. needs_clarification true ise clarification_message zorunlu; select_columns,
 filters, aggregations, group_by, order_by, joins alanlarını boş liste ver.
@@ -447,7 +452,8 @@ def _join_sections(
     examples_block: str = "",
 ) -> str:
     """Join prompt sections with double-newline separator."""
-    sections = [_PLANNER_SYSTEM, f"Kullanılabilir tablolar:\n{catalog_block}"]
+    ctx_block = ContextBuilder().build().to_prompt_block()
+    sections = [_PLANNER_SYSTEM, ctx_block, f"Kullanılabilir tablolar:\n{catalog_block}"]
     if docs_block:
         sections.append(docs_block)
     if examples_block:
@@ -797,7 +803,8 @@ def _join_sections_two_tier(
     query_context_block: str = "",
 ) -> str:
     """Join two-tier prompt sections with double-newline separators."""
-    sections = [_PLANNER_SYSTEM, compact_index, detail_section]
+    ctx_block = ContextBuilder().build().to_prompt_block()
+    sections = [_PLANNER_SYSTEM, ctx_block, compact_index, detail_section]
     if query_context_block:
         sections.append(query_context_block)
     if docs_block:

@@ -613,6 +613,43 @@ class OpenAICompatibleProvider(LLMProvider):
         self.last_text_response_text = content
         return content
 
+    async def generate_stream(self, prompt: str, *, disable_thinking: bool = False):  # type: ignore[override]
+        """Stream tokens from the remote LLM via Server-Sent Events."""
+        messages: list[dict[str, str]] = [{"role": "user", "content": prompt}]
+        payload: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "stream": True,
+        }
+        if disable_thinking:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
+
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{self._base_url}/chat/completions",
+                json=payload,
+                headers=headers,
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                        token = chunk["choices"][0]["delta"].get("content") or ""
+                        if token:
+                            yield token
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
+
     # -- Internal ------------------------------------------------------------
 
     async def _chat_completion(

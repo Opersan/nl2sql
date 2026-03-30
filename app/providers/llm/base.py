@@ -8,7 +8,7 @@ any specific LLM SDK or protocol.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TypeVar
+from typing import AsyncIterator, TypeVar
 
 from pydantic import BaseModel
 
@@ -38,3 +38,14 @@ class LLMProvider(ABC):
         ``chat_template_kwargs``) to reduce latency.
         """
         ...
+
+    async def generate_stream(
+        self, prompt: str, *, disable_thinking: bool = False
+    ) -> AsyncIterator[str]:
+        """Stream tokens as they arrive.
+
+        Default implementation falls back to ``generate_text`` and yields
+        the full response as a single chunk.  Override for true streaming.
+        """
+        full = await self.generate_text(prompt, disable_thinking=disable_thinking)
+        yield full

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
 import time
 import uuid
-from typing import Any
+from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -122,7 +123,9 @@ async def _call_llm_direct(
     Builds a single prompt from the message history and calls
     ``llm.generate_text``.
     """
-    lines: list[str] = []
+    from app.core.context_builder import ContextBuilder
+    ctx_block = ContextBuilder().build().to_prompt_block()
+    lines: list[str] = [ctx_block]
     for msg in messages:
         role = msg.role.upper()
         content = (msg.content or "").strip()
@@ -637,6 +640,63 @@ async def _build_chat_completion_result(
     )
 
 
+# ---------------------------------------------------------------------------
+# Streaming helpers
+# ---------------------------------------------------------------------------
+
+
+def _sse_chunk(
+    chunk_id: str,
+    model: str,
+    created: int,
+    *,
+    delta: dict[str, Any],
+    finish_reason: str | None = None,
+) -> str:
+    """Serialize a single chat-completion-chunk to an SSE data line."""
+    chunk = {
+        "id": chunk_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": model,
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+    }
+    return f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+
+async def _sse_from_token_iter(
+    token_iter: AsyncIterator[str],
+    *,
+    chunk_id: str,
+    model: str,
+    created: int,
+) -> AsyncIterator[str]:
+    """Wrap an async token iterator in SSE envelope (role → tokens → stop → DONE)."""
+    yield _sse_chunk(chunk_id, model, created, delta={"role": "assistant"})
+    async for token in token_iter:
+        yield _sse_chunk(chunk_id, model, created, delta={"content": token})
+    yield _sse_chunk(chunk_id, model, created, delta={}, finish_reason="stop")
+    yield "data: [DONE]\n\n"
+
+
+async def _call_llm_direct_stream(
+    llm: LLMProvider,
+    messages: list[OAIChatMessage],
+) -> AsyncIterator[str]:
+    """Build prompt from message history and stream tokens from the LLM."""
+    from app.core.context_builder import ContextBuilder
+    ctx_block = ContextBuilder().build().to_prompt_block()
+    lines: list[str] = [ctx_block]
+    for msg in messages:
+        role = msg.role.upper()
+        content = (msg.content or "").strip()
+        if content:
+            lines.append(f"[{role}]\n{content}")
+    prompt = "\n\n".join(lines)
+    async for token in llm.generate_stream(prompt):
+        yield token
+
+
 def _stream_chat_completion(response: OAIChatResponse) -> StreamingResponse:
     def event_lines() -> Any:
         chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
@@ -693,6 +753,186 @@ def _stream_chat_completion(response: OAIChatResponse) -> StreamingResponse:
     return StreamingResponse(event_lines(), media_type="text/event-stream")
 
 
+async def _build_streaming_chat_completion(
+    *,
+    body: OAIChatRequest,
+    request: Request,
+    orchestrator: ChatOrchestrator,
+    llm: LLMProvider,
+) -> StreamingResponse:
+    """Return a StreamingResponse using real token streaming or fake typing effect."""
+    session_id = _resolve_oai_session_id(body, request)
+    openwebui_chat_id = request.headers.get("x-openwebui-chat-id")
+    user_msg = _extract_user_message(body)
+    clarification_manager = getattr(orchestrator, "_clarification_manager", None)
+    helper_kind = _detect_openwebui_helper_prompt(user_msg)
+
+    chunk_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    model = body.model or settings.openai_model or "nl2sql"
+    created = int(time.time())
+
+    def _fake_content_stream(content: str) -> StreamingResponse:
+        """Emit pre-built content as a minimal SSE stream (no fake typing delay)."""
+        return _stream_chat_completion(
+            _build_oai_response(
+                body=body, session_id=session_id, status="success", content=content
+            )
+        )
+
+    # Empty message
+    if not user_msg:
+        return _fake_content_stream("Lutfen bir soru sorun.")
+
+    # Open WebUI helper prompts (follow-up / title / tags)
+    if helper_kind is not None:
+        content = _build_openwebui_helper_content(helper_kind, _extract_conversation_seed(body))
+        return _fake_content_stream(content)
+
+    # ── enterprise_mode=false → real streaming ────────────────────────────
+    if not body.enterprise_mode:
+        logger.info(
+            "[openwebui-stream] session=%s enterprise_mode=false → direct LLM stream",
+            session_id,
+        )
+
+        async def _non_enterprise_stream():
+            try:
+                token_gen = _call_llm_direct_stream(llm, body.messages)
+                async for sse_line in _sse_from_token_iter(
+                    token_gen, chunk_id=chunk_id, model=model, created=created
+                ):
+                    yield sse_line
+            except Exception:
+                logger.exception("[openwebui-stream] direct LLM stream failed")
+                yield _sse_chunk(chunk_id, model, created, delta={"content": "Bir hata oluştu. Lütfen tekrar deneyin."})
+                yield _sse_chunk(chunk_id, model, created, delta={}, finish_reason="stop")
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(_non_enterprise_stream(), media_type="text/event-stream")
+
+    # ── enterprise_mode=true → classify intent ────────────────────────────
+    intent = _classify_intent(user_msg)
+    logger.info(
+        "[openwebui-stream] session=%s intent=%s message=%r",
+        session_id,
+        intent,
+        user_msg[:160],
+    )
+
+    # GENERAL → real streaming
+    if intent == "GENERAL":
+        async def _general_stream():
+            try:
+                token_gen = _call_llm_direct_stream(llm, body.messages)
+                async for sse_line in _sse_from_token_iter(
+                    token_gen, chunk_id=chunk_id, model=model, created=created
+                ):
+                    yield sse_line
+            except Exception:
+                logger.exception("[openwebui-stream] GENERAL stream failed")
+                yield _sse_chunk(chunk_id, model, created, delta={"content": "Bir hata oluştu. Lütfen tekrar deneyin."})
+                yield _sse_chunk(chunk_id, model, created, delta={}, finish_reason="stop")
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(_general_stream(), media_type="text/event-stream")
+
+    # CLARIFICATION → steered messages → real streaming
+    if intent == "CLARIFICATION":
+        clarification_prompt = (
+            "[Netleştirme Gerekli]\n"
+            "Kullanıcının sorusu belirsiz — eksik boyut, filtre veya kapsam bilgisi var.\n"
+            "SADECE tek bir kısa ve somut netleştirme sorusu sor.\n"
+            "Veri getirme, açıklama yapma, analiz üretme.\n"
+            "Örnekler:\n"
+            "- 'Hangi tarih aralığı için sonuç istiyorsunuz?'\n"
+            "- 'DT-Dizayn mı yoksa ELM-Dizayn mı?'\n"
+            "- 'Hangi fabrika lokasyonu?'"
+        )
+        steered_messages = list(body.messages)
+        steered_messages.insert(
+            max(len(steered_messages) - 1, 0),
+            OAIChatMessage(role="system", content=clarification_prompt),
+        )
+
+        async def _clarification_stream():
+            try:
+                token_gen = _call_llm_direct_stream(llm, steered_messages)
+                async for sse_line in _sse_from_token_iter(
+                    token_gen, chunk_id=chunk_id, model=model, created=created
+                ):
+                    yield sse_line
+            except Exception:
+                logger.exception("[openwebui-stream] CLARIFICATION stream failed")
+                yield _sse_chunk(chunk_id, model, created, delta={"content": "Sorunuzu biraz daha netleştirir misiniz?"})
+                yield _sse_chunk(chunk_id, model, created, delta={}, finish_reason="stop")
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(_clarification_stream(), media_type="text/event-stream")
+
+    # DATA / METADATA — stale clarification check
+    if body.clarification_id and clarification_manager is not None:
+        pending = clarification_manager.get_pending(session_id)
+        if pending is not None and pending.clarification_id != body.clarification_id:
+            question = clarification_manager.build_clarification_message(pending)
+            payload = _clarification_payload_from_pending(pending, question)
+            return _fake_content_stream(_render_clarification_content(question, payload))
+
+    # DATA / METADATA → pipeline with fake "thinking" animation then result
+    async def _pipeline_stream():
+        # Run the pipeline as a background task so we can stream thinking
+        # indicators while waiting for the result.
+        pipeline_task = asyncio.create_task(
+            orchestrator.handle_message(
+                session_id, user_msg, openwebui_chat_id=openwebui_chat_id
+            )
+        )
+
+        yield _sse_chunk(chunk_id, model, created, delta={"role": "assistant"})
+
+        thinking_tokens = [
+            "⏳", " Sorgu", " analiz", " ediliyor", ".",
+            ".", ".", "\n",
+            "🔍", " SQL", " oluşturuluyor", ".",
+            ".", ".", "\n",
+            "📊", " Sonuçlar", " getiriliyor", ".",
+            ".", ".",
+        ]
+        for token in thinking_tokens:
+            if pipeline_task.done():
+                break
+            yield _sse_chunk(chunk_id, model, created, delta={"content": token})
+            await asyncio.sleep(0.15)
+
+        try:
+            result = await pipeline_task
+        except Exception:
+            logger.exception("[openwebui-stream] pipeline failed")
+            yield _sse_chunk(chunk_id, model, created, delta={"content": "\n\nBir hata oluştu."})
+            yield _sse_chunk(chunk_id, model, created, delta={}, finish_reason="stop")
+            yield "data: [DONE]\n\n"
+            return
+
+        result_content = result.answer
+        if result.status == "clarification" and result.clarification_payload is not None:
+            result_content = _render_clarification_content(
+                result.answer, result.clarification_payload
+            )
+
+        logger.info(
+            "[openwebui-stream] session=%s status=%s intent=%s",
+            session_id,
+            result.status,
+            intent,
+        )
+
+        yield _sse_chunk(chunk_id, model, created, delta={"content": "\n\n"})
+        yield _sse_chunk(chunk_id, model, created, delta={"content": result_content})
+        yield _sse_chunk(chunk_id, model, created, delta={}, finish_reason="stop")
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(_pipeline_stream(), media_type="text/event-stream")
+
+
 @router.get("/v1/models", response_model=OAIModelListResponse)
 async def openai_models() -> OAIModelListResponse:
     """Expose a minimal OpenAI-compatible model list for Open WebUI."""
@@ -712,12 +952,16 @@ async def openai_chat_completions(
     llm: LLMProvider = Depends(_get_llm_provider),
 ) -> OAIChatResponse | StreamingResponse:
     """OpenAI-compatible chat endpoint with Open WebUI-friendly continuity."""
-    response = await _build_chat_completion_result(
+    if body.stream:
+        return await _build_streaming_chat_completion(
+            body=body,
+            request=request,
+            orchestrator=orchestrator,
+            llm=llm,
+        )
+    return await _build_chat_completion_result(
         body=body,
         request=request,
         orchestrator=orchestrator,
         llm=llm,
     )
-    if body.stream:
-        return _stream_chat_completion(response)
-    return response

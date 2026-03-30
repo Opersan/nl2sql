@@ -476,12 +476,12 @@ class SQLCompiler:
                     ob_parts.append(f"{matched_alias} {spec.direction.value}")
                 else:
                     col_ref = _resolve_multi(spec.column, spec.table)
-                    if plan.aggregations and plan.group_by:
+                    if plan.group_by:
                         group_refs = {_resolve_multi(c) for c in plan.group_by}
                         if col_ref not in group_refs:
                             continue
                     ob_parts.append(f"{col_ref} {spec.direction.value}")
-            order_by_clause = f"ORDER BY {', '.join(ob_parts)}"
+            order_by_clause = f"ORDER BY {', '.join(ob_parts)}" if ob_parts else ""
 
         # Assemble
         parts = [select_clause, from_clause] + join_clauses
@@ -688,7 +688,7 @@ class SQLCompiler:
 
         parts: list[str] = []
         group_cols: set[str] = set()
-        if plan.aggregations and plan.group_by:
+        if plan.group_by:
             group_cols = {self._resolve(c, table) for c in plan.group_by}
         for spec in plan.order_by:
             matched_alias = agg_alias_map.get(casefold_tr(spec.column))
@@ -697,7 +697,7 @@ class SQLCompiler:
                 parts.append(f"{matched_alias} {spec.direction.value}")
             else:
                 col = self._resolve(spec.column, table)
-                if plan.aggregations and plan.group_by and col not in group_cols:
+                if plan.group_by and col not in group_cols:
                     continue
                 parts.append(f"{col} {spec.direction.value}")
         if not parts:

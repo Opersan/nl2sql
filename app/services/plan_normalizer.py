@@ -428,6 +428,25 @@ def normalize_raw_plan(
                     f["value"] = None
                     stats.filter_op_normalized += 1
 
+                # Comparison ops (>=, <=, >, <) with null value are semantically
+                # invalid — drop the filter rather than letting Pydantic raise.
+                if not f.get("_drop"):
+                    current_op_check = f.get("op")
+                    val_check = f.get("value")
+                    null_like_check = val_check is None or (
+                        isinstance(val_check, str)
+                        and val_check.strip().upper() in {"NULL", "NONE"}
+                    )
+                    if null_like_check and current_op_check in {">=", "<=", ">", "<"}:
+                        logger.warning(
+                            "Filter column=%r op=%r has null value — dropping "
+                            "filter (cannot bind null for comparison op).",
+                            f.get("column"),
+                            current_op_check,
+                        )
+                        f["_drop"] = True
+                        stats.filter_op_normalized += 1
+
                 # Normalize relative-date string values
                 if not f.get("_drop"):
                     val = f.get("value")
