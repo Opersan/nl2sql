@@ -659,3 +659,140 @@ class TestNarrativeCorrection:
         result = await svc.process("s1", message, plan)
         assert result.followup_detected is True, f"Expected narrative_correction for: {message!r}"
         assert result.message_type == "narrative_correction"
+
+
+# ── Test: comparison entity synthesis ─────────────────────────────────────────
+
+
+def _person_plan() -> QueryPlan:
+    """A person-specific plan with AD/SOYAD filters (Turn 1/2 snapshot)."""
+    return QueryPlan(
+        intent="FURKAN KİRAZ hakkında bilgi",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        select_columns=["DOGUM_TARIHI"],
+        filters=[
+            FilterSpec(column="AD", op=FilterOp.EQ, value="FURKAN"),
+            FilterSpec(column="SOYAD", op=FilterOp.EQ, value="KİRAZ"),
+        ],
+        limit=100,
+    )
+
+
+class TestComparisonEntitySynthesis:
+    """When planner produces empty-filter clarification plan for a comparison,
+    the reducer should synthesise IN-filters from the new entity name."""
+
+    @pytest.mark.asyncio
+    async def test_comparison_synthesises_in_filters(self, svc: FollowupContextMergeService) -> None:
+        svc.record_success("s1", _person_plan())
+
+        # Planner produces clarification plan with no filters
+        broken_plan = QueryPlan(
+            intent="yaş farkı hesapla",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["DOGUM_TARIHI"],
+            filters=[],
+            limit=100,
+            needs_clarification=True,
+            clarification_message="Hangi kişi?",
+        )
+        result = await svc.process(
+            "s1",
+            "Peki bu kişi ile AHMET UYGUN'un arasındaki yaş farkı nedir",
+            broken_plan,
+        )
+
+        assert result.followup_detected is True
+        assert result.message_type == "comparison_request"
+        assert result.merged_plan is not None
+        assert result.merged_plan.needs_clarification is False
+
+        # Must have IN filters for both AD and SOYAD
+        in_filters = {
+            f.column.upper(): f
+            for f in result.merged_plan.filters
+            if f.op == FilterOp.IN
+        }
+        assert "AD" in in_filters, "AD should have IN filter"
+        assert "SOYAD" in in_filters, "SOYAD should have IN filter"
+
+        ad_values = sorted(v.upper() for v in in_filters["AD"].value)
+        assert ad_values == ["AHMET", "FURKAN"]
+
+        soyad_values = sorted(v.upper() for v in in_filters["SOYAD"].value)
+        assert soyad_values == ["KİRAZ", "UYGUN"]
+
+    @pytest.mark.asyncio
+    async def test_comparison_restores_table_from_snapshot(self, svc: FollowupContextMergeService) -> None:
+        svc.record_success("s1", _person_plan())
+
+        broken_plan = QueryPlan(
+            intent="yaş farkı",
+            table=None,
+            select_columns=[],
+            filters=[],
+            limit=10,
+            needs_clarification=True,
+            clarification_message="?",
+        )
+        result = await svc.process(
+            "s1",
+            "AHMET UYGUN ile arasındaki fark nedir",
+            broken_plan,
+        )
+
+        assert result.merged_plan is not None
+        assert result.merged_plan.table == "XXBT_PDKS_PER_DETAILS_V"
+
+    @pytest.mark.asyncio
+    async def test_comparison_with_existing_filters_still_works(self, svc: FollowupContextMergeService) -> None:
+        """When planner DOES extract the new entity filters, IN-merge works as before."""
+        svc.record_success("s1", _person_plan())
+
+        new_plan = QueryPlan(
+            intent="yaş farkı",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["DOGUM_TARIHI"],
+            filters=[
+                FilterSpec(column="AD", op=FilterOp.EQ, value="AHMET"),
+                FilterSpec(column="SOYAD", op=FilterOp.EQ, value="UYGUN"),
+            ],
+            limit=100,
+        )
+        result = await svc.process(
+            "s1",
+            "AHMET UYGUN ile arasındaki yaş farkı",
+            new_plan,
+        )
+
+        assert result.followup_detected is True
+        in_filters = {
+            f.column.upper(): f
+            for f in result.merged_plan.filters
+            if f.op == FilterOp.IN
+        }
+        assert "AD" in in_filters
+        assert "SOYAD" in in_filters
+
+    @pytest.mark.asyncio
+    async def test_comparison_clears_clarification(self, svc: FollowupContextMergeService) -> None:
+        svc.record_success("s1", _person_plan())
+
+        broken_plan = QueryPlan(
+            intent="?",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=[],
+            filters=[],
+            limit=10,
+            needs_clarification=True,
+            clarification_message="Detay veriniz.",
+        )
+        result = await svc.process(
+            "s1",
+            "bu kişi ile MEHMET YILMAZ arasındaki fark",
+            broken_plan,
+        )
+
+        assert result.merged_plan is not None
+        assert result.merged_plan.needs_clarification is False
+        assert result.merged_plan.clarification_message is None

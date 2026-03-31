@@ -157,6 +157,7 @@ class ContinuationClassification:
     comparison_entities: list[str]
     raw_response: str = ""
     llm_used: bool = False
+    user_message: str = ""
 
 
 async def _classify_continuation(
@@ -169,7 +170,9 @@ async def _classify_continuation(
     Falls back to heuristic classification if LLM is unavailable or fails.
     """
     if llm is None:
-        return _heuristic_classify(message, snapshot)
+        result = _heuristic_classify(message, snapshot)
+        result.user_message = message
+        return result
 
     # Build compact context
     previous_query = (
@@ -198,12 +201,15 @@ async def _classify_continuation(
         if parsed is not None:
             parsed.raw_response = raw
             parsed.llm_used = True
+            parsed.user_message = message
             return parsed
         logger.warning("[continuation] LLM response parse failed, using heuristic")
     except Exception:
         logger.warning("[continuation] LLM classification failed, using heuristic")
 
-    return _heuristic_classify(message, snapshot)
+    result = _heuristic_classify(message, snapshot)
+    result.user_message = message
+    return result
 
 
 def _parse_classification_response(raw: str) -> ContinuationClassification | None:
@@ -274,6 +280,11 @@ def _heuristic_classify(
 
     has_compare = any(s in msg_lower for s in _COMPARE_SIGNALS)
     if has_compare and snapshot.active_entities:
+        # Extract comparison entity names from message (uppercase word groups)
+        comp_entities: list[str] = [
+            m.group(1).strip()
+            for m in _UPPERCASE_NAME_RE.finditer(message)
+        ]
         return ContinuationClassification(
             message_type="comparison_request",
             references=[{
@@ -282,7 +293,7 @@ def _heuristic_classify(
                 "confidence": "medium",
             }],
             preserve_previous_filters=True,
-            comparison_entities=[],
+            comparison_entities=comp_entities,
         )
 
     has_reference = any(s in msg_lower for s in _REFERENCE_SIGNALS)
@@ -347,6 +358,74 @@ def _summarize_filters(filters: tuple[FilterSpec, ...]) -> str:
 # C. State Reducer (deterministic)
 # ═══════════════════════════════════════════════════════════════════════════
 
+# Consecutive uppercase Turkish words — matches names like "AHMET UYGUN"
+_UPPERCASE_NAME_RE = re.compile(
+    r"([A-ZÇĞİÖŞÜ]{2,}(?:\s+[A-ZÇĞİÖŞÜ]{2,})+)"
+)
+
+
+def _extract_new_comparison_entity(
+    message: str,
+    classification: ContinuationClassification,
+    snapshot: SuccessfulTurnSnapshot,
+) -> str | None:
+    """Find the NEW entity name that is different from the snapshot entity.
+
+    Sources (in priority order):
+    1. ``classification.comparison_entities`` (from LLM)
+    2. Consecutive uppercase word groups in the message text
+    """
+    if not snapshot.active_entities:
+        return None
+
+    ref_upper = snapshot.active_entities[0].surface_form.upper().strip()
+
+    # 1. LLM comparison_entities
+    for name in classification.comparison_entities:
+        name_clean = name.strip()
+        if name_clean and name_clean.upper() != ref_upper:
+            return name_clean
+
+    # 2. Uppercase word groups in message
+    for m in _UPPERCASE_NAME_RE.finditer(message):
+        candidate = m.group(1).strip()
+        if candidate.upper() != ref_upper:
+            return candidate
+
+    return None
+
+
+def _synthesize_comparison_filters(
+    snapshot: SuccessfulTurnSnapshot,
+    new_plan: QueryPlan,
+    new_entity_name: str,
+) -> QueryPlan:
+    """Create EQ filters for *new_entity_name* using the snapshot's column mapping.
+
+    Generic — relies on ``active_entities[0].filter_columns`` for the column
+    order, not on hardcoded column names.
+    """
+    ref_entity = snapshot.active_entities[0]
+    col_order = list(ref_entity.filter_columns.keys())  # e.g. ["AD", "SOYAD"]
+    parts = new_entity_name.split()
+
+    if len(parts) != len(col_order):
+        return new_plan  # can't map safely
+
+    synth_filters = list(new_plan.filters)
+    for col, val in zip(col_order, parts):
+        # Inherit table from the corresponding snapshot filter
+        table: str | None = None
+        for f in snapshot.filters:
+            if f.column.upper() == col.upper():
+                table = f.table
+                break
+        synth_filters.append(FilterSpec(
+            column=col, table=table, op=FilterOp.EQ, value=val.upper(),
+        ))
+
+    return new_plan.model_copy(update={"filters": synth_filters})
+
 
 def _reduce_reference_question(
     snapshot: SuccessfulTurnSnapshot,
@@ -399,8 +478,31 @@ def _reduce_comparison_request(
 
     Generic — no hardcoded column names.  Any EQ string filter whose value
     differs between the snapshot and the new plan is merged into an IN filter.
+
+    When the planner produces a plan without entity filters (e.g. it set
+    ``needs_clarification=True`` with empty filters), the reducer synthesises
+    filters for the new comparison entity using the snapshot's column
+    structure + the entity name from ``classification.comparison_entities``
+    or from the user message text.
     """
-    new_filter_cols: set[str] = {f.column.upper() for f in new_plan.filters}
+    # If the new plan has no EQ-string filters, try to synthesise them
+    has_eq_string = any(
+        f.op == FilterOp.EQ and isinstance(f.value, str)
+        for f in new_plan.filters
+    )
+    working_plan = new_plan
+    if not has_eq_string and snapshot.active_entities:
+        new_entity = _extract_new_comparison_entity(
+            classification.user_message,
+            classification,
+            snapshot,
+        )
+        if new_entity:
+            working_plan = _synthesize_comparison_filters(
+                snapshot, new_plan, new_entity,
+            )
+
+    new_filter_cols: set[str] = {f.column.upper() for f in working_plan.filters}
     prev_eq_filters: dict[str, FilterSpec] = {
         f.column.upper(): f for f in snapshot.filters
         if f.op == FilterOp.EQ and isinstance(f.value, str)
@@ -410,7 +512,7 @@ def _reduce_comparison_request(
     comparison_applied = False
     in_merged_cols: set[str] = set()  # columns already merged via IN
 
-    for f in new_plan.filters:
+    for f in working_plan.filters:
         col_up = f.column.upper()
         if f.op == FilterOp.EQ and isinstance(f.value, str):
             prev_f = prev_eq_filters.get(col_up)
@@ -433,7 +535,7 @@ def _reduce_comparison_request(
 
     # Carry forward non-overridden, non-IN-merged filters from snapshot
     preserved: list[str] = []
-    added: list[str] = [f.column for f in new_plan.filters]
+    added: list[str] = [f.column for f in working_plan.filters]
 
     for prev_filter in snapshot.filters:
         col_upper = prev_filter.column.upper()
@@ -457,8 +559,9 @@ def _reduce_comparison_request(
     else:
         merged_cols = new_cols
 
-    merged_plan = new_plan.model_copy(
+    merged_plan = working_plan.model_copy(
         update={
+            "table": working_plan.table or snapshot.table,
             "filters": merged_filters,
             "select_columns": merged_cols,
             "limit": new_limit,
