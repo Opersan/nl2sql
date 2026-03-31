@@ -322,16 +322,21 @@ class PlannerService:
             normalized_user_message=qu.normalized_question,
         )
         trace["query_understanding"] = qu.as_trace_dict()
+
         logger.info(
             "Query understanding: modules=%s, entities=%s, confidence=%s",
             qu.inferred_modules, qu.detected_entities, qu.entity_confidence,
         )
 
         # 2. Structured schema context
+        import time as _time
+        _retrieval_t0 = _time.perf_counter()
         planning_context = await self._context_assembly_service.assemble(
             request_context,
             qu,
         )
+        _retrieval_ms = int((_time.perf_counter() - _retrieval_t0) * 1000)
+        _schema_tables = [t.name for t in planning_context.retrieved_snapshot.tables]
 
         # 4. Document / example context (hybrid layer)
         prompt_result = await self._prompt_assembly_service.assemble(
@@ -344,7 +349,7 @@ class PlannerService:
         planning_context = prompt_result.context
         prompt_trace = prompt_result.trace
         trace["retrieval"] = {
-            "schema_tables": [table.name for table in planning_context.retrieved_snapshot.tables],
+            "schema_tables": _schema_tables,
             **planning_context.retrieval_diagnostics.as_trace_dict(),
             "schema_docs": prompt_trace.get("schema_docs", []),
             "examples": prompt_trace.get("examples", []),
@@ -356,6 +361,7 @@ class PlannerService:
         }
         trace["prompt"]["full_prompt_text"] = prompt
 
+        _plan_t0 = _time.perf_counter()
         try:
             generation_result = await self._plan_generation_service.generate(prompt)
         except Exception as exc:
@@ -374,6 +380,8 @@ class PlannerService:
             ) from exc
 
         query_plan = generation_result.plan
+        _plan_ms = int((_time.perf_counter() - _plan_t0) * 1000)
+
         trace["llm"] = {
             "raw_response_text": generation_result.raw_response_text,
             "parse_error": generation_result.parse_error,

@@ -177,7 +177,9 @@ Kurallar:
 clarification_message dolu olsun, query alanlarını boş listeye indir.
 5. intent alanını Türkçe yaz.
 6. Alias kullanabilirsin; validation katmanı çözecektir.
-7. Aktif çalışan = CIKIS_TARIHI IS NULL (CIKIS_TARIHI boşsa çalışan aktiftir).
+7. Aktif çalışan = CIKIS_TARIHI IS NULL. Bu filtreyi SADECE kullanıcı açıkça "aktif", \
+"mevcut", "hâlâ çalışan" gibi ifadeler kullandığında ekle. Kullanıcı sadece \
+"çalışanları listele" diyorsa CIKIS_TARIHI filtresi EKLEME.
 
 Hibrit bağlam kuralları:
 8. Yapısal katalog (yukarıdaki tablo listesi) asıl referans kaynağıdır.

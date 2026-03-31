@@ -1018,7 +1018,7 @@ def validate_registry_against_catalog(
 
             for agg in intent_def.aggregations or []:
                 atbl = agg.table or tbl_for_intent or ""
-                if atbl and agg.column:
+                if atbl and agg.column and agg.column != "*":
                     _check_column(atbl, agg.column, f"{ictx}.aggregations")
 
             for col in intent_def.select_columns or []:
@@ -1027,8 +1027,8 @@ def validate_registry_against_catalog(
 
             for cm in intent_def.computed_measures or []:
                 cmtbl = cm.table or tbl_for_intent or ""
-                if cmtbl:
-                    _check_column(cmtbl, cm.name, f"{ictx}.computed_measures")
+                # computed_measures are virtual — skip column validation
+                # since the name is an alias, not a real DB column.
 
     if errors:
         logger.warning(

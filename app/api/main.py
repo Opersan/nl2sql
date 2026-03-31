@@ -58,6 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await run_store_inst.close()
 
 
+
 def _resolve_inner_executor(app: FastAPI) -> object | None:
     """Return the inner executor instance if the chat orchestrator is wired."""
     chat_orchestrator = getattr(app.state, "chat_orchestrator", None)
