@@ -55,6 +55,7 @@ class FilterValueProfileProvider:
         self._profiles_by_key: dict[str, FilterValueProfile] = {}
         self._profiles_by_column: dict[str, FilterValueProfile] = {}
         self._policy = ValueMatchingPolicy()
+        self._table_active_conditions: dict[str, str] = {}
 
     @property
     def config_path(self) -> Path:
@@ -75,6 +76,17 @@ class FilterValueProfileProvider:
             if profile is not None:
                 return profile
         return self._profiles_by_column.get(normalized_column)
+
+    def get_table_active_condition(self, table: str | None) -> str | None:
+        """Return the SQL WHERE fragment that restricts to active records for a table.
+
+        Returns ``None`` if no active condition is configured for the given table.
+        Example: ``'CIKIS_TARIHI IS NULL'`` for XXBT_PDKS_PER_DETAILS_V.
+        """
+        self._ensure_loaded()
+        if not table:
+            return None
+        return self._table_active_conditions.get(str(table).strip().upper())
 
     def _ensure_loaded(self) -> None:
         if self._loaded:
@@ -108,6 +120,14 @@ class FilterValueProfileProvider:
         profiles = raw.get("profiles")
         if not isinstance(profiles, dict):
             return
+
+        active_conds = raw.get("table_active_conditions")
+        if isinstance(active_conds, dict):
+            self._table_active_conditions = {
+                str(k).strip().upper(): str(v).strip()
+                for k, v in active_conds.items()
+                if isinstance(k, str) and isinstance(v, str) and v.strip()
+            }
 
         by_key: dict[str, FilterValueProfile] = {}
         by_column: dict[str, FilterValueProfile] = {}

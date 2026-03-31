@@ -210,6 +210,28 @@ class FilterValueResolutionService:
             base_action.update({"reason": "non_string_value_no_op", "no_op": True})
             return base_action, filter_spec, False, None
 
+        # ── User-literal passthrough ─────────────────────────────────────
+        # If the filter value appears verbatim in the user's original
+        # question, the user explicitly typed it (e.g. a person name).
+        # Trust it and skip fuzzy resolution / clarification entirely.
+        if (
+            original_question
+            and filter_spec.op == FilterOp.EQ
+            and len(original_value.strip()) >= 2
+            and self._is_user_literal(original_value, original_question)
+        ):
+            logger.info(
+                "[fvr] %s.%s value=%r → user-literal in question → passthrough",
+                filter_spec.table, filter_spec.column, original_value,
+            )
+            base_action.update({
+                "reason": "user_literal_passthrough",
+                "confidence": 1.0,
+                "no_op": True,
+                "source": "user_literal",
+            })
+            return base_action, filter_spec, False, None
+
         profile = self._provider.get_profile(filter_spec.table, filter_spec.column)
 
         # ── Determine resolver mode ──────────────────────────────────────
@@ -264,6 +286,17 @@ class FilterValueResolutionService:
         matches: list[CandidateMatch] = []
         if profile is not None:
             matches = self._match_candidates(profile, normalized_value, policy)
+            if matches:
+                logger.info(
+                    "[fvr] %s.%s value=%r → profile hit top=(%r, %.2f, %s)",
+                    filter_spec.table, filter_spec.column, original_value,
+                    matches[0].canonical_value, matches[0].score, matches[0].reason,
+                )
+            else:
+                logger.info(
+                    "[fvr] %s.%s value=%r → profile miss (no candidates scored) → falling back to DB",
+                    filter_spec.table, filter_spec.column, original_value,
+                )
             preview = [candidate.canonical_value for candidate in matches[: policy.candidate_preview_limit]]
             ranking_scores = [
                 {"value": m.canonical_value, "score": round(m.score, 3), "reason": m.reason}
@@ -274,6 +307,11 @@ class FilterValueResolutionService:
                 "candidate_values": preview,
                 "ranking_scores": ranking_scores,
             })
+        else:
+            logger.info(
+                "[fvr] %s.%s value=%r → no static profile → falling back to DB",
+                filter_spec.table, filter_spec.column, original_value,
+            )
 
         # ── DB fallback: no profile OR profile had zero matches ──────────
         if not matches:
@@ -305,6 +343,11 @@ class FilterValueResolutionService:
                         CandidateMatch(canonical_value=v, score=0.0, reason="db_canonical_fallback")
                         for v in db_candidate_values
                     ]
+                    logger.info(
+                        "[fvr] %s.%s value=%r → DB candidates scored 0 → clarification (options: %s)",
+                        filter_spec.table, filter_spec.column, original_value,
+                        db_candidate_values,
+                    )
                     display_value = effective_value if like_input else original_value
                     clarification_info = self._create_clarification(
                         filter_spec, display_value, db_candidate_values, plan,
@@ -363,6 +406,11 @@ class FilterValueResolutionService:
         gap = top_candidate.score - runner_up.score if runner_up is not None else 1.0
 
         if top_candidate.score < policy.min_select_score:
+            logger.info(
+                "[fvr] %s.%s value=%r → low confidence (score=%.2f < %.2f) → clarification",
+                filter_spec.table, filter_spec.column, original_value,
+                top_candidate.score, policy.min_select_score,
+            )
             clarification_info = self._create_clarification(
                 filter_spec, original_value, preview, plan,
                 session_id=session_id, original_question=original_question,
@@ -382,6 +430,11 @@ class FilterValueResolutionService:
             return base_action, filter_spec, False, clarification_info
 
         if runner_up is not None and gap < policy.min_score_gap:
+            logger.info(
+                "[fvr] %s.%s value=%r → ambiguous (top=%.2f runner_up=%.2f gap=%.2f < %.2f) → tiebreak/clarification",
+                filter_spec.table, filter_spec.column, original_value,
+                top_candidate.score, runner_up.score, gap, policy.min_score_gap,
+            )
             # Attempt LLM tie-break if available — narrow set only (top 3 max)
             tiebreak_candidates = matches[:3]
             llm_result = await self._llm_tiebreak(
@@ -434,6 +487,17 @@ class FilterValueResolutionService:
 
         resolved_value = top_candidate.canonical_value
         changed = resolved_value != original_value or like_input
+        if changed:
+            logger.info(
+                "[fvr] %s.%s value=%r → resolved=%r (score=%.2f, %s)",
+                filter_spec.table, filter_spec.column, original_value,
+                resolved_value, top_candidate.score, top_candidate.reason,
+            )
+        else:
+            logger.info(
+                "[fvr] %s.%s value=%r → already canonical, no change",
+                filter_spec.table, filter_spec.column, original_value,
+            )
         update_fields: dict[str, Any] = {"value": resolved_value}
         if like_input:
             update_fields["op"] = FilterOp.EQ
@@ -537,6 +601,11 @@ class FilterValueResolutionService:
             return None
         except Exception:
             return None
+
+    @staticmethod
+    def _is_user_literal(value: str, question: str) -> bool:
+        """Check if filter value appears verbatim in the user's question."""
+        return normalize_for_matching(value) in normalize_for_matching(question)
 
     def _match_candidates(
         self,
@@ -648,9 +717,17 @@ class FilterValueResolutionService:
             return self._db_value_cache[cache_key]
         try:
             from app.domain.execution_models import CompiledQuery
+            active_cond = self._provider.get_table_active_condition(table)
+            where_parts = [f"{column} IS NOT NULL"]
+            if active_cond:
+                where_parts.append(active_cond)
+            where_clause = " AND ".join(where_parts)
+            # ROWNUM must be applied AFTER DISTINCT in Oracle; otherwise it
+            # limits raw rows before deduplication, missing rare values.
             sql = (
-                f"SELECT DISTINCT {column} FROM {table} "
-                f"WHERE {column} IS NOT NULL AND ROWNUM <= :p1"
+                f"SELECT * FROM ("
+                f"SELECT DISTINCT {column} FROM {table} WHERE {where_clause}"
+                f") WHERE ROWNUM <= :p1"
             )
             cq = CompiledQuery(sql=sql, params={"p1": _DB_DISTINCT_LIMIT}, table=table)
             result = await self._executor.execute(cq)

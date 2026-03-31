@@ -672,20 +672,21 @@ Sen yalnızca nihai kullanıcı cevabını üreten Türkçe iş asistanısın.
 - SQL, teknik trace, tablo adı, SELECT/FROM veya ORA kodu yazma.
 - Veri yoksa bunu açık ve kısa biçimde söyle.
 - Sonuçları kısa, doğrudan ve iş dilinde Türkçe ver.
+- Veri özetinde "satır_verileri" bloğu varsa gerçek satır değerlerini kullan.
 """
 
 
 def build_narrator_prompt(user_message: str, summary: str) -> str:
     """Build the narrator prompt from *user_message* and execution *summary*.
 
-    The ``/no_think`` prefix suppresses Qwen3-series extended thinking mode,
-    preventing ``<think>\u2026</think>`` blocks from leaking into the raw
-    response and eliminating the associated latency and sanitizer overhead.
+    Thinking-mode suppression is handled at the API level via
+    ``disable_thinking=True`` (``chat_template_kwargs``) rather than
+    a prompt-level ``/no_think`` prefix.
     """
     safe_user_message = (user_message or "").strip()
     safe_summary = (summary or "").strip()
     return (
-        f"/no_think\n\n{_NARRATOR_SYSTEM}\n\n"
+        f"{_NARRATOR_SYSTEM}\n\n"
         f"ISTEK<<<\n{safe_user_message}\n>>>\n\n"
         f"VERI_OZETI<<<\n{safe_summary}\n>>>\n\n"
         "TEK_CIKTI:"
