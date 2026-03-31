@@ -31,3 +31,7 @@ Thumbs.db
 
 # Local outputs
 results/
+
+data/run_store.*
+*.db
+data/run_store.db
