@@ -321,6 +321,12 @@ class OracleExecutor(ExecutorProvider):
                         cur.arraysize = fetch_hint
                     if hasattr(cur, "prefetchrows"):
                         cur.prefetchrows = fetch_hint
+                    logger.info(
+                        "Oracle executing SQL (table=%s):\n%s\nparams=%s",
+                        compiled_query.table,
+                        compiled_query.sql,
+                        compiled_query.params,
+                    )
                     cur.execute(compiled_query.sql, compiled_query.params)
                     columns: list[str] = (
                         [d[0].lower() for d in cur.description]

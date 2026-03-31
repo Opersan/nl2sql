@@ -131,6 +131,7 @@ _STAGE_GROUPS: dict[str, str] = {
     "canonicalize": "grounding",
     "filter_column_resolution": "grounding",
     "filter_value_resolution": "grounding",
+    "followup_context_merge": "grounding",
     "pending_clarification_created": "clarification",
     "clarification_reply_received": "clarification",
     "user_selected_candidate": "clarification",

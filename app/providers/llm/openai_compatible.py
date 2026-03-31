@@ -500,6 +500,7 @@ class OpenAICompatibleProvider(LLMProvider):
             ),
             sampling_profile="planner",
             response_format={"type": "json_object"},
+            disable_thinking=True,
         )
         self.last_structured_response_text = content
         self.last_structured_parse_error = None

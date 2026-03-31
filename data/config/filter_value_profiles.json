@@ -14,6 +14,9 @@
     "fuzzy_score_base": 0.7,
     "fuzzy_score_scale": 0.25
   },
+  "table_active_conditions": {
+    "XXBT_PDKS_PER_DETAILS_V": "CIKIS_TARIHI IS NULL"
+  },
   "profiles": {
     "XXBT_PDKS_PER_DETAILS_V.BIRIM_ADI": {
       "table": "XXBT_PDKS_PER_DETAILS_V",
@@ -115,6 +118,36 @@
         {
           "value": "MUH-01",
           "aliases": ["muh01", "muh 01"]
+        }
+      ]
+    },
+    "XXBT_PDKS_PER_DETAILS_V.STAJYER": {
+      "table": "XXBT_PDKS_PER_DETAILS_V",
+      "column": "STAJYER",
+      "supported_ops": ["=", "!="],
+      "canonical_values": [
+        {
+          "value": "Y",
+          "aliases": ["evet", "stajyer", "intern", "yes", "1"]
+        },
+        {
+          "value": "N",
+          "aliases": ["hayir", "stajyer degil", "stajyer değil", "not intern", "no", "0"]
+        }
+      ]
+    },
+    "XXBT_PDKS_PER_DETAILS_V.BORDROLU": {
+      "table": "XXBT_PDKS_PER_DETAILS_V",
+      "column": "BORDROLU",
+      "supported_ops": ["=", "!="],
+      "canonical_values": [
+        {
+          "value": "1",
+          "aliases": ["evet", "bordrolu", "payroll", "yes"]
+        },
+        {
+          "value": "0",
+          "aliases": ["hayir", "bordrosuz", "non-payroll", "no"]
         }
       ]
     }

@@ -49,6 +49,7 @@ from app.services.clarification_state_manager import ClarificationStateManager
 from app.services.sql_compiler import SQLCompiler
 from app.services.validation_repair_service import ValidationRepairService
 from app.services.execution_risk import assess_pre_execution_risk, bind_summary, sql_fingerprint
+from app.services.followup_context_merge import FollowupContextMergeService
 from app.services.validation_service import ValidationService
 
 if TYPE_CHECKING:
@@ -524,6 +525,7 @@ class ChatOrchestrator:
         session_service: SessionService,
         clarification_manager: ClarificationStateManager | None = None,
         run_store: Any | None = None,
+        followup_merge: FollowupContextMergeService | None = None,
     ) -> None:
         self._planner = planner
         self._orchestrator = orchestrator
@@ -531,6 +533,7 @@ class ChatOrchestrator:
         self._sessions = session_service
         self._clarification_manager = clarification_manager
         self._run_store = run_store
+        self._followup_merge = followup_merge or FollowupContextMergeService(llm=planner._llm)
 
     async def _persist_stage_from_event(self, run_id: str, event: Any, order: int) -> None:
         """Persist a StageEvent to the run store.
@@ -786,6 +789,22 @@ class ChatOrchestrator:
         if tc:
             self._emit_planner_trace_stages(tc, _plan_mono)
 
+        # 2.5 – Follow-up context merge (single stage; no-op for fresh queries)
+        _merge_result = await self._followup_merge.process(session_id, message, plan)
+        if _merge_result.merge_strategy == "patch" and _merge_result.merged_plan is not None:
+            plan = _merge_result.merged_plan
+            self._sessions.set_last_plan(session_id, plan)
+        if tc:
+            tc.stage_completed(
+                "followup_context_merge",
+                summary=(
+                    f"Follow-up merge: {_merge_result.merge_strategy} "
+                    f"(confidence={_merge_result.followup_confidence}, "
+                    f"preserved={_merge_result.preserved_filters})"
+                ),
+                payload=_merge_result.to_trace_payload(),
+            )
+
         # 3 – Clarification short-circuit
         if plan.needs_clarification:
             if tc:
@@ -1001,6 +1020,9 @@ class ChatOrchestrator:
         await self._finalize_run(
             _run_id, _conversation_id, status="success", answer=answer, tc=tc,
         )
+
+        # Record snapshot so the next turn can detect follow-up refinements
+        self._followup_merge.record_success(session_id, plan, answer_preview=answer)
 
         return ChatResult(
             session_id=session_id,
@@ -1242,6 +1264,10 @@ class ChatOrchestrator:
         await self._finalize_run(
             _resume_run_id, _conversation_id, status="success", answer=answer, tc=tc,
         )
+
+        # Record snapshot so the next turn can detect follow-up refinements
+        self._followup_merge.record_success(session_id, resumed_plan, answer_preview=answer)
+
         return ChatResult(
             session_id=session_id,
             status="success",

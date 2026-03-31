@@ -595,6 +595,18 @@ class NarratorService:
             payload.append(f"group_by_hint={group_by_hint}")
         if top_group_label:
             payload.append(f"top_group_label={top_group_label}")
+
+        # ── Inline row preview (≤5 rows): expose actual values to narrator ──
+        if er.rows and er.row_count <= 5:
+            payload.append("satır_verileri:")
+            for idx, row in enumerate(er.rows, 1):
+                row_parts = []
+                for col in selected_columns[:10]:
+                    val = row.get(col.lower()) or row.get(col)
+                    if val is not None:
+                        row_parts.append(f"{col}={val}")
+                payload.append(f"  satır_{idx}: {', '.join(row_parts)}")
+
         return "\n".join(payload)
 
     @staticmethod

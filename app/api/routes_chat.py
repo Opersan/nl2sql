@@ -51,67 +51,48 @@ def _get_llm_provider(request: Request) -> LLMProvider:
 
 
 # ---------------------------------------------------------------------------
-# Intent classification (deterministic keyword-based)
+# Intent classification (LLM-based)
 # ---------------------------------------------------------------------------
 
-_METADATA_CUES = [
-    "hangi tablo", "hangi kolon", "tablo yapısı", "kolon ne", "alan ne",
-    "join", "ilişki", "relationship", "field", "schema", "metadata",
-    "veri sözlüğü", "data dictionary", "foreign key", "primary key",
-    "tablo ilişkisi", "column", "sütun", "alan tanımı",
-]
-_DATA_CUES = [
-    "kaç", "kaç tane", "listele", "getir", "göster", "toplam", "ortalama",
-    "son 3 ay", "son 6 ay", "son 1 yıl", "trend", "rapor", "karşılaştır",
-    "kıyasla", "minimum", "maksimum", "en çok", "en az", "sırala",
-    "çalışan sayısı", "sipariş", "stok", "üretim", "fatura", "ciro",
-    "maliyet", "performans", "kpi", "count", "total", "average",
-    "report", "compare", "list", "show me", "how many", "aggregate",
-    "sum", "adet", "miktar", "oran", "yüzde",
-]
-_GENERAL_CUES = [
-    "prompt yaz", "mimari", "nasıl tasarlayalım", "debug", "review",
-    "best practice", "architecture", "design", "neden", "açıkla",
-    "explain", "code", "implement", "refactor", "pattern", "strateji",
-    "strategy", "brainstorm", "fikir", "öneri", "konsept",
-]
-_CLARIFICATION_CUES = [
-    "hangi birim", "hangi departman", "hangi tarih", "ne zaman",
-    "hangisi", "belirtir misiniz", "netleştirir misiniz",
-]
+_INTENT_PROMPT = """\
+Sen bir intent sınıflandırıcısın. Kullanıcı mesajını aşağıdaki 4 kategoriden birine sınıfla.
+
+DATA — Veritabanından veri çekmeyi, listelemeyi, saymayı, filtrelemeyi, \
+raporlamayı veya herhangi bir çalışan/sipariş/fatura/stok vb. iş verisini \
+sorgulamayı gerektiren her soru. Kişi adıyla sorgulama, burç/yaş/departman \
+gibi çalışan bilgisi sorguları da DATA kapsamındadır.
+
+METADATA — Tablo yapısı, kolon adları, veri sözlüğü, şema bilgisi, \
+tablo ilişkileri (FK, PK, join) hakkında teknik sorular.
+
+CLARIFICATION — Belirsiz, eksik boyut veya filtre içeren sorular. \
+Hangi birim/departman/tarih/lokasyon gibi netleştirme gerektiren durumlar.
+
+GENERAL — Yukarıdaki 3 kategoriye girmeyen her şey: mimari, kod, strateji, \
+kavram açıklama, brainstorm, genel sohbet.
+
+Kurallar:
+- Yalnızca şu 4 kelimeden birini yaz: DATA, METADATA, CLARIFICATION, GENERAL
+- Başka hiçbir şey yazma. Açıklama, sebep, düşünce ekleme.
+- Şüphe durumunda DATA tercih et.
+
+Mesaj: "{message}"
+"""
 
 
-def _classify_intent(text: str) -> str:
-    """Classify user intent into GENERAL / METADATA / DATA / CLARIFICATION."""
-    lowered = re.sub(r"\s+", " ", text.strip()).lower()
-
-    meta = sum(1 for c in _METADATA_CUES if c in lowered)
-    data = sum(1 for c in _DATA_CUES if c in lowered)
-    gen = sum(1 for c in _GENERAL_CUES if c in lowered)
-
-    if any(kw in lowered for kw in ("pipeline", "sistem", "filtre", "filter", "mimari")):
-        gen += 2
-
-    total = meta + data + gen
-    if total == 0:
-        return "GENERAL"
-
-    if meta > data and meta > gen:
-        return "METADATA"
-
-    if data > meta and data > gen:
-        clr = sum(1 for c in _CLARIFICATION_CUES if c in lowered)
-        if clr > 0 and data <= 2:
-            return "CLARIFICATION"
-        return "DATA"
-
-    if gen > 0:
-        return "GENERAL"
-
-    if data > 0 and data == meta:
-        return "CLARIFICATION"
-
-    return "GENERAL"
+async def _classify_intent_llm(llm: LLMProvider, text: str) -> str:
+    """Classify user intent via a short LLM call."""
+    prompt = _INTENT_PROMPT.format(message=text.strip()[:300])
+    try:
+        raw = await asyncio.wait_for(llm.generate_text(prompt, disable_thinking=True), timeout=50.0)
+        token = raw.strip().upper().split()[0] if raw and raw.strip() else ""
+        # Strip any markdown/punctuation
+        token = re.sub(r"[^A-Z]", "", token)
+        if token in ("DATA", "METADATA", "CLARIFICATION", "GENERAL"):
+            return token
+    except Exception:
+        logger.warning("[intent] LLM intent classification failed, defaulting to DATA")
+    return "DATA"
 
 
 async def _call_llm_direct(
@@ -518,6 +499,40 @@ async def _build_chat_completion_result(
             content=helper_content,
         )
 
+    # ── Pending clarification reply (must precede enterprise_mode gate) ───
+    if clarification_manager is not None:
+        if clarification_manager.get_pending(session_id) is not None:
+            logger.info(
+                "[openwebui] session=%s pending clarification detected → pipeline resume",
+                session_id,
+            )
+            try:
+                _res = await orchestrator.handle_message(
+                    session_id, user_msg, openwebui_chat_id=openwebui_chat_id
+                )
+            except Exception:
+                logger.exception("[openwebui] clarification resume pipeline failed")
+                return _build_oai_response(
+                    body=body, session_id=session_id, status="error",
+                    content="Bir hata oluştu. Lütfen tekrar deneyin.",
+                )
+            _res_content = _res.answer
+            _res_actions = None
+            _res_clar_id = None
+            if _res.status == "clarification" and _res.clarification_payload is not None:
+                _res_clar_id = _res.clarification_payload.clarification_id
+                _res_actions = _build_clarification_actions(_res.clarification_payload)
+                _res_content = _render_clarification_content(_res.answer, _res.clarification_payload)
+            return _build_oai_response(
+                body=body,
+                session_id=session_id,
+                status=_res.status,
+                content=_res_content,
+                clarification_id=_res_clar_id,
+                actions=_res_actions,
+                clarification_payload=_res.clarification_payload,
+            )
+
     # ── enterprise_mode=false → direct LLM (no pipeline) ────────────
     if not body.enterprise_mode:
         logger.info(
@@ -538,7 +553,7 @@ async def _build_chat_completion_result(
         )
 
     # ── enterprise_mode=true → classify intent & route ───────────────
-    intent = _classify_intent(user_msg)
+    intent = await _classify_intent_llm(llm, user_msg)
     logger.info(
         "[openwebui] session=%s enterprise_mode=true intent=%s message=%r",
         session_id,
@@ -788,6 +803,42 @@ async def _build_streaming_chat_completion(
         content = _build_openwebui_helper_content(helper_kind, _extract_conversation_seed(body))
         return _fake_content_stream(content)
 
+    # ── Pending clarification reply (must precede enterprise_mode gate) ───
+    if clarification_manager is not None:
+        if clarification_manager.get_pending(session_id) is not None:
+            logger.info(
+                "[openwebui-stream] session=%s pending clarification detected → pipeline resume",
+                session_id,
+            )
+
+            async def _clar_resume_stream():
+                try:
+                    pipeline_task = asyncio.create_task(
+                        orchestrator.handle_message(
+                            session_id, user_msg, openwebui_chat_id=openwebui_chat_id
+                        )
+                    )
+                    yield _sse_chunk(chunk_id, model, created, delta={"role": "assistant"})
+                    for _tok in ["⏳ Sorgu", " yeniden", " çalışıyor", "...\n",
+                                 "🔍 Sonuçlar", " getiriliyor", "..."]:
+                        yield _sse_chunk(chunk_id, model, created, delta={"content": _tok})
+                    _result = await pipeline_task
+                    _res_content = _result.answer
+                    if _result.status == "clarification" and _result.clarification_payload is not None:
+                        _res_content = _render_clarification_content(
+                            _result.answer, _result.clarification_payload
+                        )
+                    yield _sse_chunk(chunk_id, model, created, delta={"content": "\n\n" + _res_content})
+                    yield _sse_chunk(chunk_id, model, created, delta={}, finish_reason="stop")
+                    yield "data: [DONE]\n\n"
+                except Exception:
+                    logger.exception("[openwebui-stream] clarification resume stream failed")
+                    yield _sse_chunk(chunk_id, model, created, delta={"content": "Bir hata oluştu. Lütfen tekrar deneyin."})
+                    yield _sse_chunk(chunk_id, model, created, delta={}, finish_reason="stop")
+                    yield "data: [DONE]\n\n"
+
+            return StreamingResponse(_clar_resume_stream(), media_type="text/event-stream")
+
     # ── enterprise_mode=false → real streaming ────────────────────────────
     if not body.enterprise_mode:
         logger.info(
@@ -811,7 +862,7 @@ async def _build_streaming_chat_completion(
         return StreamingResponse(_non_enterprise_stream(), media_type="text/event-stream")
 
     # ── enterprise_mode=true → classify intent ────────────────────────────
-    intent = _classify_intent(user_msg)
+    intent = await _classify_intent_llm(llm, user_msg)
     logger.info(
         "[openwebui-stream] session=%s intent=%s message=%r",
         session_id,
