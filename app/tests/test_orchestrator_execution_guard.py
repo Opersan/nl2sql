@@ -86,7 +86,7 @@ async def test_orchestrator_blocks_timeout_prone_wide_joined_listing() -> None:
             )
         ],
         order_by=[OrderSpec(column="creation_date", table="PO_HEADERS_ALL", direction=SortDirection.DESC)],
-        limit=100,
+        limit=10000,
     )
 
     result = await orchestrator.run_plan(plan)
@@ -156,7 +156,7 @@ async def test_orchestrator_safe_modes_valid_simple_listing_with_lower_limit() -
     assert result.compiled_query.debug_plan.limit == 25
     assert trace.get("pre_execution", {}).get("execution_guard_reason") == "execution_safe_mode_applied"
     assert trace.get("pre_execution", {}).get("safe_mode_applied") is True
-    assert trace.get("pre_execution", {}).get("original_limit") == 100
+    assert trace.get("pre_execution", {}).get("original_limit") == 10000
     assert trace.get("pre_execution", {}).get("effective_limit") == 25
     assert trace.get("execute", {}).get("execution_skipped_reason") is None
     assert trace.get("execute", {}).get("safe_mode_applied") is True
@@ -175,7 +175,7 @@ async def test_orchestrator_blocks_unfiltered_simple_listing_as_high_risk() -> N
         table="XXBT_PDKS_PER_DETAILS_V",
         select_columns=["SICIL_NO", "AD", "SOYAD", "EMAIL", "BIRIM_ADI"],
         filters=[],
-        limit=100,
+        limit=10000,
     )
 
     result = await orchestrator.run_plan(plan)

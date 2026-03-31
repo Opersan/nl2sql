@@ -112,7 +112,7 @@ async def test_pre_execution_risk_marks_unbounded_listing_as_non_blocking() -> N
         table="XXBT_PDKS_PER_DETAILS_V",
         select_columns=["SICIL_NO", "AD"],
         filters=[],
-        limit=100,
+        limit=10000,
     )
 
     risk = assess_pre_execution_risk(plan, table)
@@ -146,7 +146,7 @@ async def test_pre_execution_risk_blocks_timeout_prone_wide_joined_listing() -> 
             )
         ],
         order_by=[OrderSpec(column="creation_date", table="PO_HEADERS_ALL", direction=SortDirection.DESC)],
-        limit=100,
+        limit=10000,
     )
 
     risk = assess_pre_execution_risk(plan, table)
@@ -168,7 +168,7 @@ async def test_pre_execution_risk_safe_modes_structural_null_filtered_listing_on
         table="XXBT_PDKS_PER_DETAILS_V",
         select_columns=["SICIL_NO", "AD", "SOYAD", "EMAIL", "BIRIM_ADI"],
         filters=[FilterSpec(column="CIKIS_TARIHI", op=FilterOp.IS_NULL)],
-        limit=100,
+        limit=10000,
     )
 
     risk = assess_pre_execution_risk(plan, table)
@@ -192,7 +192,7 @@ async def test_pre_execution_risk_blocks_unfiltered_simple_listing_on_wide_view(
         table="XXBT_PDKS_PER_DETAILS_V",
         select_columns=["SICIL_NO", "AD", "SOYAD", "EMAIL", "BIRIM_ADI"],
         filters=[],
-        limit=100,
+        limit=10000,
     )
 
     risk = assess_pre_execution_risk(plan, table)

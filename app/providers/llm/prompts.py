@@ -191,6 +191,8 @@ tablo veya kolonları kullanma.
 kabul edilmez.
 13. Zorunlu anahtarlar: intent, table, select_columns, filters, aggregations,
 group_by, order_by, joins, limit, needs_clarification, clarification_message.
+13a. Kullanıcı limit belirtirse bunu limit alanına yaz (örn. "ilk 50", "en fazla 200", "top 10", "limit 100").
+13b. Kullanıcı limit belirtmezse varsayılan limiti kullan.
 14. select_columns ve group_by yalnızca string listesi olmalı; object listesi yazma.
 15. filters içindeki value scalar veya liste olmalı; serbest şema object'i yazma.
 15a. >=, <=, >, < operatörleri için value ASLA null olamaz — somut bir değer hesapla ve yaz.
@@ -228,7 +230,7 @@ filters, aggregations, group_by, order_by, joins alanlarını boş liste ver.
       "on": [{{"left_table": "...", "left_column": "...", "right_table": "...", "right_column": "..."}}]
     }}
   ],
-  "limit": 100,
+    "limit": 10000,
   "needs_clarification": false,
   "clarification_message": null
 }}
@@ -243,7 +245,7 @@ Belirsizlik örneği:
     "group_by": [],
     "order_by": [],
     "joins": [],
-    "limit": 100,
+    "limit": 10000,
     "needs_clarification": true,
     "clarification_message": "Hangi tarih aralığını istediğinizi netleştirir misiniz?"
 }}

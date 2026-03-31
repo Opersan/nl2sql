@@ -64,8 +64,9 @@ class TestSprintThreeConfig:
         ):
             monkeypatch.delenv(var, raising=False)
         s = Settings(_env_file=None)  # type: ignore[call-arg]
-        assert s.default_row_limit == 100
-        assert s.max_row_limit == 1000
+        assert s.default_row_limit == 10000
+        assert s.max_row_limit == 10000
+        assert s.safe_mode_simple_listing_limit == 25
         assert s.llm_provider == "mock"
         assert s.enable_sql_in_api_response is True
         assert s.max_rows_preview == 20

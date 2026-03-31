@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FILTER_ID = "nl2sql_clarification_buttons_filter"
 FILTER_NAME = "NL2SQL Clarification Buttons"
+FILTER_DESC = "Render NL2SQL clarification replies as Open WebUI button cards."
 FILTER_FILE = REPO_ROOT / "openwebui" / "functions" / f"{FILTER_ID}.py"
 
 
@@ -35,12 +36,20 @@ def _request(url: str, *, token: str, method: str, payload: dict | None = None) 
         raise RuntimeError(f"{method} {url} failed with HTTP {exc.code}: {detail}") from exc
 
 
-def install_filter(*, base_url: str, token: str) -> None:
-    content = FILTER_FILE.read_text(encoding="utf-8")
+def install_filter(
+    *,
+    base_url: str,
+    token: str,
+    filter_id: str,
+    filter_name: str,
+    filter_file: Path,
+    filter_desc: str,
+) -> None:
+    content = filter_file.read_text(encoding="utf-8")
     payload = {
-        "id": FILTER_ID,
-        "name": FILTER_NAME,
-        "meta": {"description": "Render NL2SQL clarification replies as Open WebUI button cards."},
+        "id": filter_id,
+        "name": filter_name,
+        "meta": {"description": filter_desc},
         "content": content,
     }
 
@@ -48,12 +57,12 @@ def install_filter(*, base_url: str, token: str) -> None:
 
     try:
         _request(
-            f"{api_root}/id/{FILTER_ID}",
+            f"{api_root}/id/{filter_id}",
             token=token,
             method="GET",
         )
         _request(
-            f"{api_root}/id/{FILTER_ID}/update",
+            f"{api_root}/id/{filter_id}/update",
             token=token,
             method="POST",
             payload=payload,
@@ -64,30 +73,49 @@ def install_filter(*, base_url: str, token: str) -> None:
         _request(f"{api_root}/create", token=token, method="POST", payload=payload)
 
     current = _request(
-        f"{api_root}/id/{FILTER_ID}",
+        f"{api_root}/id/{filter_id}",
         token=token,
         method="GET",
     )
     if not current.get("is_active", False):
-        _request(f"{api_root}/id/{FILTER_ID}/toggle", token=token, method="POST")
+        _request(f"{api_root}/id/{filter_id}/toggle", token=token, method="POST")
 
     current = _request(
-        f"{api_root}/id/{FILTER_ID}",
+        f"{api_root}/id/{filter_id}",
         token=token,
         method="GET",
     )
     if not current.get("is_global", False):
-        _request(f"{api_root}/id/{FILTER_ID}/toggle/global", token=token, method="POST")
+        _request(f"{api_root}/id/{filter_id}/toggle/global", token=token, method="POST")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://127.0.0.1:3010")
     parser.add_argument("--token", required=True, help="Open WebUI admin bearer token")
+    parser.add_argument("--id", default=FILTER_ID, help="Open WebUI function id")
+    parser.add_argument("--name", default=FILTER_NAME, help="Open WebUI function name")
+    parser.add_argument("--description", default=FILTER_DESC, help="Open WebUI function description")
+    parser.add_argument(
+        "--file",
+        default=str(FILTER_FILE),
+        help="Path to the filter .py file",
+    )
     args = parser.parse_args()
 
-    install_filter(base_url=args.base_url, token=args.token)
-    print(f"Installed Open WebUI filter: {FILTER_ID}")
+    filter_file = Path(args.file)
+    if not filter_file.is_absolute():
+        filter_file = REPO_ROOT / filter_file
+
+    install_filter(
+        base_url=args.base_url,
+        token=args.token,
+        filter_id=args.id,
+        filter_name=args.name,
+        filter_file=filter_file,
+        filter_desc=args.description,
+    )
+    print(f"Installed Open WebUI filter: {args.id}")
     return 0
 
 

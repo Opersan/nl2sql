@@ -309,6 +309,11 @@ class Orchestrator:
         execution_compiled = compiled
         if precheck.safe_mode_applied and precheck.effective_limit is not None and precheck.effective_limit < plan.limit:
             execution_plan = plan.model_copy(update={"limit": precheck.effective_limit})
+            logger.info(
+                "Safe-mode applied: limit %d -> %d.",
+                plan.limit,
+                execution_plan.limit,
+            )
             safe_compile_started = time.perf_counter()
             try:
                 execution_compiled = self._compiler.compile(
@@ -348,6 +353,8 @@ class Orchestrator:
                 "bind_summary": bind_summary(execution_compiled),
                 "latency_ms": int((time.perf_counter() - compile_started) * 1000),
             }
+            logger.info("Safe-mode SQL:\n%s", execution_compiled.sql)
+            logger.info("Safe-mode params: %s", execution_compiled.params)
 
         if trace_collector and self._last_trace.get("compile", {}).get("ok"):
             from app.services.trace_serializer import build_compile_payload

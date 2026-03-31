@@ -453,7 +453,7 @@ class NarratorService:
 
     # -- Markdown table renderer (deterministic, never goes through LLM) ---
 
-    _TABLE_MAX_ROWS = 50          # hard cap to avoid enormous messages
+    _TABLE_MAX_ROWS = 10000         # hard cap to avoid enormous messages
     _TABLE_CELL_MAX_CHARS = 80    # truncate long cell values
 
     @staticmethod
@@ -589,6 +589,7 @@ class NarratorService:
             f"iş_alanları={','.join(human_fields)}",
             f"uygulanan_filtreler={'; '.join(filters) if filters else 'yok'}",
             f"uygulanan_sıralama={'; '.join(sort) if sort else 'yok'}",
+            f"uygulanan_limit={plan.limit if plan is not None else 'bilinmiyor'}",
             f"row_limit_hit={'evet' if row_limit_hit else 'hayır'}",
         ]
         if group_by_hint:

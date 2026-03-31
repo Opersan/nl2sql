@@ -23,8 +23,9 @@ class Settings(BaseSettings):
 
     app_name: str = "nl2sql-assistant"
     environment: str = "development"
-    default_row_limit: int = 100
-    max_row_limit: int = 1000
+    default_row_limit: int = 10000
+    max_row_limit: int = 10000
+    safe_mode_simple_listing_limit: int = 25
 
     # LLM provider
     llm_provider: Literal["mock", "openai_compatible"] = "mock"

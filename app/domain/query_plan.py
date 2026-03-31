@@ -283,7 +283,7 @@ class QueryPlan(BaseModel):
     measures: list[NonEmptyStr] = Field(default_factory=list)
     join_path_id: str | None = Field(default=None, min_length=1)
     computed_measures: list[ComputedMeasureSpec] = Field(default_factory=list)
-    limit: int = Field(default=100, ge=1, le=1000)
+    limit: int = Field(default=10000, ge=1, le=10000)
     needs_clarification: bool = False
     clarification_message: str | None = Field(default=None, min_length=1)
     clarification_missing_dimensions: list[str] = Field(default_factory=list)

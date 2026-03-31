@@ -19,7 +19,6 @@ _BLOCKING_FLAG_TO_REASON: dict[str, str] = {
     "timeout_prone_simple_listing": "precheck_timeout_prone_simple_listing",
 }
 
-_SAFE_MODE_SIMPLE_LISTING_LIMIT = 25
 
 
 def _is_date_column(meta: TableMetadata, column_name: str) -> bool:
@@ -134,7 +133,7 @@ def assess_pre_execution_risk(plan: QueryPlan, table: TableMetadata) -> Executio
             safe_mode_applied = True
             safe_mode_reason = "execution_safe_mode_applied"
             guard_reason = safe_mode_reason
-            effective_limit = min(plan.limit, _SAFE_MODE_SIMPLE_LISTING_LIMIT)
+            effective_limit = min(plan.limit, settings.safe_mode_simple_listing_limit)
 
     if not plan.filters and not plan.aggregations and plan.limit >= settings.default_row_limit:
         flags.append("high_risk_but_executable")

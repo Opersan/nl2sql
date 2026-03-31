@@ -355,3 +355,28 @@ class TestNarratorSummaryIncludesFilterValues:
         assert "CIKIS_TARIHI IS_NULL" in summary
         # IS_NULL should not have a trailing 'None'
         assert "None" not in summary
+
+    def test_applied_limit_in_summary(self) -> None:
+        plan = QueryPlan(
+            intent="employee_list",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["AD", "SOYAD"],
+            limit=50,
+        )
+        result = OrchestrationResult(
+            validation=ValidationResult(),
+            compiled_query=CompiledQuery(
+                sql="SELECT ...",
+                table="XXBT_PDKS_PER_DETAILS_V",
+                selected_columns=["AD", "SOYAD"],
+                debug_plan=plan,
+            ),
+            execution_result=ExecutionResult(
+                status=ExecutionStatus.SUCCESS,
+                columns=["AD", "SOYAD"],
+                rows=[{"ad": "Ali", "soyad": "Veli"}],
+                row_count=1,
+            ),
+        )
+        summary = NarratorService._build_success_summary(result)
+        assert "uygulanan_limit=50" in summary

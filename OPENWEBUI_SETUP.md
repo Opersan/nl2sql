@@ -101,6 +101,26 @@ Backend log should still show the same session across ask and resume:
 
 Open WebUI should no longer rely on the plain clarification text block for the primary UX.
 
+## 4b. Optional: Results Table Filter (Pagination + Search)
+
+This filter replaces Markdown result tables with an interactive table that
+supports client-side search and pagination.
+
+Filter source:
+
+- [openwebui/functions/nl2sql_results_table_filter.py](C:/Users/furkan.kiraz/Desktop/nl2sql/openwebui/functions/nl2sql_results_table_filter.py)
+
+Install through the Open WebUI API (same approach as clarification filter):
+
+```powershell
+\.venv\Scripts\python .\scripts\install_openwebui_filter.py --base-url http://127.0.0.1:3010 --token <OPENWEBUI_ADMIN_TOKEN> --id nl2sql_results_table_filter --name "NL2SQL Results Table" --description "Render NL2SQL result tables with pagination and search." --file .\openwebui\functions\nl2sql_results_table_filter.py
+```
+
+After install:
+
+1. hard refresh the browser with `Ctrl+F5`
+2. if needed, restart the Open WebUI process once
+
 ## 6. Notes
 
 - The filter is additive and reversible. Disabling or deleting it returns Open WebUI to the existing text fallback.
