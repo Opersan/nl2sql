@@ -1,0 +1,651 @@
+{
+  "sessions": [
+    {
+      "session_id": "session_01_followup_negation",
+      "description": "Follow-up + negation + correction",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "elektrik dizayn bölümündeki çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "domain": "HR",
+            "entity": "HR_EMPLOYEES",
+            "filters": ["BIRIM_ADI = ELEKTRIK DIZAYN"],
+            "clarification": false
+          }
+        },
+        {
+          "turn": 2,
+          "user": "stajyer olanları filtrele ve getirme",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "inherits_filters": true,
+            "add_filters": ["STAJYER != Y"],
+            "must_not": ["STAJYER = Y", "new_query"]
+          }
+        },
+        {
+          "turn": 3,
+          "user": "ad soyada göre sırala",
+          "expect": {
+            "turn_type": "FOLLOW_UP",
+            "inherits_filters": true,
+            "order_by": ["AD ASC"]
+          }
+        },
+        {
+          "turn": 4,
+          "user": "ilk 20 kişiyi getir",
+          "expect": {
+            "turn_type": "FOLLOW_UP",
+            "limit": 20
+          }
+        },
+        {
+          "turn": 5,
+          "user": "stajyerleri getirme demiştim",
+          "expect": {
+            "turn_type": "CORRECTION",
+            "state_should_remain": true,
+            "must_not": ["reset_query", "STAJYER = Y"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_02_clarification_flow",
+      "description": "Clarification + answer + state carry",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "dizayn bölümündeki çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "clarification": true,
+            "clarification_reason": "ambiguous_department"
+          }
+        },
+        {
+          "turn": 2,
+          "user": "DT-Dizayn",
+          "expect": {
+            "turn_type": "CLARIFICATION_ANSWER",
+            "add_filters": ["BIRIM_ADI = DT-DIZAYN"]
+          }
+        },
+        {
+          "turn": 3,
+          "user": "stajyerleri çıkar",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["STAJYER != Y"]
+          }
+        },
+        {
+          "turn": 4,
+          "user": "aktif olanlar",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["CIKIS_TARIHI IS NULL"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_03_correction_vs_new",
+      "description": "Correction vs new query",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "ankaradaki çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "filters": ["LOCATION_ADI = ANKARA"]
+          }
+        },
+        {
+          "turn": 2,
+          "user": "yok istanbuldakiler",
+          "expect": {
+            "turn_type": "CORRECTION",
+            "replace_filters": ["LOCATION_ADI = ISTANBUL"]
+          }
+        },
+        {
+          "turn": 3,
+          "user": "sadece bordrolular",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["BORDROLU = Y"]
+          }
+        },
+        {
+          "turn": 4,
+          "user": "hayır bunu yeni sorgu say satın alma siparişlerini aç",
+          "expect": {
+            "turn_type": "RESET",
+            "domain": "PO"
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_04_domain_drift",
+      "description": "Domain switching safety",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "elektrik dizayndaki çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "domain": "HR"
+          }
+        },
+        {
+          "turn": 2,
+          "user": "yalnız aktif olanlar",
+          "expect": {
+            "turn_type": "FILTER_UPDATE"
+          }
+        },
+        {
+          "turn": 3,
+          "user": "onaylı satın alma siparişlerini de getir",
+          "expect": {
+            "turn_type": "DOMAIN_SWITCH_OR_CLARIFICATION",
+            "must_not": ["mix_hr_po"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_05_aggregate_drilldown",
+      "description": "Aggregate → drilldown",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "elektrik dizayn bölümünde kaç çalışan var",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "aggregation": "COUNT"
+          }
+        },
+        {
+          "turn": 2,
+          "user": "stajyer olmayanları say",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["STAJYER != Y"]
+          }
+        },
+        {
+          "turn": 3,
+          "user": "bunları listele",
+          "expect": {
+            "turn_type": "FOLLOW_UP",
+            "shape_change": "AGG_TO_LIST"
+          }
+        },
+        {
+          "turn": 4,
+          "user": "en son işe giren 5 kişi",
+          "expect": {
+            "turn_type": "FOLLOW_UP",
+            "order_by": ["ISE_GIRIS_TARIHI DESC"],
+            "limit": 5
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_06_temporal_refinement",
+      "description": "Temporal filter replace",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "son 1 yılda işe giren çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "filters": ["ISE_GIRIS_TARIHI >= DYNAMIC"]
+          }
+        },
+        {
+          "turn": 2,
+          "user": "stajyerleri çıkar",
+          "expect": {
+            "turn_type": "FILTER_UPDATE"
+          }
+        },
+        {
+          "turn": 3,
+          "user": "şimdi son 3 aya indir",
+          "expect": {
+            "turn_type": "CORRECTION",
+            "replace_filters": ["ISE_GIRIS_TARIHI >= NEW_DATE"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_07_clarification_chain",
+      "description": "Multi-step clarification",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "çalışanları getir",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "clarification": true
+          }
+        },
+        {
+          "turn": 2,
+          "user": "elektrik dizayn",
+          "expect": {
+            "turn_type": "CLARIFICATION_ANSWER"
+          }
+        },
+        {
+          "turn": 3,
+          "user": "aktif olanlar",
+          "expect": {
+            "turn_type": "CLARIFICATION_ANSWER_OR_FILTER_UPDATE"
+          }
+        },
+        {
+          "turn": 4,
+          "user": "ilk 50",
+          "expect": {
+            "turn_type": "FOLLOW_UP",
+            "limit": 50
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_08_contradiction",
+      "description": "Contradiction detection",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "aktif stajyerleri listele",
+          "expect": {
+            "turn_type": "NEW_QUERY"
+          }
+        },
+        {
+          "turn": 2,
+          "user": "BS4505 için stajyer Y görünüyor",
+          "expect": {
+            "turn_type": "FOLLOW_UP"
+          }
+        },
+        {
+          "turn": 3,
+          "user": "aynı çalışanı tekrar kontrol et",
+          "expect": {
+            "turn_type": "FOLLOW_UP",
+            "filters": ["SICIL_NO = BS4505"]
+          }
+        },
+        {
+          "turn": 4,
+          "user": "az önce Y dedin şimdi N diyorsun",
+          "expect": {
+            "turn_type": "CONTRADICTION_REPORT",
+            "must_not": ["new_query"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_09_negation_variants",
+      "description": "Negation consistency",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "elektrik dizayndaki çalışanları listele",
+          "expect": { "turn_type": "NEW_QUERY" }
+        },
+        {
+          "turn": 2,
+          "user": "stajyerleri getirme",
+          "expect": { "turn_type": "FILTER_UPDATE", "add_filters": ["STAJYER != Y"] }
+        },
+        {
+          "turn": 3,
+          "user": "stajyer olmayanları getir",
+          "expect": { "turn_type": "FILTER_UPDATE" }
+        },
+        {
+          "turn": 4,
+          "user": "stajyerleri hariç tut",
+          "expect": { "turn_type": "FILTER_UPDATE" }
+        },
+        {
+          "turn": 5,
+          "user": "yalnız stajyerler",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "replace_filters": ["STAJYER = Y"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_10_pagination",
+      "description": "Pagination + sort persistence",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "istanbuldaki çalışanları listele",
+          "expect": { "turn_type": "NEW_QUERY" }
+        },
+        {
+          "turn": 2,
+          "user": "soyadına göre sırala",
+          "expect": { "turn_type": "FOLLOW_UP" }
+        },
+        {
+          "turn": 3,
+          "user": "ikinci sayfayı getir",
+          "expect": { "turn_type": "FOLLOW_UP", "pagination": "page_2" }
+        },
+        {
+          "turn": 4,
+          "user": "ada göre sırala",
+          "expect": { "turn_type": "FOLLOW_UP" }
+        },
+        {
+          "turn": 5,
+          "user": "ilk sayfa",
+          "expect": { "turn_type": "FOLLOW_UP", "pagination": "page_1" }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_11_shape_shift",
+      "description": "List ↔ aggregate transitions",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "elektrik dizayndaki çalışanları listele",
+          "expect": { "turn_type": "NEW_QUERY" }
+        },
+        {
+          "turn": 2,
+          "user": "bunların sayısını ver",
+          "expect": { "turn_type": "FOLLOW_UP", "shape": "AGGREGATE" }
+        },
+        {
+          "turn": 3,
+          "user": "yönetici sicili dolu olanları listele",
+          "expect": { "turn_type": "FILTER_UPDATE" }
+        },
+        {
+          "turn": 4,
+          "user": "birimlere göre dağılımı göster",
+          "expect": { "turn_type": "FOLLOW_UP", "group_by": true }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_12_reset",
+      "description": "Full reset behavior",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "elektrik dizayndaki aktif çalışanları listele",
+          "expect": { "turn_type": "NEW_QUERY" }
+        },
+        {
+          "turn": 2,
+          "user": "stajyerleri çıkar",
+          "expect": { "turn_type": "FILTER_UPDATE" }
+        },
+        {
+          "turn": 3,
+          "user": "tamam bunu unut",
+          "expect": {
+            "turn_type": "RESET",
+            "state_cleared": true
+          }
+        },
+        {
+          "turn": 4,
+          "user": "onaylı satın alma siparişlerini listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "domain": "PO"
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_13_filter_removal",
+      "description": "Explicit filter removal without replacement",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "elektrik dizayndaki aktif bordrolu çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "filters": ["BIRIM_ADI = ELEKTRIK DIZAYN", "CIKIS_TARIHI IS NULL", "BORDROLU = Y"]
+          }
+        },
+        {
+          "turn": 2,
+          "user": "bordrolu filtresini kaldır",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "remove_filters": ["BORDROLU"]
+          }
+        },
+        {
+          "turn": 3,
+          "user": "aktiflik şartını da kaldır",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "remove_filters": ["CIKIS_TARIHI"]
+          }
+        },
+        {
+          "turn": 4,
+          "user": "sadece stajyer olmayanlar",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["STAJYER != Y"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_14_multi_filter_single_turn",
+      "description": "Multiple filters applied in a single turn",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "ankaradaki aktif bordrolu çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "filters": ["LOCATION_ADI = ANKARA", "CIKIS_TARIHI IS NULL", "BORDROLU = Y"]
+          }
+        },
+        {
+          "turn": 2,
+          "user": "stajyer olmayanları da ekle",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["STAJYER != Y"],
+            "inherits_filters": true
+          }
+        },
+        {
+          "turn": 3,
+          "user": "yalnız istanbuldakileri göster",
+          "expect": {
+            "turn_type": "FILTER_UPDATE_OR_CORRECTION",
+            "replace_filters": ["LOCATION_ADI = ISTANBUL"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_15_confirmation_turns",
+      "description": "Standalone confirmation and rejection turns",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "elektrik dizayndaki çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "filters": ["BIRIM_ADI = ELEKTRIK DIZAYN"]
+          }
+        },
+        {
+          "turn": 2,
+          "user": "evet",
+          "expect": {
+            "turn_type": "CONFIRMATION",
+            "state_should_remain": true
+          }
+        },
+        {
+          "turn": 3,
+          "user": "tamam",
+          "expect": {
+            "turn_type": "CONFIRMATION",
+            "state_should_remain": true
+          }
+        },
+        {
+          "turn": 4,
+          "user": "stajyerleri hariç tut",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["STAJYER != Y"]
+          }
+        },
+        {
+          "turn": 5,
+          "user": "hayır sadece stajyerleri getir",
+          "expect": {
+            "turn_type": "CORRECTION",
+            "replace_filters": ["STAJYER = Y"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_16_clarification_rejection",
+      "description": "User rejects clarification choices",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "dizayn bölümündeki çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "clarification": true,
+            "clarification_candidates": ["DT-Dizayn", "ELM-Dizayn"]
+          }
+        },
+        {
+          "turn": 2,
+          "user": "farketmez hepsini getir",
+          "expect": {
+            "turn_type": "CLARIFICATION_REJECTION",
+            "clarification": false,
+            "remove_filters": ["BIRIM_ADI"]
+          }
+        },
+        {
+          "turn": 3,
+          "user": "sadece aktif olanlar",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["CIKIS_TARIHI IS NULL"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_17_entity_swap",
+      "description": "Template repeat with entity substitution",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "ankaradaki çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "filters": ["LOCATION_ADI = ANKARA"]
+          }
+        },
+        {
+          "turn": 2,
+          "user": "sadece aktif olanlar",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["CIKIS_TARIHI IS NULL"]
+          }
+        },
+        {
+          "turn": 3,
+          "user": "aynısını istanbul için yap",
+          "expect": {
+            "turn_type": "ENTITY_SWAP_OR_CORRECTION",
+            "replace_filters": ["LOCATION_ADI = ISTANBUL"]
+          }
+        }
+      ]
+    },
+
+    {
+      "session_id": "session_18_idempotent_reask",
+      "description": "Exact same query repeated",
+      "turns": [
+        {
+          "turn": 1,
+          "user": "elektrik dizayndaki çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "filters": ["BIRIM_ADI = ELEKTRIK DIZAYN"]
+          }
+        },
+        {
+          "turn": 2,
+          "user": "elektrik dizayndaki çalışanları listele",
+          "expect": {
+            "turn_type": "NEW_QUERY",
+            "state_should_remain": true,
+            "filters": ["BIRIM_ADI = ELEKTRIK DIZAYN"]
+          }
+        },
+        {
+          "turn": 3,
+          "user": "stajyerleri hariç tut",
+          "expect": {
+            "turn_type": "FILTER_UPDATE",
+            "add_filters": ["STAJYER != Y"]
+          }
+        }
+      ]
+    }
+  ]
+}
