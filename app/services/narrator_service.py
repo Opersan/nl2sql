@@ -17,7 +17,10 @@ Even when the LLM ignores prompt constraints, ``_strip_leakage`` removes:
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import random
 import re
+from datetime import date, datetime
 from typing import Any
 
 from app.core.exceptions import NarratorError
@@ -98,6 +101,11 @@ _PRESENTATION_META_RE = re.compile(
 class NarratorService:
     """Produce user-facing Turkish narrations for pipeline results."""
 
+    _SAMPLE_RATIO = 0.2
+    _SAMPLE_MAX_ROWS = 200
+    _PROFILE_DISTINCT_CAP = 5000
+    _PROFILE_TOP_K = 3
+
     def __init__(self, llm: LLMProvider) -> None:
         self._llm = llm
         self._last_trace: dict[str, Any] | None = None
@@ -157,6 +165,7 @@ class NarratorService:
 
     async def _generate(self, user_message: str, summary: str) -> str:
         prompt = build_narrator_prompt(user_message, summary)
+        logger.debug("Narrator prompt (len=%s): %s", len(prompt), prompt)
         self._set_last_trace({
             "user_message": user_message,
             "summary": summary,
@@ -530,6 +539,146 @@ class NarratorService:
         return "\n".join(table_lines) + footer
 
     @staticmethod
+    def _resolve_value(row: dict[str, Any], col: str) -> Any:
+        if col in row:
+            return row[col]
+        lower = col.lower()
+        if lower in row:
+            return row[lower]
+        upper = col.upper()
+        if upper in row:
+            return row[upper]
+        return None
+
+    @staticmethod
+    def _stable_seed(columns: list[str], row_count: int) -> int:
+        raw = "|".join(columns) + f"::{row_count}"
+        digest = hashlib.md5(raw.encode("utf-8")).hexdigest()
+        return int(digest[:8], 16)
+
+    @classmethod
+    def _sample_rows(cls, rows: list[dict[str, Any]], columns: list[str]) -> list[dict[str, Any]]:
+        if not rows:
+            return []
+        target = max(1, int(len(rows) * cls._SAMPLE_RATIO + 0.999))
+        sample_size = min(target, cls._SAMPLE_MAX_ROWS, len(rows))
+        if sample_size >= len(rows):
+            return list(rows)
+        seed = cls._stable_seed(columns, len(rows))
+        rng = random.Random(seed)
+        indices = rng.sample(range(len(rows)), sample_size)
+        return [rows[i] for i in indices]
+
+    @classmethod
+    def _format_profile_value(cls, value: Any) -> str:
+        if value is None:
+            return "—"
+        if isinstance(value, datetime):
+            return value.isoformat(timespec="seconds")
+        if isinstance(value, date):
+            return value.isoformat()
+        text = str(value).replace("\n", " ").replace("\r", " ").strip()
+        if len(text) > 60:
+            return text[:60] + "…"
+        return text
+
+    @classmethod
+    def _build_profiles(cls, rows: list[dict[str, Any]], columns: list[str]) -> list[str]:
+        profiles: list[str] = []
+        for col in columns:
+            nulls = 0
+            distinct: set[str] = set()
+            distinct_overflow = False
+            numeric_min: float | None = None
+            numeric_max: float | None = None
+            numeric_count = 0
+            date_min: datetime | date | None = None
+            date_max: datetime | date | None = None
+            date_count = 0
+            freq: dict[str, int] = {}
+
+            for row in rows:
+                val = cls._resolve_value(row, col)
+                if val is None:
+                    nulls += 1
+                    continue
+
+                if isinstance(val, bool):
+                    val_key = str(val)
+                elif isinstance(val, (int, float)):
+                    numeric_count += 1
+                    numeric_min = val if numeric_min is None else min(numeric_min, float(val))
+                    numeric_max = val if numeric_max is None else max(numeric_max, float(val))
+                    val_key = str(val)
+                elif isinstance(val, (date, datetime)):
+                    date_count += 1
+                    if date_min is None or val < date_min:
+                        date_min = val
+                    if date_max is None or val > date_max:
+                        date_max = val
+                    val_key = cls._format_profile_value(val)
+                else:
+                    val_key = cls._format_profile_value(val)
+
+                if not distinct_overflow:
+                    if len(distinct) < cls._PROFILE_DISTINCT_CAP:
+                        distinct.add(val_key)
+                    elif val_key not in distinct:
+                        distinct_overflow = True
+
+                if date_count == 0 and numeric_count == 0:
+                    freq[val_key] = freq.get(val_key, 0) + 1
+
+            distinct_count = len(distinct)
+            distinct_label = f">={cls._PROFILE_DISTINCT_CAP}" if distinct_overflow else str(distinct_count)
+
+            if numeric_count > 0:
+                profiles.append(
+                    " | ".join(
+                        [
+                            f"kolon={col}",
+                            "tur=numeric",
+                            f"min={cls._format_profile_value(numeric_min)}",
+                            f"max={cls._format_profile_value(numeric_max)}",
+                            f"distinct={distinct_label}",
+                            f"null={nulls}",
+                        ]
+                    )
+                )
+                continue
+
+            if date_count > 0:
+                profiles.append(
+                    " | ".join(
+                        [
+                            f"kolon={col}",
+                            "tur=date",
+                            f"min={cls._format_profile_value(date_min)}",
+                            f"max={cls._format_profile_value(date_max)}",
+                            f"distinct={distinct_label}",
+                            f"null={nulls}",
+                        ]
+                    )
+                )
+                continue
+
+            top_values = sorted(freq.items(), key=lambda item: (-item[1], item[0]))[: cls._PROFILE_TOP_K]
+            top_label = ", ".join(f"{k}({v})" for k, v in top_values) if top_values else "yok"
+            profiles.append(
+                " | ".join(
+                    [
+                        f"kolon={col}",
+                        "tur=text",
+                        f"distinct={distinct_label}",
+                        f"null={nulls}",
+                        f"top={top_label}",
+                    ]
+                )
+            )
+
+        return profiles
+
+    @staticmethod
     def _build_success_summary(result: OrchestrationResult) -> str:
         if not result.execution_result:
             return "status=success\nshape=listing\nsatır_sayısı=0"
@@ -552,6 +701,11 @@ class NarratorService:
         ][:6]
         if not human_fields:
             human_fields = selected_columns[:4]
+
+        result_columns = list(er.columns if er.columns else [])
+        profile_columns = selected_columns or result_columns
+        if not profile_columns and er.rows:
+            profile_columns = list(er.rows[0].keys())
 
         plan = result.compiled_query.debug_plan if result.compiled_query else None
         filters = []
@@ -603,14 +757,23 @@ class NarratorService:
         # For other shapes, keep the ≤5 row preview.
         max_inline_rows = 100 if shape == "grouped_aggregate" else 5
         if er.rows and er.row_count <= max_inline_rows:
+            sample_rows = NarratorService._sample_rows(er.rows, profile_columns)
+            payload.append(f"ornekleme_oran={NarratorService._SAMPLE_RATIO}")
+            payload.append(f"ornekleme_satir_sayisi={len(sample_rows)}")
+            payload.append("ornekleme_kaynak=donen_veri")
             payload.append("satır_verileri:")
-            for idx, row in enumerate(er.rows, 1):
+            for idx, row in enumerate(sample_rows, 1):
                 row_parts = []
-                for col in selected_columns[:10]:
-                    val = row.get(col.lower()) or row.get(col)
+                for col in profile_columns[:12]:
+                    val = NarratorService._resolve_value(row, col)
                     if val is not None:
-                        row_parts.append(f"{col}={val}")
+                        row_parts.append(f"{col}={NarratorService._format_profile_value(val)}")
                 payload.append(f"  satır_{idx}: {', '.join(row_parts)}")
+
+            profiles = NarratorService._build_profiles(er.rows, profile_columns)
+            if profiles:
+                payload.append("profil_ozeti:")
+                payload.extend(f"  {line}" for line in profiles)
 
         return "\n".join(payload)
 

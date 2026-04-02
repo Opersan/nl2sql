@@ -251,6 +251,221 @@
         }
       ]
     },
+    "XXBT_V_BILANCO_DONEN_VARLIKLAR.LEDGER_NAME": {
+      "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+      "column": "LEDGER_NAME",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "GOKZIRVE_MUHASEBE_DEFTERI",
+          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+        },
+        {
+          "value": "KARLITEPE_MUHASEBE_DEFTERI",
+          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+        },
+        {
+          "value": "HOLDING_MUHASEBE_DEFTERI",
+          "aliases": ["holding", "holding muhasebe", "2123"]
+        },
+        {
+          "value": "AKHISAR_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+        },
+        {
+          "value": "BESTAS_MUHASEBE_DEFTERI",
+          "aliases": ["bestas", "bestas muhasebe", "2023"]
+        },
+        {
+          "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+        },
+        {
+          "value": "BEST_MUHASEBE_DEFTERI",
+          "aliases": ["best", "best muhasebe", "2021"]
+        },
+        {
+          "value": "BEST_EUR_MUHASEBE_DEFTERI",
+          "aliases": ["best eur", "best eur muhasebe", "2161"]
+        },
+        {
+          "value": "KARESI_MUHASEBE_DEFTERI",
+          "aliases": ["karesi", "karesi muhasebe", "2043"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_DURAN_VARLIKLAR.LEDGER_NAME": {
+      "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+      "column": "LEDGER_NAME",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "GOKZIRVE_MUHASEBE_DEFTERI",
+          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+        },
+        {
+          "value": "KARLITEPE_MUHASEBE_DEFTERI",
+          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+        },
+        {
+          "value": "HOLDING_MUHASEBE_DEFTERI",
+          "aliases": ["holding", "holding muhasebe", "2123"]
+        },
+        {
+          "value": "AKHISAR_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+        },
+        {
+          "value": "BESTAS_MUHASEBE_DEFTERI",
+          "aliases": ["bestas", "bestas muhasebe", "2023"]
+        },
+        {
+          "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+        },
+        {
+          "value": "BEST_MUHASEBE_DEFTERI",
+          "aliases": ["best", "best muhasebe", "2021"]
+        },
+        {
+          "value": "BEST_EUR_MUHASEBE_DEFTERI",
+          "aliases": ["best eur", "best eur muhasebe", "2161"]
+        },
+        {
+          "value": "KARESI_MUHASEBE_DEFTERI",
+          "aliases": ["karesi", "karesi muhasebe", "2043"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_KVYK.LEDGER_NAME": {
+      "table": "XXBT_V_BILANCO_KVYK",
+      "column": "LEDGER_NAME",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "GOKZIRVE_MUHASEBE_DEFTERI",
+          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+        },
+        {
+          "value": "KARLITEPE_MUHASEBE_DEFTERI",
+          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+        },
+        {
+          "value": "HOLDING_MUHASEBE_DEFTERI",
+          "aliases": ["holding", "holding muhasebe", "2123"]
+        },
+        {
+          "value": "AKHISAR_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+        },
+        {
+          "value": "BESTAS_MUHASEBE_DEFTERI",
+          "aliases": ["bestas", "bestas muhasebe", "2023"]
+        },
+        {
+          "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+        },
+        {
+          "value": "BEST_MUHASEBE_DEFTERI",
+          "aliases": ["best", "best muhasebe", "2021"]
+        },
+        {
+          "value": "BEST_EUR_MUHASEBE_DEFTERI",
+          "aliases": ["best eur", "best eur muhasebe", "2161"]
+        },
+        {
+          "value": "KARESI_MUHASEBE_DEFTERI",
+          "aliases": ["karesi", "karesi muhasebe", "2043"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_UVYK.LEDGER_NAME": {
+      "table": "XXBT_V_BILANCO_UVYK",
+      "column": "LEDGER_NAME",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "GOKZIRVE_MUHASEBE_DEFTERI",
+          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+        },
+        {
+          "value": "KARLITEPE_MUHASEBE_DEFTERI",
+          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+        },
+        {
+          "value": "HOLDING_MUHASEBE_DEFTERI",
+          "aliases": ["holding", "holding muhasebe", "2123"]
+        },
+        {
+          "value": "AKHISAR_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+        },
+        {
+          "value": "BESTAS_MUHASEBE_DEFTERI",
+          "aliases": ["bestas", "bestas muhasebe", "2023"]
+        },
+        {
+          "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+        },
+        {
+          "value": "BEST_MUHASEBE_DEFTERI",
+          "aliases": ["best", "best muhasebe", "2021"]
+        },
+        {
+          "value": "BEST_EUR_MUHASEBE_DEFTERI",
+          "aliases": ["best eur", "best eur muhasebe", "2161"]
+        },
+        {
+          "value": "KARESI_MUHASEBE_DEFTERI",
+          "aliases": ["karesi", "karesi muhasebe", "2043"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_OZKAYNAKLAR.LEDGER_NAME": {
+      "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+      "column": "LEDGER_NAME",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "GOKZIRVE_MUHASEBE_DEFTERI",
+          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+        },
+        {
+          "value": "KARLITEPE_MUHASEBE_DEFTERI",
+          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+        },
+        {
+          "value": "HOLDING_MUHASEBE_DEFTERI",
+          "aliases": ["holding", "holding muhasebe", "2123"]
+        },
+        {
+          "value": "AKHISAR_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+        },
+        {
+          "value": "BESTAS_MUHASEBE_DEFTERI",
+          "aliases": ["bestas", "bestas muhasebe", "2023"]
+        },
+        {
+          "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
+          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+        },
+        {
+          "value": "BEST_MUHASEBE_DEFTERI",
+          "aliases": ["best", "best muhasebe", "2021"]
+        },
+        {
+          "value": "BEST_EUR_MUHASEBE_DEFTERI",
+          "aliases": ["best eur", "best eur muhasebe", "2161"]
+        },
+        {
+          "value": "KARESI_MUHASEBE_DEFTERI",
+          "aliases": ["karesi", "karesi muhasebe", "2043"]
+        }
+      ]
+    },
     "XXBT_V_BILANCO_DONEN_VARLIKLAR.LINE_TEXT": {
       "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
       "column": "LINE_TEXT",
@@ -488,12 +703,12 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-2025",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+          "value": "01-25",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
         },
         {
-          "value": "03-2018",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
+          "value": "03-18",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
         }
       ]
     },
@@ -503,12 +718,12 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-2025",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+          "value": "01-25",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
         },
         {
-          "value": "03-2018",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
+          "value": "03-18",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
         }
       ]
     },
@@ -518,12 +733,12 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-2025",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+          "value": "01-25",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
         },
         {
-          "value": "03-2018",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
+          "value": "03-18",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
         }
       ]
     },
@@ -533,12 +748,12 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-2025",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+          "value": "01-25",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
         },
         {
-          "value": "03-2018",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
+          "value": "03-18",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
         }
       ]
     },
@@ -548,12 +763,12 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-2025",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+          "value": "01-25",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
         },
         {
-          "value": "03-2018",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
+          "value": "03-18",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
         }
       ]
     }

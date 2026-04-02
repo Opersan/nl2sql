@@ -160,7 +160,7 @@ def _build_employee_table() -> TableMetadata:
             ColumnMetadata(name="UNVAN_ID",          data_type=ColumnType.NUMBER,  nullable=True,  description="Unvan teknik kimliği"),
             ColumnMetadata(name="GOREV_GURUBU",      data_type=ColumnType.VARCHAR, nullable=True,  description="Görev grubu"),
             ColumnMetadata(name="GOREV_FULL",        data_type=ColumnType.VARCHAR, nullable=True,  description="Görev tam adı"),
-            ColumnMetadata(name="BOLUM",             data_type=ColumnType.VARCHAR, nullable=True,  description="Bölüm"),
+            ColumnMetadata(name="BOLUM",             data_type=ColumnType.VARCHAR, nullable=True,  description="Çalışanın Çalıştığı Bölüm"),
             ColumnMetadata(name="CALISAN_TIPI",      data_type=ColumnType.VARCHAR, nullable=True,  description="Çalışan tipi"),
             ColumnMetadata(name="EMPLOYEE_CATEGORY", data_type=ColumnType.VARCHAR, nullable=True,  description="Çalışan kategorisi"),
             ColumnMetadata(name="ISE_GIRIS_TARIHI",  data_type=ColumnType.DATE,    nullable=True,  description="İşe giriş tarihi",               aliases=["hire_date", "start_date", "ise_baslama"]),
@@ -197,9 +197,9 @@ def _build_employee_table() -> TableMetadata:
             ColumnMetadata(name="DOGUM_TARIHI",      data_type=ColumnType.DATE,    nullable=True,  restricted=True, description="Doğum tarihi (kısıtlı)", aliases=["birth_date", "dogum_tarihi"]),
             ColumnMetadata(name="TC_NO",             data_type=ColumnType.VARCHAR, nullable=True,  restricted=True, description="T.C. kimlik no (kısıtlı)"),
             ColumnMetadata(name="KANGRUBU",          data_type=ColumnType.VARCHAR, nullable=True,  restricted=True, description="Kan grubu (kısıtlı)"),
-            ColumnMetadata(name="CINSIYET",          data_type=ColumnType.VARCHAR, nullable=True,  restricted=True, description="Cinsiyet (kısıtlı)"),
+            ColumnMetadata(name="CINSIYET",          data_type=ColumnType.VARCHAR, nullable=True,  restricted=False, description="Cinsiyet"),
             ColumnMetadata(name="MEDENI_HAL",        data_type=ColumnType.VARCHAR, nullable=True,  restricted=True, description="Medeni hal (kısıtlı)"),
-            ColumnMetadata(name="OGRENIM_DURUMU",    data_type=ColumnType.VARCHAR, nullable=True,  restricted=True, description="Öğrenim durumu (kısıtlı)"),
+            ColumnMetadata(name="OGRENIM_DURUMU",    data_type=ColumnType.VARCHAR, nullable=True,  restricted=False, description="Öğrenim durumu"),
             ColumnMetadata(name="MOBILE",            data_type=ColumnType.VARCHAR, nullable=True,  restricted=True, description="Mobil telefon (kısıtlı)"),
             ColumnMetadata(name="IBAN_TR",           data_type=ColumnType.VARCHAR, nullable=True,  restricted=True, description="TL IBAN (kısıtlı)"),
             ColumnMetadata(name="IBAN_USD",          data_type=ColumnType.VARCHAR, nullable=True,  restricted=True, description="USD IBAN (kısıtlı)"),
@@ -208,6 +208,100 @@ def _build_employee_table() -> TableMetadata:
         ],
     )
 
+def _build_balance_sheet_views() -> list[TableMetadata]:
+    def _col(name: str, dtype: ColumnType = ColumnType.NUMBER, **kw) -> ColumnMetadata:
+        return ColumnMetadata(name=name, data_type=dtype, **kw)
+
+    common_columns = [
+        _col("LEDGER_ID", nullable=False),
+        _col("LEDGER_NAME", ColumnType.VARCHAR),
+        _col("CHART_OF_ACCOUNTS_ID"),
+        _col("CURRENCY_CODE", ColumnType.VARCHAR),
+        _col("PERIOD_NAME", ColumnType.VARCHAR, nullable=False),
+        _col("LINE_TEXT", ColumnType.VARCHAR),
+        _col("IS_HEADER"),
+        _col("LINE_ORDER"),
+        _col("AMOUNT_DISPLAY", ColumnType.VARCHAR),
+        _col("AMOUNT_VALUE"),
+    ]
+
+    return [
+        TableMetadata(
+            name="XXBT_V_BILANCO_DONEN_VARLIKLAR",
+            description=(
+                "Bu view, bilançonun dönen varlıklar bölümünü temsil eder. Her kayıt belirli bir "
+                "LEDGER_ID ve PERIOD_NAME için tek bir bilanço satırını gösterir. LINE_TEXT bilanço "
+                "kaleminin görünen açıklamasıdır. IS_HEADER alanı, satırın ana başlık mı yoksa detay "
+                "satırı mı olduğunu belirtir; 1 başlık, 0 detay anlamına gelir. LINE_ORDER raporun doğal "
+                "sıralama kolonudur ve sonuçlar mümkün olduğunca bu alana göre sıralanmalıdır. "
+                "AMOUNT_DISPLAY kullanıcıya gösterim için formatlanmış metin değerdir; toplama, "
+                "karşılaştırma, filtreleme ve sıralama işlemlerinde bunun yerine AMOUNT_VALUE kullanılmalıdır. "
+                "Bu view, \"dönen varlıklar\", \"aktif varlıklar\", \"current assets\" gibi sorular için temel kaynaktır."
+            ),
+            aliases=["bilanço", "dönen varlıklar", "aktif", "current assets"],
+            primary_key=["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+            columns=common_columns,
+        ),
+        TableMetadata(
+            name="XXBT_V_BILANCO_DURAN_VARLIKLAR",
+            description=(
+                "Bu view, bilançonun duran varlıklar bölümünü temsil eder. Her satır belirli bir ledger "
+                "ve dönem için tek bir bilanço kalemidir. LINE_TEXT satır açıklamasını içerir. IS_HEADER "
+                "alanı satırın başlık olup olmadığını gösterir. LINE_ORDER finansal raporun hiyerarşik "
+                "sırasını korumak için kullanılmalıdır. Görsel çıktı veya listeleme ekranlarında "
+                "AMOUNT_DISPLAY, analitik işlemlerde ise AMOUNT_VALUE kullanılmalıdır. Bu view, \"duran "
+                "varlıklar\", \"sabit kıymetler\", \"fixed assets\", \"non-current assets\" gibi doğal dil "
+                "sorgularında hedef tablo olarak değerlendirilmelidir."
+            ),
+            aliases=["bilanço", "duran varlıklar", "fixed assets"],
+            primary_key=["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+            columns=common_columns,
+        ),
+        TableMetadata(
+            name="XXBT_V_BILANCO_KVYK",
+            description=(
+                "Bu view, bilançonun kısa vadeli yabancı kaynaklar bölümünü temsil eder. Her kayıt, "
+                "belirli bir ledger ve dönem için tek bir pasif kalemini gösterir. LINE_TEXT kalem açıklamasıdır. "
+                "IS_HEADER=1 olan satırlar ana başlık seviyesini, IS_HEADER=0 olanlar detay satırlarını ifade eder. "
+                "Sonuçlar varsayılan olarak LINE_ORDER ile sıralanmalıdır. AMOUNT_DISPLAY biçimlendirilmiş gösterim "
+                "değeridir; matematiksel işlem, toplam veya karşılaştırma gerektiğinde AMOUNT_VALUE kullanılmalıdır. "
+                "Bu view, \"kısa vadeli yabancı kaynaklar\", \"kısa vadeli borçlar\", \"KVYK\", \"current liabilities\" "
+                "gibi sorular için kullanılır."
+            ),
+            aliases=["kvyk", "kısa vadeli borçlar", "current liabilities"],
+            primary_key=["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+            columns=common_columns,
+        ),
+        TableMetadata(
+            name="XXBT_V_BILANCO_UVYK",
+            description=(
+                "Bu view, bilançonun uzun vadeli yabancı kaynaklar bölümünü temsil eder. Her satır belirli bir "
+                "LEDGER_ID ve PERIOD_NAME için tek bir bilanço kalemini içerir. LINE_TEXT kalem açıklamasını taşır. "
+                "IS_HEADER kolonuyla başlık ve detay ayrımı yapılır. LINE_ORDER, finansal rapor sıralamasını ve "
+                "hiyerarşisini koruyan temel alandır. Kullanıcıya gösterilecek listelerde AMOUNT_DISPLAY tercih "
+                "edilmelidir; toplam alma, filtreleme, büyükten küçüğe sıralama ve karşılaştırma işlemlerinde "
+                "AMOUNT_VALUE esas alınmalıdır. Bu view, \"uzun vadeli yabancı kaynaklar\", \"uzun vadeli borçlar\", "
+                "\"UVYK\", \"long-term liabilities\" ifadeleriyle ilişkili sorgular için kullanılmalıdır."
+            ),
+            aliases=["uvyk", "uzun vadeli borçlar", "long term liabilities"],
+            primary_key=["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+            columns=common_columns,
+        ),
+        TableMetadata(
+            name="XXBT_V_BILANCO_OZKAYNAKLAR",
+            description=(
+                "Bu view, bilançonun özkaynaklar bölümünü temsil eder. Her satır belirli bir ledger ve dönem için "
+                "tek bir özkaynak kalemini gösterir. LINE_TEXT kullanıcıya görünen kalem açıklamasıdır. IS_HEADER "
+                "alanı, satırın ana başlık mı yoksa detay satırı mı olduğunu belirler. LINE_ORDER raporun sıralama "
+                "kolonudur ve varsayılan sıralama için kullanılmalıdır. AMOUNT_DISPLAY yalnızca gösterim amaçlı "
+                "formatlı değerdir; toplama, kıyaslama ve analitik sorgularda AMOUNT_VALUE kullanılmalıdır. Bu view, "
+                "\"özkaynak\", \"özkaynaklar\", \"equity\" gibi sorguların ana veri kaynağıdır."
+            ),
+            aliases=["özkaynak", "equity"],
+            primary_key=["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+            columns=common_columns,
+        ),
+    ]
 
 class InMemoryCatalogProvider(CatalogProvider):
     """Catalog provider backed by an in-memory table list.
@@ -218,12 +312,12 @@ class InMemoryCatalogProvider(CatalogProvider):
     """
 
     def __init__(self) -> None:
+        balance_tables = _build_balance_sheet_views()
         po_tables, po_rels = _build_po_tables()
         self._snapshot = CatalogSnapshot(
-            tables=[*po_tables, _build_employee_table()],
+            tables=[*po_tables, _build_employee_table(), *balance_tables],
             relationships=po_rels,
         )
-
     async def get_snapshot(self) -> CatalogSnapshot:
         return self._snapshot
 

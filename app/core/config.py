@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     oracle_dsn: str = ""
     oracle_user: str = ""
     oracle_password: str = ""
-    oracle_timeout: int = 30
+    oracle_timeout: int = 900
 
     # --- System context (date/time/fiscal) ---
     system_timezone: str = "Europe/Istanbul"
