@@ -15,11 +15,20 @@
       "priority": 2,
       "keywords": ["departman", "birim", "bolum", "department"],
       "phrases": [
-        "birimindeki", "biriminde", "bolumundeki", "bolumunde",
-        "departmanindaki", "departmaninda"
+        "birimindeki",
+        "biriminde",
+        "bolumundeki",
+        "bolumunde",
+        "departmanindaki",
+        "departmaninda"
       ],
       "confusable_columns": [
-        "BIRIM_ADI", "ORGANIZATION_ADI", "DEPARTMENT_NAME", "DEPT_NAME", "DEPARTMENT", "BOLUM"
+        "BIRIM_ADI",
+        "ORGANIZATION_ADI",
+        "DEPARTMENT_NAME",
+        "DEPT_NAME",
+        "DEPARTMENT",
+        "BOLUM"
       ]
     },
     "location": {
@@ -27,14 +36,26 @@
       "priority": 3,
       "keywords": ["lokasyon", "sehir", "ofis", "location", "city"],
       "phrases": [],
-      "confusable_columns": ["LOCATION_ADI", "LOKASYON_ADI", "LOCATION", "CITY", "SEHIR"]
+      "confusable_columns": [
+        "LOCATION_ADI",
+        "LOKASYON_ADI",
+        "LOCATION",
+        "CITY",
+        "SEHIR"
+      ]
     },
     "title": {
       "preferred_column": "UNVAN",
       "priority": 4,
       "keywords": ["unvan", "title", "gorev", "pozisyon"],
       "phrases": ["unvanli", "unvanina sahip", "gorev tanimi"],
-      "confusable_columns": ["UNVAN", "GOREV_TANIMI", "JOB_TITLE", "POSITION", "POZISYON"]
+      "confusable_columns": [
+        "UNVAN",
+        "GOREV_TANIMI",
+        "JOB_TITLE",
+        "POSITION",
+        "POZISYON"
+      ]
     },
     "organization": {
       "preferred_column": "ORGANIZATION_ADI",
@@ -42,6 +63,111 @@
       "keywords": ["organizasyon", "organization"],
       "phrases": [],
       "confusable_columns": ["ORGANIZATION_ADI", "BIRIM_ADI", "ORG_NAME"]
+    },
+    "ledger": {
+      "preferred_column": "LEDGER_NAME",
+      "priority": 6,
+      "keywords": [
+        "ledger",
+        "defter",
+        "sob",
+        "set of books",
+        "muhasebe defteri"
+      ],
+      "phrases": [
+        "ledger adı",
+        "ledger name",
+        "defter adı",
+        "defter adi",
+        "sob adı",
+        "sob adi"
+      ],
+      "confusable_columns": ["LEDGER_NAME", "LEDGER_ID"]
+    },
+    "period": {
+      "preferred_column": "PERIOD_NAME",
+      "priority": 7,
+      "keywords": [
+        "dönem",
+        "donem",
+        "period",
+        "ay",
+        "muhasebe dönemi",
+        "muhasebe donemi"
+      ],
+      "phrases": [
+        "hangi dönem",
+        "hangi donem",
+        "period name",
+        "dönem adı",
+        "donem adi"
+      ],
+      "confusable_columns": ["PERIOD_NAME"]
+    },
+    "currency": {
+      "preferred_column": "CURRENCY_CODE",
+      "priority": 8,
+      "keywords": [
+        "para birimi",
+        "döviz",
+        "doviz",
+        "currency",
+        "kur",
+        "valuta"
+      ],
+      "phrases": [
+        "para biriminde",
+        "currency code",
+        "döviz cinsi",
+        "doviz cinsi"
+      ],
+      "confusable_columns": ["CURRENCY_CODE"]
+    },
+    "line": {
+      "preferred_column": "LINE_TEXT",
+      "priority": 9,
+      "keywords": [
+        "satır",
+        "satir",
+        "kalem",
+        "hesap",
+        "açıklama",
+        "aciklama",
+        "line"
+      ],
+      "phrases": [
+        "satır adı",
+        "satir adi",
+        "kalem adı",
+        "kalem adi",
+        "satır açıklaması",
+        "satir aciklamasi"
+      ],
+      "confusable_columns": ["LINE_TEXT"]
+    },
+    "header_level": {
+      "preferred_column": "IS_HEADER",
+      "priority": 10,
+      "keywords": [
+        "başlık",
+        "baslik",
+        "detay",
+        "ana kalem",
+        "üst başlık",
+        "ust baslik",
+        "üst kırılım",
+        "ust kirilim"
+      ],
+      "phrases": [
+        "başlık satırları",
+        "baslik satirlari",
+        "detay satırları",
+        "detay satirlari",
+        "ana kalemler",
+        "üst kırılımlar",
+        "ust kirilimlar"
+      ],
+      "confusable_columns": ["IS_HEADER"]
     }
   },
 
@@ -65,6 +191,13 @@
     "TYPE_LOOKUP_CODE",
     "VENDOR_ID",
     "PO_HEADER_ID",
-    "PO_LINE_ID"
+    "PO_LINE_ID",
+    "LEDGER_ID",
+    "CHART_OF_ACCOUNTS_ID",
+    "IS_HEADER",
+    "LINE_ORDER",
+    "AMOUNT_DISPLAY",
+    "AMOUNT_VALUE",
+    "IS_HEADER"
   ]
 }

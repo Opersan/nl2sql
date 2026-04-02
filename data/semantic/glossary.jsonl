@@ -50,3 +50,83 @@
 {"raw_term": "kıdemli", "language": "tr", "normalized": "kidemli", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.95, "domain": "HR", "source": "curated"}
 {"raw_term": "kıdem", "language": "tr", "normalized": "kidem", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.95, "domain": "HR", "source": "curated"}
 {"raw_term": "en kıdemli", "language": "tr", "normalized": "en kidemli", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.97, "domain": "HR", "source": "curated"}
+{"raw_term":"bilanço","language":"tr","normalized":"bilanco","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"exact","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"dönen varlıklar","language":"tr","normalized":"donen varliklar","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"phrase","confidence":0.99,"domain":"GL","source":"curated"}
+{"raw_term":"aktif varlıklar","language":"tr","normalized":"aktif varliklar","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"phrase","confidence":0.92,"domain":"GL","source":"curated"}
+{"raw_term":"aktif dönen varlıklar","language":"tr","normalized":"aktif donen varliklar","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"phrase","confidence":0.99,"domain":"GL","source":"curated"}
+{"raw_term":"current assets","language":"en","normalized":"current assets","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"phrase","confidence":0.97,"domain":"GL","source":"curated"}
+{"raw_term":"balance sheet current assets","language":"en","normalized":"balance sheet current assets","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"phrase","confidence":0.97,"domain":"GL","source":"curated"}
+{"raw_term":"hazır değerler","language":"tr","normalized":"hazir degerler","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"phrase","confidence":0.94,"domain":"GL","source":"curated"}
+{"raw_term":"menkul kıymetler","language":"tr","normalized":"menkul kiymetler","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"phrase","confidence":0.91,"domain":"GL","source":"curated"}
+{"raw_term":"ticari alacaklar","language":"tr","normalized":"ticari alacaklar","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"phrase","confidence":0.95,"domain":"GL","source":"curated"}
+{"raw_term":"stoklar","language":"tr","normalized":"stoklar","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"exact","confidence":0.92,"domain":"GL","source":"curated"}
+{"raw_term":"diğer dönen varlıklar","language":"tr","normalized":"diger donen varliklar","canonical":"GL_BALANCE_CURRENT_ASSETS","match_type":"phrase","confidence":0.94,"domain":"GL","source":"curated"}
+{"raw_term":"bilanço","language":"tr","normalized":"bilanco","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"exact","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"duran varlıklar","language":"tr","normalized":"duran varliklar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.99,"domain":"GL","source":"curated"}
+{"raw_term":"aktif duran varlıklar","language":"tr","normalized":"aktif duran varliklar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.99,"domain":"GL","source":"curated"}
+{"raw_term":"non current assets","language":"en","normalized":"non current assets","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"fixed assets","language":"en","normalized":"fixed assets","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"mali duran varlıklar","language":"tr","normalized":"mali duran varliklar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.97,"domain":"GL","source":"curated"}
+{"raw_term":"maddi duran varlıklar","language":"tr","normalized":"maddi duran varliklar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.98,"domain":"GL","source":"curated"}
+{"raw_term":"maddi olmayan duran varlıklar","language":"tr","normalized":"maddi olmayan duran varliklar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.98,"domain":"GL","source":"curated"}
+{"raw_term":"özel tükenmeye tabi varlıklar","language":"tr","normalized":"ozel tukenmeye tabi varliklar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.93,"domain":"GL","source":"curated"}
+{"raw_term":"gelecek yıllara ait gider ve gelir tahakkukları","language":"tr","normalized":"gelecek yillara ait gider ve gelir tahakkuklari","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.92,"domain":"GL","source":"curated"}
+{"raw_term":"diğer duran varlıklar","language":"tr","normalized":"diger duran varliklar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.95,"domain":"GL","source":"curated"}
+{"raw_term":"arazi ve arsalar","language":"tr","normalized":"arazi ve arsalar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"tesis makine ve cihazlar","language":"tr","normalized":"tesis makine ve cihazlar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"demirbaşlar","language":"tr","normalized":"demirbaslar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"exact","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"birikmiş amortismanlar","language":"tr","normalized":"birikmis amortismanlar","canonical":"GL_BALANCE_NON_CURRENT_ASSETS","match_type":"phrase","confidence":0.91,"domain":"GL","source":"curated"}
+{"raw_term":"kısa vadeli yabancı kaynaklar","language":"tr","normalized":"kisa vadeli yabanci kaynaklar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.99,"domain":"GL","source":"curated"}
+{"raw_term":"pasif kısa vadeli yabancı kaynaklar","language":"tr","normalized":"pasif kisa vadeli yabanci kaynaklar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.98,"domain":"GL","source":"curated"}
+{"raw_term":"kısa vadeli borçlar","language":"tr","normalized":"kisa vadeli borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.95,"domain":"GL","source":"curated"}
+{"raw_term":"short term liabilities","language":"en","normalized":"short term liabilities","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.98,"domain":"GL","source":"curated"}
+{"raw_term":"current liabilities","language":"en","normalized":"current liabilities","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.95,"domain":"GL","source":"curated"}
+{"raw_term":"mali borçlar","language":"tr","normalized":"mali borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"ticari borçlar","language":"tr","normalized":"ticari borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.97,"domain":"GL","source":"curated"}
+{"raw_term":"diğer borçlar","language":"tr","normalized":"diger borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.94,"domain":"GL","source":"curated"}
+{"raw_term":"satıcılar","language":"tr","normalized":"saticilar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"exact","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"borç senetleri","language":"tr","normalized":"borc senetleri","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.91,"domain":"GL","source":"curated"}
+{"raw_term":"ortaklara borçlar","language":"tr","normalized":"ortaklara borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.91,"domain":"GL","source":"curated"}
+{"raw_term":"personele borçlar","language":"tr","normalized":"personele borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"kısa vadeli yabancı kaynaklar","language":"tr","normalized":"kisa vadeli yabanci kaynaklar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.99,"domain":"GL","source":"curated"}
+{"raw_term":"pasif kısa vadeli yabancı kaynaklar","language":"tr","normalized":"pasif kisa vadeli yabanci kaynaklar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.98,"domain":"GL","source":"curated"}
+{"raw_term":"kısa vadeli borçlar","language":"tr","normalized":"kisa vadeli borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.95,"domain":"GL","source":"curated"}
+{"raw_term":"short term liabilities","language":"en","normalized":"short term liabilities","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.98,"domain":"GL","source":"curated"}
+{"raw_term":"current liabilities","language":"en","normalized":"current liabilities","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.95,"domain":"GL","source":"curated"}
+{"raw_term":"mali borçlar","language":"tr","normalized":"mali borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"ticari borçlar","language":"tr","normalized":"ticari borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.97,"domain":"GL","source":"curated"}
+{"raw_term":"diğer borçlar","language":"tr","normalized":"diger borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.94,"domain":"GL","source":"curated"}
+{"raw_term":"satıcılar","language":"tr","normalized":"saticilar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"exact","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"borç senetleri","language":"tr","normalized":"borc senetleri","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.91,"domain":"GL","source":"curated"}
+{"raw_term":"ortaklara borçlar","language":"tr","normalized":"ortaklara borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.91,"domain":"GL","source":"curated"}
+{"raw_term":"personele borçlar","language":"tr","normalized":"personele borclar","canonical":"GL_BALANCE_SHORT_TERM_LIABILITIES","match_type":"phrase","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"uzun vadeli yabancı kaynaklar","language":"tr","normalized":"uzun vadeli yabanci kaynaklar","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.99,"domain":"GL","source":"curated"}
+{"raw_term":"pasif uzun vadeli yabancı kaynaklar","language":"tr","normalized":"pasif uzun vadeli yabanci kaynaklar","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.98,"domain":"GL","source":"curated"}
+{"raw_term":"uzun vadeli borçlar","language":"tr","normalized":"uzun vadeli borclar","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"long term liabilities","language":"en","normalized":"long term liabilities","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.98,"domain":"GL","source":"curated"}
+{"raw_term":"non current liabilities","language":"en","normalized":"non current liabilities","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.95,"domain":"GL","source":"curated"}
+{"raw_term":"mali borçlar","language":"tr","normalized":"mali borclar","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.94,"domain":"GL","source":"curated"}
+{"raw_term":"ticari borçlar","language":"tr","normalized":"ticari borclar","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.93,"domain":"GL","source":"curated"}
+{"raw_term":"diğer borçlar","language":"tr","normalized":"diger borclar","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.93,"domain":"GL","source":"curated"}
+{"raw_term":"kıdem tazminatı karşılıkları","language":"tr","normalized":"kidem tazminati karsiliklari","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.92,"domain":"GL","source":"curated"}
+{"raw_term":"gelecek yıllara ait gelir gider tahakkukları","language":"tr","normalized":"gelecek yillara ait gelir gider tahakkuklari","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.91,"domain":"GL","source":"curated"}
+{"raw_term":"diğer uzun vadeli yabancı kaynaklar","language":"tr","normalized":"diger uzun vadeli yabanci kaynaklar","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"banka kredileri","language":"tr","normalized":"banka kredileri","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"çıkarılmış tahviller","language":"tr","normalized":"cikarilmis tahviller","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"finansal kiralama borçları","language":"tr","normalized":"finansal kiralama borclari","canonical":"GL_BALANCE_LONG_TERM_LIABILITIES","match_type":"phrase","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"özkaynaklar","language":"tr","normalized":"ozkaynaklar","canonical":"GL_BALANCE_EQUITY","match_type":"exact","confidence":0.99,"domain":"GL","source":"curated"}
+{"raw_term":"öz kaynaklar","language":"tr","normalized":"oz kaynaklar","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.99,"domain":"GL","source":"curated"}
+{"raw_term":"equity","language":"en","normalized":"equity","canonical":"GL_BALANCE_EQUITY","match_type":"exact","confidence":0.97,"domain":"GL","source":"curated"}
+{"raw_term":"shareholders equity","language":"en","normalized":"shareholders equity","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"ödenen sermaye","language":"tr","normalized":"odenen sermaye","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.97,"domain":"GL","source":"curated"}
+{"raw_term":"sermaye","language":"tr","normalized":"sermaye","canonical":"GL_BALANCE_EQUITY","match_type":"exact","confidence":0.90,"domain":"GL","source":"curated"}
+{"raw_term":"ödenmemiş sermaye","language":"tr","normalized":"odenmemis sermaye","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.92,"domain":"GL","source":"curated"}
+{"raw_term":"sermaye yedekleri","language":"tr","normalized":"sermaye yedekleri","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.97,"domain":"GL","source":"curated"}
+{"raw_term":"kar yedekleri","language":"tr","normalized":"kar yedekleri","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.97,"domain":"GL","source":"curated"}
+{"raw_term":"geçmiş yıllar karları","language":"tr","normalized":"gecmis yillar karlari","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"geçmiş yıllar zararları","language":"tr","normalized":"gecmis yillar zararlari","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"dönem net karı","language":"tr","normalized":"donem net kari","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"dönem net zararı","language":"tr","normalized":"donem net zarari","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.95,"domain":"GL","source":"curated"}
+{"raw_term":"yasal yedekler","language":"tr","normalized":"yasal yedekler","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.92,"domain":"GL","source":"curated"}
+{"raw_term":"olağanüstü yedekler","language":"tr","normalized":"olaganustu yedekler","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.92,"domain":"GL","source":"curated"}
+{"raw_term":"özel fonlar","language":"tr","normalized":"ozel fonlar","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.91,"domain":"GL","source":"curated"}

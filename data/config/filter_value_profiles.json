@@ -6,7 +6,7 @@
     "min_select_score": 0.88,
     "min_score_gap": 0.08,
     "min_fuzzy_ratio": 0.76,
-    "min_auto_resolve_score": 0.80,
+    "min_auto_resolve_score": 0.8,
     "exact_canonical_score": 1.0,
     "exact_alias_score": 0.96,
     "token_subset_score": 0.86,
@@ -25,7 +25,13 @@
       "canonical_values": [
         {
           "value": "YAZILIM GELİŞTİRME",
-          "aliases": ["it", "bt", "bilgi teknolojileri", "bilgi teknolojileri birimi", "bilgi islem"]
+          "aliases": [
+            "it",
+            "bt",
+            "bilgi teknolojileri",
+            "bilgi teknolojileri birimi",
+            "bilgi islem"
+          ]
         },
         {
           "value": "İnsan Kaynakları",
@@ -124,7 +130,14 @@
         },
         {
           "value": "N",
-          "aliases": ["hayir", "stajyer degil", "stajyer değil", "not intern", "no", "0"]
+          "aliases": [
+            "hayir",
+            "stajyer degil",
+            "stajyer değil",
+            "not intern",
+            "no",
+            "0"
+          ]
         }
       ]
     },
@@ -140,6 +153,407 @@
         {
           "value": "0",
           "aliases": ["hayir", "bordrosuz", "non-payroll", "no"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_DONEN_VARLIKLAR.CURRENCY_CODE": {
+      "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+      "column": "CURRENCY_CODE",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "TRY",
+          "aliases": ["tl", "try", "türk lirası", "turk lirasi", "₺"]
+        },
+        {
+          "value": "USD",
+          "aliases": ["usd", "dolar", "amerikan doları", "amerikan dolari", "$"]
+        },
+        {
+          "value": "EUR",
+          "aliases": ["eur", "euro", "avro", "€"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_DURAN_VARLIKLAR.CURRENCY_CODE": {
+      "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+      "column": "CURRENCY_CODE",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "TRY",
+          "aliases": ["tl", "try", "türk lirası", "turk lirasi", "₺"]
+        },
+        {
+          "value": "USD",
+          "aliases": ["usd", "dolar", "amerikan doları", "amerikan dolari", "$"]
+        },
+        {
+          "value": "EUR",
+          "aliases": ["eur", "euro", "avro", "€"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_KVYK.CURRENCY_CODE": {
+      "table": "XXBT_V_BILANCO_KVYK",
+      "column": "CURRENCY_CODE",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "TRY",
+          "aliases": ["tl", "try", "türk lirası", "turk lirasi", "₺"]
+        },
+        {
+          "value": "USD",
+          "aliases": ["usd", "dolar", "amerikan doları", "amerikan dolari", "$"]
+        },
+        {
+          "value": "EUR",
+          "aliases": ["eur", "euro", "avro", "€"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_UVYK.CURRENCY_CODE": {
+      "table": "XXBT_V_BILANCO_UVYK",
+      "column": "CURRENCY_CODE",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "TRY",
+          "aliases": ["tl", "try", "türk lirası", "turk lirasi", "₺"]
+        },
+        {
+          "value": "USD",
+          "aliases": ["usd", "dolar", "amerikan doları", "amerikan dolari", "$"]
+        },
+        {
+          "value": "EUR",
+          "aliases": ["eur", "euro", "avro", "€"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_OZKAYNAKLAR.CURRENCY_CODE": {
+      "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+      "column": "CURRENCY_CODE",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "TRY",
+          "aliases": ["tl", "try", "türk lirası", "turk lirasi", "₺"]
+        },
+        {
+          "value": "USD",
+          "aliases": ["usd", "dolar", "amerikan doları", "amerikan dolari", "$"]
+        },
+        {
+          "value": "EUR",
+          "aliases": ["eur", "euro", "avro", "€"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_DONEN_VARLIKLAR.LINE_TEXT": {
+      "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+      "column": "LINE_TEXT",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "A. Hazır Değerler",
+          "aliases": [
+            "hazır değerler",
+            "hazir degerler",
+            "nakit",
+            "nakit benzerleri"
+          ]
+        },
+        {
+          "value": "B. Menkul Kıymetler",
+          "aliases": ["menkul kıymetler", "menkul kiymetler"]
+        },
+        { "value": "C. Ticari Alacaklar", "aliases": ["ticari alacaklar"] },
+        {
+          "value": "D. Diğer Alacaklar",
+          "aliases": ["diğer alacaklar", "diger alacaklar"]
+        },
+        { "value": "E. Stoklar", "aliases": ["stoklar", "stok"] },
+        {
+          "value": "F. Yıllara Yaygın İnş. ve Ona. Maliyeti",
+          "aliases": [
+            "yıllara yaygın inşaat maliyeti",
+            "yaygın inşaat maliyeti",
+            "insaat maliyeti"
+          ]
+        },
+        {
+          "value": "G. Gelecek Aylara Ait Gider ve Gelir Tahakkukları",
+          "aliases": [
+            "gelecek aylara ait giderler",
+            "gelir tahakkukları",
+            "gelecek aylara ait gider ve gelir tahakkukları"
+          ]
+        },
+        {
+          "value": "H. Diğer Dönen Varlıklar",
+          "aliases": ["diğer dönen varlıklar", "diger donen varliklar"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_DURAN_VARLIKLAR.LINE_TEXT": {
+      "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+      "column": "LINE_TEXT",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        { "value": "A. Ticari Alacaklar", "aliases": ["ticari alacaklar"] },
+        {
+          "value": "B. Diğer Alacaklar",
+          "aliases": ["diğer alacaklar", "diger alacaklar"]
+        },
+        {
+          "value": "C. Mali Duran Varlıklar",
+          "aliases": ["mali duran varlıklar", "mali duran varliklar"]
+        },
+        {
+          "value": "D. Maddi Duran Varlıklar",
+          "aliases": [
+            "maddi duran varlıklar",
+            "maddi duran varliklar",
+            "sabit kıymetler",
+            "fixed assets"
+          ]
+        },
+        {
+          "value": "E. Maddi Olmayan Duran Varlıklar",
+          "aliases": [
+            "maddi olmayan duran varlıklar",
+            "maddi olmayan duran varliklar",
+            "intangible assets"
+          ]
+        },
+        {
+          "value": "F. Özel Tükenmeye Tabi Varlıklar",
+          "aliases": [
+            "özel tükenmeye tabi varlıklar",
+            "ozel tukenmeye tabi varliklar"
+          ]
+        },
+        {
+          "value": "G. Gelecek Yıllara Ait Gider ve Gelir Tahakkukları",
+          "aliases": [
+            "gelecek yıllara ait giderler",
+            "gelecek yıllara ait gelir tahakkukları"
+          ]
+        },
+        {
+          "value": "H. Diğer Duran Varlıklar",
+          "aliases": ["diğer duran varlıklar", "diger duran varliklar"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_KVYK.LINE_TEXT": {
+      "table": "XXBT_V_BILANCO_KVYK",
+      "column": "LINE_TEXT",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "A. Mali Borçlar",
+          "aliases": ["mali borçlar", "mali borclar", "financial debts"]
+        },
+        {
+          "value": "B. Ticari Borçlar",
+          "aliases": ["ticari borçlar", "ticari borclar", "trade payables"]
+        },
+        {
+          "value": "C. Diğer Borçlar",
+          "aliases": ["diğer borçlar", "diger borclar"]
+        },
+        {
+          "value": "D. Alınan Avanslar",
+          "aliases": ["alınan avanslar", "alinan avanslar"]
+        },
+        {
+          "value": "E. Ödenecek Vergi ve Diğer Yükümlülükler",
+          "aliases": [
+            "ödenecek vergiler",
+            "vergi yükümlülükleri",
+            "odenecek vergiler"
+          ]
+        },
+        {
+          "value": "F. Borç ve Gider Karşılıkları",
+          "aliases": [
+            "borç karşılıkları",
+            "gider karşılıkları",
+            "borc ve gider karsiliklari"
+          ]
+        },
+        {
+          "value": "G. Gelecek Aylara Ait Gelirler ve Gider Tahakkukları",
+          "aliases": ["gelecek aylara ait gelirler", "gider tahakkukları"]
+        },
+        {
+          "value": "H. Diğer Kısa Vadeli Yabancı Kaynaklar",
+          "aliases": [
+            "diğer kısa vadeli yabancı kaynaklar",
+            "diger kisa vadeli yabanci kaynaklar"
+          ]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_UVYK.LINE_TEXT": {
+      "table": "XXBT_V_BILANCO_UVYK",
+      "column": "LINE_TEXT",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "A. Mali Borçlar",
+          "aliases": ["mali borçlar", "mali borclar"]
+        },
+        {
+          "value": "B. Ticari Borçlar",
+          "aliases": ["ticari borçlar", "ticari borclar"]
+        },
+        {
+          "value": "C. Diğer Borçlar",
+          "aliases": ["diğer borçlar", "diger borclar"]
+        },
+        {
+          "value": "D. Alınan Avanslar",
+          "aliases": ["alınan avanslar", "alinan avanslar"]
+        },
+        {
+          "value": "E. Borç ve Gider Karşılıkları",
+          "aliases": [
+            "borç ve gider karşılıkları",
+            "borc ve gider karsiliklari",
+            "kıdem tazminatı karşılıkları",
+            "kidem tazminati karsiliklari"
+          ]
+        },
+        {
+          "value": "F. Gelecek Yıllara Ait Gel. ve Gid. Tah.",
+          "aliases": [
+            "gelecek yıllara ait gelir ve gider tahakkukları",
+            "gelecek yıllara ait tahakkuklar"
+          ]
+        },
+        {
+          "value": "G. Diğer Uzun Vadeli Yabancı Kaynaklar",
+          "aliases": [
+            "diğer uzun vadeli yabancı kaynaklar",
+            "diger uzun vadeli yabanci kaynaklar"
+          ]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_OZKAYNAKLAR.LINE_TEXT": {
+      "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+      "column": "LINE_TEXT",
+      "supported_ops": ["=", "!=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "A. Ödenen Sermaye",
+          "aliases": ["ödenen sermaye", "odenen sermaye", "paid in capital"]
+        },
+        {
+          "value": "B. Sermaye Yedekleri",
+          "aliases": ["sermaye yedekleri", "capital reserves"]
+        },
+        {
+          "value": "C. Kar Yedekleri",
+          "aliases": ["kar yedekleri", "profit reserves"]
+        },
+        {
+          "value": "D. Geçmiş Yıllar Karları",
+          "aliases": ["geçmiş yıllar karları", "gecmis yillar karlari"]
+        },
+        {
+          "value": "E. Geçmiş Yıllar Zararları (-)",
+          "aliases": ["geçmiş yıllar zararları", "gecmis yillar zararlari"]
+        },
+        {
+          "value": "F. Dönem Net Karı (Zararı)",
+          "aliases": [
+            "dönem net karı",
+            "donem net kari",
+            "dönem net zararı",
+            "donem net zarari",
+            "net profit",
+            "net loss"
+          ]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_DONEN_VARLIKLAR.PERIOD_NAME": {
+      "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+      "column": "PERIOD_NAME",
+      "supported_ops": ["=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "01-2025",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+        },
+        {
+          "value": "03-2018",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_DURAN_VARLIKLAR.PERIOD_NAME": {
+      "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+      "column": "PERIOD_NAME",
+      "supported_ops": ["=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "01-2025",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+        },
+        {
+          "value": "03-2018",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_KVYK.PERIOD_NAME": {
+      "table": "XXBT_V_BILANCO_KVYK",
+      "column": "PERIOD_NAME",
+      "supported_ops": ["=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "01-2025",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+        },
+        {
+          "value": "03-2018",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_UVYK.PERIOD_NAME": {
+      "table": "XXBT_V_BILANCO_UVYK",
+      "column": "PERIOD_NAME",
+      "supported_ops": ["=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "01-2025",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+        },
+        {
+          "value": "03-2018",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
+        }
+      ]
+    },
+    "XXBT_V_BILANCO_OZKAYNAKLAR.PERIOD_NAME": {
+      "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+      "column": "PERIOD_NAME",
+      "supported_ops": ["=", "LIKE"],
+      "canonical_values": [
+        {
+          "value": "01-2025",
+          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01"]
+        },
+        {
+          "value": "03-2018",
+          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03"]
         }
       ]
     }

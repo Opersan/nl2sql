@@ -192,6 +192,856 @@
         }
       },
       "default_intent": "po_header_query"
+    },
+    {
+      "entity_id": "BALANCE_SHEET_CURRENT_ASSETS",
+      "root_table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+      "child_tables": [],
+      "join_paths": [],
+      "keywords": [
+        "bilanço",
+        "bilanco",
+        "dönen varlıklar",
+        "donen varliklar",
+        "aktif",
+        "aktif varlıklar",
+        "current assets"
+      ],
+      "intent_rules": [
+        {
+          "intent": "balance_line_list",
+          "all_of": ["dönen"],
+          "any_of": [
+            "listele",
+            "getir",
+            "göster",
+            "goster",
+            "kalem",
+            "satır",
+            "satir"
+          ]
+        },
+        {
+          "intent": "balance_line_list",
+          "all_of": ["varlıklar"],
+          "any_of": [
+            "listele",
+            "getir",
+            "göster",
+            "goster",
+            "kalem",
+            "satır",
+            "satir"
+          ]
+        },
+        {
+          "intent": "balance_value_lookup",
+          "all_of": ["dönen"],
+          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+        },
+        {
+          "intent": "balance_header_only",
+          "all_of": ["dönen"],
+          "any_of": [
+            "başlık",
+            "baslik",
+            "ana kalem",
+            "üst başlık",
+            "ust baslik"
+          ]
+        },
+        {
+          "intent": "balance_detail_only",
+          "all_of": ["detay"],
+          "any_of": [
+            "satır",
+            "satir",
+            "kalem",
+            "listele",
+            "getir",
+            "göster",
+            "goster"
+          ]
+        },
+        {
+          "intent": "balance_top_line",
+          "all_of": ["en büyük"],
+          "any_of": ["kalem", "satır", "satir", "grup", "tutar"]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        }
+      ],
+      "intent_defaults": {
+        "balance_line_list": {
+          "stable": true
+        },
+        "balance_value_lookup": {
+          "stable": true,
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "alias": "total_amount"
+            }
+          ]
+        },
+        "balance_header_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "op": "=",
+              "value": 1
+            }
+          ]
+        },
+        "balance_detail_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "op": "=",
+              "value": 0
+            }
+          ]
+        },
+        "balance_top_line": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "order_by": [
+            {
+              "column": "AMOUNT_VALUE",
+              "direction": "DESC",
+              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR"
+            }
+          ],
+          "limit": 1
+        },
+        "balance_total_excluding_headers": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "alias": "detail_total_amount"
+            }
+          ]
+        }
+      },
+      "default_intent": "balance_line_list"
+    },
+    {
+      "entity_id": "BALANCE_SHEET_NONCURRENT_ASSETS",
+      "root_table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+      "child_tables": [],
+      "join_paths": [],
+      "keywords": [
+        "bilanço",
+        "bilanco",
+        "duran varlıklar",
+        "duran varliklar",
+        "aktif",
+        "fixed assets",
+        "non current assets"
+      ],
+      "intent_rules": [
+        {
+          "intent": "balance_line_list",
+          "all_of": ["duran"],
+          "any_of": [
+            "listele",
+            "getir",
+            "göster",
+            "goster",
+            "kalem",
+            "satır",
+            "satir"
+          ]
+        },
+        {
+          "intent": "balance_value_lookup",
+          "all_of": ["duran"],
+          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+        },
+        {
+          "intent": "balance_header_only",
+          "all_of": ["duran"],
+          "any_of": [
+            "başlık",
+            "baslik",
+            "ana kalem",
+            "üst başlık",
+            "ust baslik"
+          ]
+        },
+        {
+          "intent": "balance_detail_only",
+          "all_of": ["detay"],
+          "any_of": [
+            "satır",
+            "satir",
+            "kalem",
+            "listele",
+            "getir",
+            "göster",
+            "goster"
+          ]
+        },
+        {
+          "intent": "balance_top_line",
+          "all_of": ["en büyük"],
+          "any_of": ["kalem", "satır", "satir", "grup", "tutar"]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        }
+      ],
+      "intent_defaults": {
+        "balance_line_list": {
+          "stable": true
+        },
+        "balance_value_lookup": {
+          "stable": true,
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+              "alias": "total_amount"
+            }
+          ]
+        },
+        "balance_header_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+              "op": "=",
+              "value": 1
+            }
+          ]
+        },
+        "balance_detail_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+              "op": "=",
+              "value": 0
+            }
+          ]
+        },
+        "balance_top_line": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "order_by": [
+            {
+              "column": "AMOUNT_VALUE",
+              "direction": "DESC",
+              "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR"
+            }
+          ],
+          "limit": 1
+        },
+        "balance_total_excluding_headers": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "alias": "detail_total_amount"
+            }
+          ]
+        }
+      },
+      "default_intent": "balance_line_list"
+    },
+    {
+      "entity_id": "BALANCE_SHEET_SHORT_TERM_LIABILITIES",
+      "root_table": "XXBT_V_BILANCO_KVYK",
+      "child_tables": [],
+      "join_paths": [],
+      "keywords": [
+        "bilanço",
+        "bilanco",
+        "kvyk",
+        "kısa vadeli yabancı kaynaklar",
+        "kisa vadeli yabanci kaynaklar",
+        "kısa vadeli borçlar",
+        "kisa vadeli borclar",
+        "current liabilities"
+      ],
+      "intent_rules": [
+        {
+          "intent": "balance_line_list",
+          "all_of": ["kısa"],
+          "any_of": [
+            "listele",
+            "getir",
+            "göster",
+            "goster",
+            "kalem",
+            "satır",
+            "satir"
+          ]
+        },
+        {
+          "intent": "balance_line_list",
+          "all_of": ["kvyk"],
+          "any_of": [
+            "listele",
+            "getir",
+            "göster",
+            "goster",
+            "kalem",
+            "satır",
+            "satir"
+          ]
+        },
+        {
+          "intent": "balance_value_lookup",
+          "all_of": ["kısa"],
+          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+        },
+        {
+          "intent": "balance_header_only",
+          "all_of": ["kısa"],
+          "any_of": [
+            "başlık",
+            "baslik",
+            "ana kalem",
+            "üst başlık",
+            "ust baslik"
+          ]
+        },
+        {
+          "intent": "balance_detail_only",
+          "all_of": ["detay"],
+          "any_of": [
+            "satır",
+            "satir",
+            "kalem",
+            "listele",
+            "getir",
+            "göster",
+            "goster"
+          ]
+        },
+        {
+          "intent": "balance_top_line",
+          "all_of": ["en büyük"],
+          "any_of": ["kalem", "satır", "satir", "grup", "tutar"]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        }
+      ],
+      "intent_defaults": {
+        "balance_line_list": {
+          "stable": true
+        },
+        "balance_value_lookup": {
+          "stable": true,
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_KVYK",
+              "alias": "total_amount"
+            }
+          ]
+        },
+        "balance_header_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_KVYK",
+              "op": "=",
+              "value": 1
+            }
+          ]
+        }
+      },
+      "default_intent": "balance_line_list"
+    },
+    {
+      "entity_id": "BALANCE_SHEET_LONG_TERM_LIABILITIES",
+      "root_table": "XXBT_V_BILANCO_UVYK",
+      "child_tables": [],
+      "join_paths": [],
+      "keywords": [
+        "bilanço",
+        "bilanco",
+        "uvyk",
+        "uzun vadeli yabancı kaynaklar",
+        "uzun vadeli yabanci kaynaklar",
+        "uzun vadeli borçlar",
+        "uzun vadeli borclar",
+        "long term liabilities"
+      ],
+      "intent_rules": [
+        {
+          "intent": "balance_line_list",
+          "all_of": ["uzun"],
+          "any_of": [
+            "listele",
+            "getir",
+            "göster",
+            "goster",
+            "kalem",
+            "satır",
+            "satir"
+          ]
+        },
+        {
+          "intent": "balance_line_list",
+          "all_of": ["uvyk"],
+          "any_of": [
+            "listele",
+            "getir",
+            "göster",
+            "goster",
+            "kalem",
+            "satır",
+            "satir"
+          ]
+        },
+        {
+          "intent": "balance_value_lookup",
+          "all_of": ["uzun"],
+          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+        },
+        {
+          "intent": "balance_header_only",
+          "all_of": ["uzun"],
+          "any_of": [
+            "başlık",
+            "baslik",
+            "ana kalem",
+            "üst başlık",
+            "ust baslik"
+          ]
+        },
+        {
+          "intent": "balance_detail_only",
+          "all_of": ["detay"],
+          "any_of": [
+            "satır",
+            "satir",
+            "kalem",
+            "listele",
+            "getir",
+            "göster",
+            "goster"
+          ]
+        },
+        {
+          "intent": "balance_top_line",
+          "all_of": ["en büyük"],
+          "any_of": ["kalem", "satır", "satir", "grup", "tutar"]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        }
+      ],
+      "intent_defaults": {
+        "balance_line_list": {
+          "stable": true
+        },
+        "balance_value_lookup": {
+          "stable": true,
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_UVYK",
+              "alias": "total_amount"
+            }
+          ]
+        },
+        "balance_header_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_UVYK",
+              "op": "=",
+              "value": 1
+            }
+          ]
+        },
+        "balance_detail_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_UVYK",
+              "op": "=",
+              "value": 0
+            }
+          ]
+        },
+        "balance_top_line": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_UVYK",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "order_by": [
+            {
+              "column": "AMOUNT_VALUE",
+              "direction": "DESC",
+              "table": "XXBT_V_BILANCO_UVYK"
+            }
+          ],
+          "limit": 1
+        },
+        "balance_total_excluding_headers": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_UVYK",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_UVYK",
+              "alias": "detail_total_amount"
+            }
+          ]
+        }
+      },
+      "default_intent": "balance_line_list"
+    },
+    {
+      "entity_id": "BALANCE_SHEET_EQUITY",
+      "root_table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+      "child_tables": [],
+      "join_paths": [],
+      "keywords": [
+        "bilanço",
+        "bilanco",
+        "özkaynak",
+        "ozkaynak",
+        "özkaynaklar",
+        "ozkaynaklar",
+        "equity"
+      ],
+      "intent_rules": [
+        {
+          "intent": "balance_line_list",
+          "all_of": ["özkaynak"],
+          "any_of": [
+            "listele",
+            "getir",
+            "göster",
+            "goster",
+            "kalem",
+            "satır",
+            "satir"
+          ]
+        },
+        {
+          "intent": "balance_line_list",
+          "all_of": ["ozkaynak"],
+          "any_of": [
+            "listele",
+            "getir",
+            "göster",
+            "goster",
+            "kalem",
+            "satır",
+            "satir"
+          ]
+        },
+        {
+          "intent": "balance_value_lookup",
+          "all_of": ["özkaynak"],
+          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+        },
+        {
+          "intent": "balance_header_only",
+          "all_of": ["özkaynak"],
+          "any_of": [
+            "başlık",
+            "baslik",
+            "ana kalem",
+            "üst başlık",
+            "ust baslik"
+          ]
+        },
+        {
+          "intent": "balance_detail_only",
+          "all_of": ["detay"],
+          "any_of": [
+            "satır",
+            "satir",
+            "kalem",
+            "listele",
+            "getir",
+            "göster",
+            "goster"
+          ]
+        },
+        {
+          "intent": "balance_top_line",
+          "all_of": ["en büyük"],
+          "any_of": ["kalem", "satır", "satir", "grup", "tutar"]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        },
+        {
+          "intent": "balance_line_lookup",
+          "all_of": [],
+          "any_of": [
+            "hazır değerler",
+            "stoklar",
+            "mali borçlar",
+            "ticari borçlar",
+            "ödenen sermaye",
+            "kar yedekleri",
+            "kıdem tazminatı",
+            "dönem net karı"
+          ]
+        }
+      ],
+      "intent_defaults": {
+        "balance_line_list": {
+          "stable": true
+        },
+        "balance_value_lookup": {
+          "stable": true,
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+              "alias": "total_amount"
+            }
+          ]
+        },
+        "balance_header_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+              "op": "=",
+              "value": 1
+            }
+          ]
+        },
+        "balance_detail_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+              "op": "=",
+              "value": 0
+            }
+          ]
+        },
+        "balance_top_line": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "order_by": [
+            {
+              "column": "AMOUNT_VALUE",
+              "direction": "DESC",
+              "table": "XXBT_V_BILANCO_OZKAYNAKLAR"
+            }
+          ],
+          "limit": 1
+        },
+        "balance_total_excluding_headers": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_OZKAYNAKLAR",
+              "alias": "detail_total_amount"
+            }
+          ]
+        }
+      },
+      "default_intent": "balance_line_list"
     }
   ],
   "intent_join_paths": {
@@ -201,9 +1051,7 @@
     "po_item_line_count": "po.header_lines_items"
   },
   "policy_rules": {
-    "sensitive_intent_patterns": [
-      "password"
-    ]
+    "sensitive_intent_patterns": ["password"]
   },
   "column_aliases": {
     "token_abbreviations": {

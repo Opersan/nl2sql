@@ -12,9 +12,7 @@
         "pdks personel",
         "ik personel"
       ],
-      "primary_key": [
-        "PERSON_ID"
-      ],
+      "primary_key": ["PERSON_ID"],
       "foreign_keys": [],
       "columns": [
         {
@@ -413,7 +411,7 @@
           "name": "CINSIYET",
           "data_type": "VARCHAR",
           "nullable": true,
-          "restricted": true,
+          "restricted": false,
           "description": "Çalışanın cinsiyet bilgisidir.",
           "aliases": []
         },
@@ -429,7 +427,7 @@
           "name": "OGRENIM_DURUMU",
           "data_type": "VARCHAR",
           "nullable": true,
-          "restricted": true,
+          "restricted": false,
           "description": "Çalışanın öğrenim durumu bilgisidir.",
           "aliases": []
         },
@@ -512,9 +510,7 @@
         "po başlık",
         "po numarası"
       ],
-      "primary_key": [
-        "PO_HEADER_ID"
-      ],
+      "primary_key": ["PO_HEADER_ID"],
       "foreign_keys": [],
       "columns": [
         {
@@ -523,11 +519,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Belge başlığının benzersiz teknik anahtarıdır.",
-          "aliases": [
-            "po header id",
-            "header id",
-            "belge id"
-          ]
+          "aliases": ["po header id", "header id", "belge id"]
         },
         {
           "name": "SEGMENT1",
@@ -535,12 +527,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Kullanıcının gördüğü belge numarasıdır. Tek başına global benzersiz kabul edilmemelidir; pratikte TYPE_LOOKUP_CODE ve ORG_ID bağlamıyla değerlendirilir.",
-          "aliases": [
-            "po number",
-            "po no",
-            "sipariş no",
-            "belge no"
-          ]
+          "aliases": ["po number", "po no", "sipariş no", "belge no"]
         },
         {
           "name": "TYPE_LOOKUP_CODE",
@@ -548,11 +535,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Belge tipini gösterir; örneğin STANDARD, BLANKET, CONTRACT veya QUOTATION gibi Purchasing doküman sınıflarını ayırır.",
-          "aliases": [
-            "document type",
-            "po type",
-            "belge tipi"
-          ]
+          "aliases": ["document type", "po type", "belge tipi"]
         },
         {
           "name": "AUTHORIZATION_STATUS",
@@ -573,11 +556,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Belgenin onaylandığını gösteren bayraktır; ancak detaylı durum analizi için AUTHORIZATION_STATUS ile birlikte değerlendirilmelidir.",
-          "aliases": [
-            "approved",
-            "onaylı mı",
-            "approve flag"
-          ]
+          "aliases": ["approved", "onaylı mı", "approve flag"]
         },
         {
           "name": "VENDOR_ID",
@@ -585,11 +564,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Tedarikçi kaydının teknik anahtarıdır. Başlık seviyesindeki supplier bilgisini temsil eder.",
-          "aliases": [
-            "supplier id",
-            "vendor id",
-            "tedarikçi id"
-          ]
+          "aliases": ["supplier id", "vendor id", "tedarikçi id"]
         },
         {
           "name": "VENDOR_SITE_ID",
@@ -597,11 +572,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Tedarikçinin site/adres kullanımının teknik anahtarıdır. Satın alma belgesindeki supplier site bağlamını gösterir.",
-          "aliases": [
-            "supplier site id",
-            "vendor site",
-            "tedarikçi site id"
-          ]
+          "aliases": ["supplier site id", "vendor site", "tedarikçi site id"]
         },
         {
           "name": "AGENT_ID",
@@ -609,12 +580,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Belgeden sorumlu buyer/satın almacı kişinin teknik anahtarıdır.",
-          "aliases": [
-            "buyer id",
-            "agent",
-            "satın almacı",
-            "buyer"
-          ]
+          "aliases": ["buyer id", "agent", "satın almacı", "buyer"]
         },
         {
           "name": "CREATION_DATE",
@@ -648,11 +614,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Belgenin işlem para birimidir. Tutar yorumlarında UNIT_PRICE ve kur alanlarıyla birlikte değerlendirilir.",
-          "aliases": [
-            "currency",
-            "para birimi",
-            "döviz cinsi"
-          ]
+          "aliases": ["currency", "para birimi", "döviz cinsi"]
         },
         {
           "name": "RATE_TYPE",
@@ -660,11 +622,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Kur tipidir. Yabancı para belgelerde muhasebe/raporlama dönüşüm mantığında kullanılır.",
-          "aliases": [
-            "exchange rate type",
-            "rate type",
-            "kur tipi"
-          ]
+          "aliases": ["exchange rate type", "rate type", "kur tipi"]
         },
         {
           "name": "RATE_DATE",
@@ -672,11 +630,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Kur tarihidir. Yabancı para belgelerde CURRENCY_CODE ve RATE ile birlikte anlamlıdır.",
-          "aliases": [
-            "exchange rate date",
-            "rate date",
-            "kur tarihi"
-          ]
+          "aliases": ["exchange rate date", "rate date", "kur tarihi"]
         },
         {
           "name": "RATE",
@@ -684,11 +638,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Belgede kullanılan döviz kurudur.",
-          "aliases": [
-            "exchange rate",
-            "kur",
-            "rate"
-          ]
+          "aliases": ["exchange rate", "kur", "rate"]
         },
         {
           "name": "COMMENTS",
@@ -696,12 +646,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Başlık seviyesindeki serbest açıklama/not alanıdır.",
-          "aliases": [
-            "comments",
-            "header comments",
-            "açıklama",
-            "not"
-          ]
+          "aliases": ["comments", "header comments", "açıklama", "not"]
         },
         {
           "name": "BLANKET_TOTAL_AMOUNT",
@@ -721,11 +666,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Blanket/contract benzeri belgelerde geçerlilik başlangıç tarihidir.",
-          "aliases": [
-            "start date",
-            "agreement start",
-            "başlangıç tarihi"
-          ]
+          "aliases": ["start date", "agreement start", "başlangıç tarihi"]
         },
         {
           "name": "END_DATE",
@@ -733,11 +674,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Blanket/contract benzeri belgelerde geçerlilik bitiş tarihidir.",
-          "aliases": [
-            "end date",
-            "agreement end",
-            "bitiş tarihi"
-          ]
+          "aliases": ["end date", "agreement end", "bitiş tarihi"]
         },
         {
           "name": "CANCEL_FLAG",
@@ -745,11 +682,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Belge başlığının iptal edilip edilmediğini gösteren bayraktır.",
-          "aliases": [
-            "cancelled",
-            "cancel flag",
-            "iptal mi"
-          ]
+          "aliases": ["cancelled", "cancel flag", "iptal mi"]
         },
         {
           "name": "CLOSED_CODE",
@@ -757,11 +690,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Başlık seviyesindeki kapanış durumudur. Satır veya shipment kapanışlarından bağımsız olabilir.",
-          "aliases": [
-            "closed status",
-            "header closed",
-            "kapanış durumu"
-          ]
+          "aliases": ["closed status", "header closed", "kapanış durumu"]
         }
       ]
     },
@@ -777,9 +706,7 @@
         "line item",
         "po kalemi"
       ],
-      "primary_key": [
-        "PO_LINE_ID"
-      ],
+      "primary_key": ["PO_LINE_ID"],
       "foreign_keys": [
         {
           "column": "PO_HEADER_ID",
@@ -801,11 +728,7 @@
           "nullable": false,
           "restricted": false,
           "description": "PO satırının benzersiz teknik anahtarıdır.",
-          "aliases": [
-            "po line id",
-            "line id",
-            "satır id"
-          ]
+          "aliases": ["po line id", "line id", "satır id"]
         },
         {
           "name": "PO_HEADER_ID",
@@ -813,11 +736,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Satırın bağlı olduğu PO başlığının teknik anahtarıdır.",
-          "aliases": [
-            "header id",
-            "po header id",
-            "başlık id"
-          ]
+          "aliases": ["header id", "po header id", "başlık id"]
         },
         {
           "name": "LINE_NUM",
@@ -825,11 +744,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Belge üzerindeki görünen satır numarasıdır. Genellikle SEGMENT1 altında kullanıcıya gösterilen kalem sırasıdır.",
-          "aliases": [
-            "line number",
-            "satır numarası",
-            "kalem no"
-          ]
+          "aliases": ["line number", "satır numarası", "kalem no"]
         },
         {
           "name": "LINE_TYPE_ID",
@@ -837,11 +752,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satır tipinin teknik anahtarıdır. Malzeme, hizmet vb. iş davranışını belirler.",
-          "aliases": [
-            "line type",
-            "satır tipi",
-            "line type id"
-          ]
+          "aliases": ["line type", "satır tipi", "line type id"]
         },
         {
           "name": "ITEM_ID",
@@ -849,12 +760,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Item master üzerindeki inventory item anahtarıdır. Doğru item bağlamı yorumlanırken organizasyon/destination context ayrıca dikkate alınmalıdır.",
-          "aliases": [
-            "inventory item id",
-            "item",
-            "malzeme id",
-            "stok id"
-          ]
+          "aliases": ["inventory item id", "item", "malzeme id", "stok id"]
         },
         {
           "name": "ITEM_DESCRIPTION",
@@ -875,11 +781,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satırın purchasing/item kategori anahtarıdır. Harcama ve sınıflandırma raporlarında önemlidir.",
-          "aliases": [
-            "category",
-            "kategori",
-            "item category"
-          ]
+          "aliases": ["category", "kategori", "item category"]
         },
         {
           "name": "ITEM_REVISION",
@@ -887,11 +789,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satırda sipariş edilen item revizyon bilgisidir. Revision kontrollü itemlarda anlamlıdır.",
-          "aliases": [
-            "revision",
-            "item revision",
-            "revizyon"
-          ]
+          "aliases": ["revision", "item revision", "revizyon"]
         },
         {
           "name": "UNIT_MEAS_LOOKUP_CODE",
@@ -899,12 +797,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satır miktarı için kullanılan ölçü birimidir.",
-          "aliases": [
-            "uom",
-            "unit of measure",
-            "ölçü birimi",
-            "birim"
-          ]
+          "aliases": ["uom", "unit of measure", "ölçü birimi", "birim"]
         },
         {
           "name": "UNIT_PRICE",
@@ -912,11 +805,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satırın işlem birim fiyatıdır. Para birimi başlık seviyesinden gelir.",
-          "aliases": [
-            "price",
-            "unit price",
-            "birim fiyat"
-          ]
+          "aliases": ["price", "unit price", "birim fiyat"]
         },
         {
           "name": "LIST_PRICE_PER_UNIT",
@@ -924,10 +813,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Liste birim fiyatıdır; her senaryoda fiili işlem fiyatı olmayabilir.",
-          "aliases": [
-            "list price",
-            "liste fiyatı"
-          ]
+          "aliases": ["list price", "liste fiyatı"]
         },
         {
           "name": "QUANTITY",
@@ -935,12 +821,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satır seviyesinde sipariş edilen toplam miktardır. Shipment seviyesine dağıtılabilir.",
-          "aliases": [
-            "qty",
-            "quantity",
-            "miktar",
-            "sipariş miktarı"
-          ]
+          "aliases": ["qty", "quantity", "miktar", "sipariş miktarı"]
         },
         {
           "name": "CANCEL_FLAG",
@@ -948,11 +829,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satırın iptal edilip edilmediğini gösterir.",
-          "aliases": [
-            "cancelled",
-            "cancel flag",
-            "iptal mi"
-          ]
+          "aliases": ["cancelled", "cancel flag", "iptal mi"]
         },
         {
           "name": "CLOSED_CODE",
@@ -960,11 +837,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satır kapanış durumudur. Satırın finally closed / closed for receiving gibi iş durumlarını gösterebilir.",
-          "aliases": [
-            "closed status",
-            "line closed",
-            "kapanış durumu"
-          ]
+          "aliases": ["closed status", "line closed", "kapanış durumu"]
         },
         {
           "name": "FROM_HEADER_ID",
@@ -972,11 +845,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satırın türetildiği source document başlığına referans olabilir; özellikle quotation veya agreement kaynaklı akışlarda kullanılır.",
-          "aliases": [
-            "source header",
-            "from header",
-            "kaynak başlık"
-          ]
+          "aliases": ["source header", "from header", "kaynak başlık"]
         },
         {
           "name": "FROM_LINE_ID",
@@ -984,11 +853,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satırın türetildiği kaynak satıra referans olabilir.",
-          "aliases": [
-            "source line",
-            "from line",
-            "kaynak satır"
-          ]
+          "aliases": ["source line", "from line", "kaynak satır"]
         },
         {
           "name": "CREATION_DATE",
@@ -996,11 +861,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Satırın oluşturulma tarihidir.",
-          "aliases": [
-            "created date",
-            "creation date",
-            "oluşturulma tarihi"
-          ]
+          "aliases": ["created date", "creation date", "oluşturulma tarihi"]
         }
       ]
     },
@@ -1017,9 +878,7 @@
         "shipment line",
         "satır sevkiyat planı"
       ],
-      "primary_key": [
-        "LINE_LOCATION_ID"
-      ],
+      "primary_key": ["LINE_LOCATION_ID"],
       "foreign_keys": [
         {
           "column": "PO_HEADER_ID",
@@ -1041,11 +900,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Shipment/schedule kaydının benzersiz teknik anahtarıdır.",
-          "aliases": [
-            "line location id",
-            "shipment id",
-            "schedule id"
-          ]
+          "aliases": ["line location id", "shipment id", "schedule id"]
         },
         {
           "name": "PO_HEADER_ID",
@@ -1053,10 +908,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Shipment kaydının bağlı olduğu PO başlığının teknik anahtarıdır.",
-          "aliases": [
-            "po header id",
-            "header id"
-          ]
+          "aliases": ["po header id", "header id"]
         },
         {
           "name": "PO_LINE_ID",
@@ -1064,10 +916,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Shipment kaydının bağlı olduğu PO satırının teknik anahtarıdır.",
-          "aliases": [
-            "po line id",
-            "line id"
-          ]
+          "aliases": ["po line id", "line id"]
         },
         {
           "name": "SHIPMENT_NUM",
@@ -1075,11 +924,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Belge üzerindeki shipment/schedule sıra numarasıdır. Aynı PO line altında birden fazla schedule olabilir.",
-          "aliases": [
-            "shipment number",
-            "schedule number",
-            "teslimat satır no"
-          ]
+          "aliases": ["shipment number", "schedule number", "teslimat satır no"]
         },
         {
           "name": "SHIPMENT_TYPE",
@@ -1087,10 +932,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Shipment kaydının tipini belirtir. Standart teslimat veya price break gibi kullanım senaryolarında ayrım sağlayabilir.",
-          "aliases": [
-            "shipment type",
-            "schedule type"
-          ]
+          "aliases": ["shipment type", "schedule type"]
         },
         {
           "name": "QUANTITY",
@@ -1098,11 +940,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Shipment schedule seviyesindeki sipariş miktarıdır; line toplamından küçük veya ona eşit olabilir.",
-          "aliases": [
-            "shipment qty",
-            "schedule qty",
-            "miktar"
-          ]
+          "aliases": ["shipment qty", "schedule qty", "miktar"]
         },
         {
           "name": "QUANTITY_RECEIVED",
@@ -1135,11 +973,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Faturalanmış miktardır.",
-          "aliases": [
-            "billed qty",
-            "quantity billed",
-            "faturalanan miktar"
-          ]
+          "aliases": ["billed qty", "quantity billed", "faturalanan miktar"]
         },
         {
           "name": "QUANTITY_CANCELLED",
@@ -1208,10 +1042,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Teslimat hedef tipini gösterir; örneğin inventory, expense veya shop floor gibi destination mantığını ayrıştırır.",
-          "aliases": [
-            "destination type",
-            "hedef tipi"
-          ]
+          "aliases": ["destination type", "hedef tipi"]
         },
         {
           "name": "CANCEL_FLAG",
@@ -1219,11 +1050,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Shipment kaydının iptal edilip edilmediğini gösterir.",
-          "aliases": [
-            "cancelled",
-            "cancel flag",
-            "iptal mi"
-          ]
+          "aliases": ["cancelled", "cancel flag", "iptal mi"]
         },
         {
           "name": "CLOSED_CODE",
@@ -1231,11 +1058,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Shipment kapanış durumudur. Receiving veya invoicing açısından kapanış bilgisini taşır.",
-          "aliases": [
-            "closed status",
-            "closure status",
-            "kapanış durumu"
-          ]
+          "aliases": ["closed status", "closure status", "kapanış durumu"]
         }
       ]
     },
@@ -1251,9 +1074,7 @@
         "charge account",
         "masraf dağıtımı"
       ],
-      "primary_key": [
-        "PO_DISTRIBUTION_ID"
-      ],
+      "primary_key": ["PO_DISTRIBUTION_ID"],
       "foreign_keys": [
         {
           "column": "PO_HEADER_ID",
@@ -1281,11 +1102,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Dağıtım satırının benzersiz teknik anahtarıdır.",
-          "aliases": [
-            "distribution id",
-            "po distribution id",
-            "dağıtım id"
-          ]
+          "aliases": ["distribution id", "po distribution id", "dağıtım id"]
         },
         {
           "name": "PO_HEADER_ID",
@@ -1293,10 +1110,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Dağıtımın bağlı olduğu PO başlığının teknik anahtarıdır.",
-          "aliases": [
-            "header id",
-            "po header id"
-          ]
+          "aliases": ["header id", "po header id"]
         },
         {
           "name": "PO_LINE_ID",
@@ -1304,10 +1118,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Dağıtımın bağlı olduğu PO satırının teknik anahtarıdır.",
-          "aliases": [
-            "line id",
-            "po line id"
-          ]
+          "aliases": ["line id", "po line id"]
         },
         {
           "name": "LINE_LOCATION_ID",
@@ -1315,11 +1126,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Dağıtımın bağlı olduğu shipment schedule teknik anahtarıdır.",
-          "aliases": [
-            "shipment id",
-            "schedule id",
-            "line location id"
-          ]
+          "aliases": ["shipment id", "schedule id", "line location id"]
         },
         {
           "name": "CODE_COMBINATION_ID",
@@ -1364,11 +1171,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Dağıtım seviyesinde faturalanan miktardır.",
-          "aliases": [
-            "billed qty",
-            "quantity billed",
-            "faturalanan miktar"
-          ]
+          "aliases": ["billed qty", "quantity billed", "faturalanan miktar"]
         },
         {
           "name": "QUANTITY_CANCELLED",
@@ -1388,10 +1191,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Dağıtım seviyesinde faturalanan tutardır. Miktar değil tutar bazlı analizlerde kullanılır.",
-          "aliases": [
-            "billed amount",
-            "faturalanan tutar"
-          ]
+          "aliases": ["billed amount", "faturalanan tutar"]
         },
         {
           "name": "REQ_DISTRIBUTION_ID",
@@ -1424,10 +1224,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Dağıtımın teslim edileceği lokasyon kimliğidir.",
-          "aliases": [
-            "deliver to location",
-            "teslim lokasyonu"
-          ]
+          "aliases": ["deliver to location", "teslim lokasyonu"]
         },
         {
           "name": "DESTINATION_ORGANIZATION_ID",
@@ -1435,10 +1232,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Malzeme/dağıtımın hedef envanter organizasyonudur. Expense veya inventory destination senaryolarında önemlidir.",
-          "aliases": [
-            "destination org",
-            "hedef organizasyon"
-          ]
+          "aliases": ["destination org", "hedef organizasyon"]
         },
         {
           "name": "DESTINATION_SUBINVENTORY",
@@ -1446,10 +1240,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Hedef alt envanter bilgisidir. Inventory destination senaryolarında kullanılır.",
-          "aliases": [
-            "subinventory",
-            "alt envanter"
-          ]
+          "aliases": ["subinventory", "alt envanter"]
         },
         {
           "name": "SET_OF_BOOKS_ID",
@@ -1457,11 +1248,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Dağıtımın bağlı olduğu muhasebe defteri/ledger bağlamını temsil eder. Finansal raporlama için önemlidir.",
-          "aliases": [
-            "ledger id",
-            "set of books",
-            "defter id"
-          ]
+          "aliases": ["ledger id", "set of books", "defter id"]
         },
         {
           "name": "ENCUMBERED_FLAG",
@@ -1469,11 +1256,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Bütçe rezervasyonu/encumbrance oluşup oluşmadığını gösteren bayraktır.",
-          "aliases": [
-            "encumbered",
-            "budget reserved",
-            "encumbrance flag"
-          ]
+          "aliases": ["encumbered", "budget reserved", "encumbrance flag"]
         },
         {
           "name": "GL_ENCUMBERED_DATE",
@@ -1481,10 +1264,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Encumbrance muhasebe tarihidir.",
-          "aliases": [
-            "encumbered date",
-            "budget date"
-          ]
+          "aliases": ["encumbered date", "budget date"]
         },
         {
           "name": "CREATION_DATE",
@@ -1492,11 +1272,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Dağıtımın oluşturulma tarihidir.",
-          "aliases": [
-            "created date",
-            "creation date",
-            "oluşturulma tarihi"
-          ]
+          "aliases": ["created date", "creation date", "oluşturulma tarihi"]
         }
       ]
     },
@@ -1513,10 +1289,7 @@
         "ürün kartı",
         "item master"
       ],
-      "primary_key": [
-        "inventory_item_id",
-        "organization_id"
-      ],
+      "primary_key": ["inventory_item_id", "organization_id"],
       "foreign_keys": [],
       "columns": [
         {
@@ -1525,12 +1298,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Item kaydının teknik anahtarıdır.",
-          "aliases": [
-            "inventory item id",
-            "item id",
-            "stok id",
-            "malzeme id"
-          ]
+          "aliases": ["inventory item id", "item id", "stok id", "malzeme id"]
         },
         {
           "name": "organization_id",
@@ -1550,12 +1318,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Item numarası/kodu genellikle bu kolonda tutulur.",
-          "aliases": [
-            "item number",
-            "item code",
-            "stok kodu",
-            "malzeme kodu"
-          ]
+          "aliases": ["item number", "item code", "stok kodu", "malzeme kodu"]
         },
         {
           "name": "description",
@@ -1576,11 +1339,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Oracle Manufacturing tarafında kullanılan 3 karakterlik ana ölçü birimidir.",
-          "aliases": [
-            "primary uom",
-            "uom code",
-            "ana ölçü birimi"
-          ]
+          "aliases": ["primary uom", "uom code", "ana ölçü birimi"]
         },
         {
           "name": "primary_unit_of_measure",
@@ -1588,11 +1347,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Oracle Purchasing tarafında görülen ana ölçü birimidir.",
-          "aliases": [
-            "unit of measure",
-            "measure",
-            "ölçü birimi"
-          ]
+          "aliases": ["unit of measure", "measure", "ölçü birimi"]
         },
         {
           "name": "purchasing_enabled_flag",
@@ -1600,11 +1355,7 @@
           "nullable": false,
           "restricted": false,
           "description": "Item'ın satınalma işlemlerinde kullanılabilir olup olmadığını gösterir.",
-          "aliases": [
-            "purchasable",
-            "purchasing enabled",
-            "satın alınabilir"
-          ]
+          "aliases": ["purchasable", "purchasing enabled", "satın alınabilir"]
         },
         {
           "name": "buyer_id",
@@ -1612,11 +1363,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Item için tanımlı buyer kimliğidir.",
-          "aliases": [
-            "buyer id",
-            "item buyer",
-            "satın almacı"
-          ]
+          "aliases": ["buyer id", "item buyer", "satın almacı"]
         },
         {
           "name": "list_price_per_unit",
@@ -1624,11 +1371,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Varsayılan liste birim fiyatıdır.",
-          "aliases": [
-            "list price",
-            "unit list price",
-            "liste fiyatı"
-          ]
+          "aliases": ["list price", "unit list price", "liste fiyatı"]
         },
         {
           "name": "market_price",
@@ -1636,10 +1379,7 @@
           "nullable": true,
           "restricted": false,
           "description": "Piyasa fiyatı bilgisidir; bazı PO satırlarına default olabilir.",
-          "aliases": [
-            "market price",
-            "piyasa fiyatı"
-          ]
+          "aliases": ["market price", "piyasa fiyatı"]
         },
         {
           "name": "enabled_flag",
@@ -1647,10 +1387,681 @@
           "nullable": false,
           "restricted": false,
           "description": "Item master segmentinin aktif olup olmadığını gösterir.",
+          "aliases": ["enabled", "active flag", "aktif mi"]
+        }
+      ]
+    },
+    {
+      "name": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+      "description": "Bu view, bilançonun dönen varlıklar bölümünü temsil eder. Her kayıt belirli bir LEDGER_ID ve PERIOD_NAME için tek bir bilanço satırını gösterir. LINE_TEXT bilanço kaleminin görünen açıklamasıdır. IS_HEADER alanı, satırın ana başlık mı yoksa detay satırı mı olduğunu belirtir; 1 başlık, 0 detay anlamına gelir. LINE_ORDER raporun doğal sıralama kolonudur ve sonuçlar mümkün olduğunca bu alana göre sıralanmalıdır. AMOUNT_DISPLAY kullanıcıya gösterim için formatlanmış metin değerdir; toplama, karşılaştırma, filtreleme ve sıralama işlemlerinde bunun yerine AMOUNT_VALUE kullanılmalıdır. Bu view, 'dönen varlıklar', 'aktif varlıklar', 'current assets' gibi sorular için temel kaynaktır.",
+      "aliases": [
+        "bilanco",
+        "bilanço",
+        "donen varliklar",
+        "dönen varlıklar",
+        "aktif",
+        "aktif varliklar",
+        "current assets"
+      ],
+      "primary_key": ["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "LEDGER_ID",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Muhasebe defteri veya set of books teknik kimliğidir.",
+          "aliases": ["ledger id", "set of books id", "sob id", "defter id"]
+        },
+        {
+          "name": "LEDGER_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger veya muhasebe defteri adıdır.",
+          "aliases": ["ledger name", "sob name", "defter adı", "defter adi"]
+        },
+        {
+          "name": "CHART_OF_ACCOUNTS_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "İlgili ledger için chart of accounts teknik kimliğidir.",
           "aliases": [
-            "enabled",
-            "active flag",
-            "aktif mi"
+            "chart of accounts",
+            "coa id",
+            "hesap planı id",
+            "hesap plani id"
+          ]
+        },
+        {
+          "name": "CURRENCY_CODE",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger'ın işlem veya raporlama para birimidir.",
+          "aliases": ["currency", "currency code", "para birimi", "döviz cinsi"]
+        },
+        {
+          "name": "PERIOD_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço verisinin ait olduğu muhasebe dönemidir.",
+          "aliases": ["period", "period name", "dönem", "muhasebe dönemi"]
+        },
+        {
+          "name": "LINE_TEXT",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Bilanço satırının görünen açıklamasıdır.",
+          "aliases": [
+            "line text",
+            "row text",
+            "satır",
+            "satir",
+            "kalem",
+            "satır açıklaması"
+          ]
+        },
+        {
+          "name": "IS_HEADER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Satırın başlık olup olmadığını gösterir. 1 başlık, 0 detay satırıdır.",
+          "aliases": [
+            "is header",
+            "header flag",
+            "başlık mı",
+            "baslik mi",
+            "başlık satırı"
+          ]
+        },
+        {
+          "name": "LINE_ORDER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço satırının rapordaki sırasıdır.",
+          "aliases": [
+            "line order",
+            "row order",
+            "satır sırası",
+            "satir sirasi",
+            "sıra",
+            "sira"
+          ]
+        },
+        {
+          "name": "AMOUNT_DISPLAY",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Formatlanmış bilanço tutarıdır. Ekran gösterimi için uygundur.",
+          "aliases": [
+            "display amount",
+            "formatted amount",
+            "gösterim tutarı",
+            "formatlı değer",
+            "gorunum tutari"
+          ]
+        },
+        {
+          "name": "AMOUNT_VALUE",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Sayısal bilanço tutarıdır. Toplama, sıralama ve filtreleme işlemlerinde kullanılmalıdır.",
+          "aliases": [
+            "amount",
+            "amount value",
+            "numeric amount",
+            "tutar",
+            "değer",
+            "ham tutar"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
+      "description": "Bu view, bilançonun duran varlıklar bölümünü temsil eder. Her satır belirli bir ledger ve dönem için tek bir bilanço kalemidir. LINE_TEXT satır açıklamasını içerir. IS_HEADER alanı satırın başlık olup olmadığını gösterir. LINE_ORDER finansal raporun hiyerarşik sırasını korumak için kullanılmalıdır. Görsel çıktı veya listeleme ekranlarında AMOUNT_DISPLAY, analitik işlemlerde ise AMOUNT_VALUE kullanılmalıdır. Bu view, 'duran varlıklar', 'sabit kıymetler', 'fixed assets', 'non-current assets' gibi doğal dil sorgularında hedef tablo olarak değerlendirilmelidir.",
+      "aliases": [
+        "bilanco",
+        "bilanço",
+        "duran varliklar",
+        "duran varlıklar",
+        "aktif",
+        "fixed assets",
+        "non current assets"
+      ],
+      "primary_key": ["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "LEDGER_ID",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Muhasebe defteri veya set of books teknik kimliğidir.",
+          "aliases": ["ledger id", "set of books id", "sob id", "defter id"]
+        },
+        {
+          "name": "LEDGER_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger veya muhasebe defteri adıdır.",
+          "aliases": ["ledger name", "sob name", "defter adı", "defter adi"]
+        },
+        {
+          "name": "CHART_OF_ACCOUNTS_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "İlgili ledger için chart of accounts teknik kimliğidir.",
+          "aliases": [
+            "chart of accounts",
+            "coa id",
+            "hesap planı id",
+            "hesap plani id"
+          ]
+        },
+        {
+          "name": "CURRENCY_CODE",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger'ın işlem veya raporlama para birimidir.",
+          "aliases": ["currency", "currency code", "para birimi", "döviz cinsi"]
+        },
+        {
+          "name": "PERIOD_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço verisinin ait olduğu muhasebe dönemidir.",
+          "aliases": ["period", "period name", "dönem", "muhasebe dönemi"]
+        },
+        {
+          "name": "LINE_TEXT",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Bilanço satırının görünen açıklamasıdır.",
+          "aliases": [
+            "line text",
+            "row text",
+            "satır",
+            "satir",
+            "kalem",
+            "satır açıklaması"
+          ]
+        },
+        {
+          "name": "IS_HEADER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Satırın başlık olup olmadığını gösterir. 1 başlık, 0 detay satırıdır.",
+          "aliases": [
+            "is header",
+            "header flag",
+            "başlık mı",
+            "baslik mi",
+            "başlık satırı"
+          ]
+        },
+        {
+          "name": "LINE_ORDER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço satırının rapordaki sırasıdır.",
+          "aliases": [
+            "line order",
+            "row order",
+            "satır sırası",
+            "satir sirasi",
+            "sıra",
+            "sira"
+          ]
+        },
+        {
+          "name": "AMOUNT_DISPLAY",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Formatlanmış bilanço tutarıdır. Ekran gösterimi için uygundur.",
+          "aliases": [
+            "display amount",
+            "formatted amount",
+            "gösterim tutarı",
+            "formatlı değer",
+            "gorunum tutari"
+          ]
+        },
+        {
+          "name": "AMOUNT_VALUE",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Sayısal bilanço tutarıdır. Toplama, sıralama ve filtreleme işlemlerinde kullanılmalıdır.",
+          "aliases": [
+            "amount",
+            "amount value",
+            "numeric amount",
+            "tutar",
+            "değer",
+            "ham tutar"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "XXBT_V_BILANCO_KVYK",
+      "description": "Bu view, bilançonun kısa vadeli yabancı kaynaklar bölümünü temsil eder. Her kayıt, belirli bir ledger ve dönem için tek bir pasif kalemini gösterir. LINE_TEXT kalem açıklamasıdır. IS_HEADER=1 olan satırlar ana başlık seviyesini, IS_HEADER=0 olanlar detay satırlarını ifade eder. Sonuçlar varsayılan olarak LINE_ORDER ile sıralanmalıdır. AMOUNT_DISPLAY biçimlendirilmiş gösterim değeridir; matematiksel işlem, toplam veya karşılaştırma gerektiğinde AMOUNT_VALUE kullanılmalıdır. Bu view, 'kısa vadeli yabancı kaynaklar', 'kısa vadeli borçlar', 'KVYK', 'current liabilities' gibi sorular için kullanılır.",
+      "aliases": [
+        "bilanco",
+        "bilanço",
+        "kvyk",
+        "kisa vadeli yabanci kaynaklar",
+        "kısa vadeli yabancı kaynaklar",
+        "short term liabilities",
+        "current liabilities"
+      ],
+      "primary_key": ["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "LEDGER_ID",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Muhasebe defteri veya set of books teknik kimliğidir.",
+          "aliases": ["ledger id", "set of books id", "sob id", "defter id"]
+        },
+        {
+          "name": "LEDGER_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger veya muhasebe defteri adıdır.",
+          "aliases": ["ledger name", "sob name", "defter adı", "defter adi"]
+        },
+        {
+          "name": "CHART_OF_ACCOUNTS_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "İlgili ledger için chart of accounts teknik kimliğidir.",
+          "aliases": [
+            "chart of accounts",
+            "coa id",
+            "hesap planı id",
+            "hesap plani id"
+          ]
+        },
+        {
+          "name": "CURRENCY_CODE",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger'ın işlem veya raporlama para birimidir.",
+          "aliases": ["currency", "currency code", "para birimi", "döviz cinsi"]
+        },
+        {
+          "name": "PERIOD_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço verisinin ait olduğu muhasebe dönemidir.",
+          "aliases": ["period", "period name", "dönem", "muhasebe dönemi"]
+        },
+        {
+          "name": "LINE_TEXT",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Bilanço satırının görünen açıklamasıdır.",
+          "aliases": [
+            "line text",
+            "row text",
+            "satır",
+            "satir",
+            "kalem",
+            "satır açıklaması"
+          ]
+        },
+        {
+          "name": "IS_HEADER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Satırın başlık olup olmadığını gösterir. 1 başlık, 0 detay satırıdır.",
+          "aliases": [
+            "is header",
+            "header flag",
+            "başlık mı",
+            "baslik mi",
+            "başlık satırı"
+          ]
+        },
+        {
+          "name": "LINE_ORDER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço satırının rapordaki sırasıdır.",
+          "aliases": [
+            "line order",
+            "row order",
+            "satır sırası",
+            "satir sirasi",
+            "sıra",
+            "sira"
+          ]
+        },
+        {
+          "name": "AMOUNT_DISPLAY",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Formatlanmış bilanço tutarıdır. Ekran gösterimi için uygundur.",
+          "aliases": [
+            "display amount",
+            "formatted amount",
+            "gösterim tutarı",
+            "formatlı değer",
+            "gorunum tutari"
+          ]
+        },
+        {
+          "name": "AMOUNT_VALUE",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Sayısal bilanço tutarıdır. Toplama, sıralama ve filtreleme işlemlerinde kullanılmalıdır.",
+          "aliases": [
+            "amount",
+            "amount value",
+            "numeric amount",
+            "tutar",
+            "değer",
+            "ham tutar"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "XXBT_V_BILANCO_UVYK",
+      "description": "Bu view, bilançonun uzun vadeli yabancı kaynaklar bölümünü temsil eder. Her satır belirli bir LEDGER_ID ve PERIOD_NAME için tek bir bilanço kalemini içerir. LINE_TEXT kalem açıklamasını taşır. IS_HEADER kolonuyla başlık ve detay ayrımı yapılır. LINE_ORDER, finansal rapor sıralamasını ve hiyerarşisini koruyan temel alandır. Kullanıcıya gösterilecek listelerde AMOUNT_DISPLAY tercih edilmelidir; toplam alma, filtreleme, büyükten küçüğe sıralama ve karşılaştırma işlemlerinde AMOUNT_VALUE esas alınmalıdır. Bu view, 'uzun vadeli yabancı kaynaklar', 'uzun vadeli borçlar', 'UVYK', 'long-term liabilities' ifadeleriyle ilişkili sorgular için kullanılmalıdır.",
+      "aliases": [
+        "bilanco",
+        "bilanço",
+        "uvyk",
+        "uzun vadeli yabanci kaynaklar",
+        "uzun vadeli yabancı kaynaklar",
+        "long term liabilities",
+        "non current liabilities"
+      ],
+      "primary_key": ["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "LEDGER_ID",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Muhasebe defteri veya set of books teknik kimliğidir.",
+          "aliases": ["ledger id", "set of books id", "sob id", "defter id"]
+        },
+        {
+          "name": "LEDGER_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger veya muhasebe defteri adıdır.",
+          "aliases": ["ledger name", "sob name", "defter adı", "defter adi"]
+        },
+        {
+          "name": "CHART_OF_ACCOUNTS_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "İlgili ledger için chart of accounts teknik kimliğidir.",
+          "aliases": [
+            "chart of accounts",
+            "coa id",
+            "hesap planı id",
+            "hesap plani id"
+          ]
+        },
+        {
+          "name": "CURRENCY_CODE",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger'ın işlem veya raporlama para birimidir.",
+          "aliases": ["currency", "currency code", "para birimi", "döviz cinsi"]
+        },
+        {
+          "name": "PERIOD_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço verisinin ait olduğu muhasebe dönemidir.",
+          "aliases": ["period", "period name", "dönem", "muhasebe dönemi"]
+        },
+        {
+          "name": "LINE_TEXT",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Bilanço satırının görünen açıklamasıdır.",
+          "aliases": [
+            "line text",
+            "row text",
+            "satır",
+            "satir",
+            "kalem",
+            "satır açıklaması"
+          ]
+        },
+        {
+          "name": "IS_HEADER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Satırın başlık olup olmadığını gösterir. 1 başlık, 0 detay satırıdır.",
+          "aliases": [
+            "is header",
+            "header flag",
+            "başlık mı",
+            "baslik mi",
+            "başlık satırı"
+          ]
+        },
+        {
+          "name": "LINE_ORDER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço satırının rapordaki sırasıdır.",
+          "aliases": [
+            "line order",
+            "row order",
+            "satır sırası",
+            "satir sirasi",
+            "sıra",
+            "sira"
+          ]
+        },
+        {
+          "name": "AMOUNT_DISPLAY",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Formatlanmış bilanço tutarıdır. Ekran gösterimi için uygundur.",
+          "aliases": [
+            "display amount",
+            "formatted amount",
+            "gösterim tutarı",
+            "formatlı değer",
+            "gorunum tutari"
+          ]
+        },
+        {
+          "name": "AMOUNT_VALUE",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Sayısal bilanço tutarıdır. Toplama, sıralama ve filtreleme işlemlerinde kullanılmalıdır.",
+          "aliases": [
+            "amount",
+            "amount value",
+            "numeric amount",
+            "tutar",
+            "değer",
+            "ham tutar"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "XXBT_V_BILANCO_OZKAYNAKLAR",
+      "description": "Bu view, bilançonun özkaynaklar bölümünü temsil eder. Her satır belirli bir ledger ve dönem için tek bir özkaynak kalemini gösterir. LINE_TEXT kullanıcıya görünen kalem açıklamasıdır. IS_HEADER alanı, satırın ana başlık mı yoksa detay satırı mı olduğunu belirler. LINE_ORDER raporun sıralama kolonudur ve varsayılan sıralama için kullanılmalıdır. AMOUNT_DISPLAY yalnızca gösterim amaçlı formatlı değerdir; toplama, kıyaslama ve analitik sorgularda AMOUNT_VALUE kullanılmalıdır. Bu view, 'özkaynak', 'özkaynaklar', 'equity' gibi sorguların ana veri kaynağıdır.",
+      "aliases": [
+        "bilanco",
+        "bilanço",
+        "ozkaynaklar",
+        "özkaynaklar",
+        "ozkaynak",
+        "özkaynak",
+        "equity"
+      ],
+      "primary_key": ["LEDGER_ID", "PERIOD_NAME", "LINE_ORDER"],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "LEDGER_ID",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Muhasebe defteri veya set of books teknik kimliğidir.",
+          "aliases": ["ledger id", "set of books id", "sob id", "defter id"]
+        },
+        {
+          "name": "LEDGER_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger veya muhasebe defteri adıdır.",
+          "aliases": ["ledger name", "sob name", "defter adı", "defter adi"]
+        },
+        {
+          "name": "CHART_OF_ACCOUNTS_ID",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "İlgili ledger için chart of accounts teknik kimliğidir.",
+          "aliases": [
+            "chart of accounts",
+            "coa id",
+            "hesap planı id",
+            "hesap plani id"
+          ]
+        },
+        {
+          "name": "CURRENCY_CODE",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Ledger'ın işlem veya raporlama para birimidir.",
+          "aliases": ["currency", "currency code", "para birimi", "döviz cinsi"]
+        },
+        {
+          "name": "PERIOD_NAME",
+          "data_type": "VARCHAR2",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço verisinin ait olduğu muhasebe dönemidir.",
+          "aliases": ["period", "period name", "dönem", "muhasebe dönemi"]
+        },
+        {
+          "name": "LINE_TEXT",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Bilanço satırının görünen açıklamasıdır.",
+          "aliases": [
+            "line text",
+            "row text",
+            "satır",
+            "satir",
+            "kalem",
+            "satır açıklaması"
+          ]
+        },
+        {
+          "name": "IS_HEADER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Satırın başlık olup olmadığını gösterir. 1 başlık, 0 detay satırıdır.",
+          "aliases": [
+            "is header",
+            "header flag",
+            "başlık mı",
+            "baslik mi",
+            "başlık satırı"
+          ]
+        },
+        {
+          "name": "LINE_ORDER",
+          "data_type": "NUMBER",
+          "nullable": false,
+          "restricted": false,
+          "description": "Bilanço satırının rapordaki sırasıdır.",
+          "aliases": [
+            "line order",
+            "row order",
+            "satır sırası",
+            "satir sirasi",
+            "sıra",
+            "sira"
+          ]
+        },
+        {
+          "name": "AMOUNT_DISPLAY",
+          "data_type": "VARCHAR2",
+          "nullable": true,
+          "restricted": false,
+          "description": "Formatlanmış bilanço tutarıdır. Ekran gösterimi için uygundur.",
+          "aliases": [
+            "display amount",
+            "formatted amount",
+            "gösterim tutarı",
+            "formatlı değer",
+            "gorunum tutari"
+          ]
+        },
+        {
+          "name": "AMOUNT_VALUE",
+          "data_type": "NUMBER",
+          "nullable": true,
+          "restricted": false,
+          "description": "Sayısal bilanço tutarıdır. Toplama, sıralama ve filtreleme işlemlerinde kullanılmalıdır.",
+          "aliases": [
+            "amount",
+            "amount value",
+            "numeric amount",
+            "tutar",
+            "değer",
+            "ham tutar"
           ]
         }
       ]
