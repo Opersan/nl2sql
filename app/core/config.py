@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     app_name: str = "nl2sql-assistant"
     environment: str = "development"
+    pii_safe_trace: bool = False  # When True, mask PII fields in trace/log output
     default_row_limit: int = 10000
     max_row_limit: int = 10000
     safe_mode_simple_listing_limit: int = 25

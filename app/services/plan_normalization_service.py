@@ -39,6 +39,8 @@ class PlanNormalizationService:
                 mutations["group_by"] = []
             if plan.order_by:
                 mutations["order_by"] = []
+            if plan.partition_by:
+                mutations["partition_by"] = []
 
         normalized_plan = plan.model_copy(update=mutations) if mutations else plan
         clarification_cleanup_applied = (

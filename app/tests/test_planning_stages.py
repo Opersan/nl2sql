@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.domain.catalog_models import CatalogSnapshot, ColumnMetadata, TableMetadata
-from app.domain.query_plan import QueryPlan
+from app.domain.query_plan import OrderSpec, QueryPlan, SortDirection
 from app.providers.catalog.in_memory import InMemoryCatalogProvider
 from app.providers.llm.mock_llm import MockLLMProvider
 from app.services.catalog_service import CatalogService
@@ -433,3 +433,106 @@ def test_clarification_decision_service_recovers_safe_listing_clarification() ->
     assert result.plan.needs_clarification is False
     assert result.plan.select_columns == ["SICIL_NO", "AD", "SOYAD"]
     assert result.decision.clarification_reason_code is None
+
+
+def test_planner_had_substantive_plan_detects_order_by() -> None:
+    """Snapshot with order_by is considered substantive."""
+    snapshot = QueryPlan(
+        intent="per-group ranking",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        select_columns=["FULL_NAME", "LOCATION_ADI"],
+        order_by=[OrderSpec(column="ISE_GIRIS_TARIHI", direction=SortDirection.ASC)],
+        needs_clarification=True,
+        clarification_message="partition_by alanı gerekli.",
+    )
+    assert ClarificationDecisionService._planner_had_substantive_plan(snapshot) is True
+
+
+def test_planner_had_substantive_plan_detects_partition_by() -> None:
+    """Snapshot with partition_by is considered substantive."""
+    snapshot = QueryPlan(
+        intent="per-group ranking",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        partition_by=["LOCATION_ADI"],
+        order_by=[OrderSpec(column="ISE_GIRIS_TARIHI", direction=SortDirection.ASC)],
+        needs_clarification=True,
+        clarification_message="partition_by alanı gerekli.",
+    )
+    assert ClarificationDecisionService._planner_had_substantive_plan(snapshot) is True
+
+
+def test_planner_had_substantive_plan_empty_plan() -> None:
+    """Empty snapshot (LLM returned {}) is NOT substantive."""
+    snapshot = QueryPlan(
+        intent="unknown",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        needs_clarification=True,
+        clarification_message="Ne istediğinizi anlayamadım.",
+    )
+    assert ClarificationDecisionService._planner_had_substantive_plan(snapshot) is False
+
+
+def test_clarification_not_auto_recovered_when_planner_had_substantive_plan() -> None:
+    """Auto-recovery must be blocked when the original planner plan had substantive content."""
+    service = ClarificationDecisionService()
+
+    planner_plan = QueryPlan(
+        intent="per-group ranking",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        select_columns=["FULL_NAME", "LOCATION_ADI", "ISE_GIRIS_TARIHI"],
+        partition_by=["LOCATION_ADI"],
+        order_by=[OrderSpec(column="ISE_GIRIS_TARIHI", direction=SortDirection.ASC)],
+        needs_clarification=True,
+        clarification_message="Per-group analitik sütun gerekli, partition_by alanını kullanınız.",
+    )
+    # After normalization, fields are cleared but needs_clarification stays True
+    resolved_plan = QueryPlan(
+        intent="per-group ranking",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        needs_clarification=True,
+        clarification_message="Per-group analitik sütun gerekli, partition_by alanını kullanınız.",
+    )
+
+    catalog_snapshot = CatalogSnapshot(
+        tables=[
+            TableMetadata(
+                name="XXBT_PDKS_PER_DETAILS_V",
+                columns=[
+                    ColumnMetadata(name="PERSON_ID", data_type="NUMBER"),
+                    ColumnMetadata(name="SICIL_NO", data_type="VARCHAR"),
+                    ColumnMetadata(name="AD", data_type="VARCHAR"),
+                    ColumnMetadata(name="SOYAD", data_type="VARCHAR"),
+                    ColumnMetadata(name="FULL_NAME", data_type="VARCHAR"),
+                ],
+            )
+        ]
+    )
+
+    result = service.apply(
+        "Her lokasyon için en kıdemli çalışanı getir",
+        planner_plan,
+        resolved_plan,
+        query_understanding=QueryUnderstanding(
+            original_question="Her lokasyon için en kıdemli çalışanı getir",
+            normalized_question="her lokasyon icin en kidemli calisani getir",
+            requested_output_type="list",
+            entity_confidence="high",
+        ),
+        retrieval_diagnostics=RetrievalDiagnostics(
+            assessment="sufficient",
+            dominant_domain_match=True,
+            root_table_name="XXBT_PDKS_PER_DETAILS_V",
+            root_table_confidence="high",
+        ),
+        semantic_diagnostics={
+            "confidence": "high",
+            "selected_root_table": "XXBT_PDKS_PER_DETAILS_V",
+            "selected_entity_score": 18,
+            "runner_up_score": 5,
+        },
+        catalog_snapshot=catalog_snapshot,
+    )
+
+    # Auto-recovery must NOT override the planner's decision
+    assert result.plan.needs_clarification is True
+    assert result.plan.select_columns == []  # not auto-filled

@@ -213,9 +213,13 @@ class FilterValueResolutionService:
         # ── User-literal passthrough ─────────────────────────────────────
         # If the filter value appears verbatim in the user's original
         # question, the user explicitly typed it (e.g. a person name).
-        # Trust it and skip fuzzy resolution / clarification entirely.
+        # When a profile exists for this column, skip passthrough so that
+        # fuzzy matching can resolve the value to its canonical form
+        # (handles case differences like "Dizayn" → "DİZAYN").
+        _has_profile = self._provider.get_profile(filter_spec.table, filter_spec.column) is not None
         if (
-            original_question
+            not _has_profile
+            and original_question
             and filter_spec.op == FilterOp.EQ
             and len(original_value.strip()) >= 2
             and self._is_user_literal(original_value, original_question)
@@ -404,6 +408,24 @@ class FilterValueResolutionService:
         top_candidate = matches[0]
         runner_up = matches[1] if len(matches) > 1 else None
         gap = top_candidate.score - runner_up.score if runner_up is not None else 1.0
+
+        # Single candidate → auto-select regardless of score; asking the
+        # user to "pick" from a list of one is pointless.
+        if len(matches) == 1 and top_candidate.score < policy.min_select_score:
+            logger.info(
+                "[fvr] %s.%s value=%r → single candidate (%r, score=%.2f) → auto-select",
+                filter_spec.table, filter_spec.column, original_value,
+                top_candidate.canonical_value, top_candidate.score,
+            )
+            resolved_value = top_candidate.canonical_value
+            new_filter = filter_spec.model_copy(update={"value": resolved_value})
+            base_action.update({
+                "resolved_value": resolved_value,
+                "reason": "single_candidate_auto_select",
+                "confidence": round(top_candidate.score, 3),
+                "changed": resolved_value != original_value,
+            })
+            return base_action, new_filter, resolved_value != original_value, None
 
         if top_candidate.score < policy.min_select_score:
             logger.info(
@@ -708,19 +730,33 @@ class FilterValueResolutionService:
             "Lutfen daha net bir deger belirtin."
         )
 
-    async def _fetch_db_distinct_values(self, table: str | None, column: str | None) -> list[str]:
-        """Fetch DISTINCT values from the database for a given table.column."""
+    async def _fetch_db_distinct_values(
+        self, table: str | None, column: str | None,
+        *, active_only: bool = False,
+    ) -> list[str]:
+        """Fetch DISTINCT values from the database for a given table.column.
+
+        Parameters
+        ----------
+        active_only:
+            When *True*, apply the table's active-record condition (e.g.
+            ``CIKIS_TARIHI IS NULL``).  Default is *False* so the candidate
+            list covers **all** values that exist in the table — the main
+            query already applies the active filter when the user asks for
+            active employees.
+        """
         if not self._executor or not table or not column:
             return []
-        cache_key = f"{table}.{column}"
+        cache_key = f"{table}.{column}.{'active' if active_only else 'all'}"
         if cache_key in self._db_value_cache:
             return self._db_value_cache[cache_key]
         try:
             from app.domain.execution_models import CompiledQuery
-            active_cond = self._provider.get_table_active_condition(table)
             where_parts = [f"{column} IS NOT NULL"]
-            if active_cond:
-                where_parts.append(active_cond)
+            if active_only:
+                active_cond = self._provider.get_table_active_condition(table)
+                if active_cond:
+                    where_parts.append(active_cond)
             where_clause = " AND ".join(where_parts)
             # ROWNUM must be applied AFTER DISTINCT in Oracle; otherwise it
             # limits raw rows before deduplication, missing rare values.

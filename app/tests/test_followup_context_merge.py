@@ -661,6 +661,127 @@ class TestNarrativeCorrection:
         assert result.message_type == "narrative_correction"
 
 
+# ── Partition-by / analytic ranking preservation ──────────────────────────────
+
+
+def _partition_plan() -> QueryPlan:
+    """A successful partition_by plan: most senior employee per location."""
+    return QueryPlan(
+        intent="Her lokasyon için en kıdemli çalışan",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        select_columns=["LOCATION_ADI", "FULL_NAME", "ISE_GIRIS_TARIHI", "PERSON_ID"],
+        partition_by=["LOCATION_ADI"],
+        order_by=[OrderSpec(column="ISE_GIRIS_TARIHI", direction=SortDirection.ASC)],
+        rank_limit=1,
+        limit=1000,
+    )
+
+
+class TestPartitionByPreservation:
+    """Ensure partition_by / rank_limit survive follow-up merges."""
+
+    @pytest.mark.asyncio
+    async def test_followup_refinement_preserves_partition_by(
+        self, svc: FollowupContextMergeService,
+    ) -> None:
+        """When the follow-up adds columns, partition_by must be carried forward."""
+        svc.record_success("s1", _partition_plan())
+
+        followup = QueryPlan(
+            intent="Bu kişilerin sicillerini de getir",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["SICIL_NO", "AD", "SOYAD"],
+            needs_clarification=True,
+            clarification_message="Hangi kişiler?",
+        )
+        result = await svc.process(
+            "s1", "ayrıca sicil numaralarını da getir", followup,
+        )
+
+        assert result.followup_detected is True
+        merged = result.merged_plan
+        assert merged is not None
+        assert merged.partition_by == ["LOCATION_ADI"]
+        assert merged.rank_limit == 1
+        assert merged.order_by  # order_by must survive
+        assert merged.needs_clarification is False
+
+    @pytest.mark.asyncio
+    async def test_followup_projection_union_with_partition(
+        self, svc: FollowupContextMergeService,
+    ) -> None:
+        """Previous columns + new columns are merged, partition stays."""
+        svc.record_success("s1", _partition_plan())
+
+        followup = QueryPlan(
+            intent="sicil ekle",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["SICIL_NO"],
+            needs_clarification=True,
+            clarification_message="?",
+        )
+        result = await svc.process("s1", "ayrıca sicillerini de ekle", followup)
+
+        merged = result.merged_plan
+        assert merged is not None
+        cols_upper = [c.upper() for c in merged.select_columns]
+        # Previous columns preserved
+        assert "LOCATION_ADI" in cols_upper
+        assert "FULL_NAME" in cols_upper
+        # New column added
+        assert "SICIL_NO" in cols_upper
+
+    @pytest.mark.asyncio
+    async def test_snapshot_stores_partition_fields(
+        self, svc: FollowupContextMergeService,
+    ) -> None:
+        """record_success captures partition_by and rank_limit in snapshot."""
+        svc.record_success("s1", _partition_plan())
+        snap = svc.get_snapshot("s1")
+
+        assert snap is not None
+        assert snap.partition_by == ("LOCATION_ADI",)
+        assert snap.rank_limit == 1
+
+    @pytest.mark.asyncio
+    async def test_narrative_correction_preserves_partition(
+        self, svc: FollowupContextMergeService,
+    ) -> None:
+        """Narrative correction replays the full previous plan including partition."""
+        svc.record_success("s1", _partition_plan())
+
+        plan = QueryPlan(
+            intent="?", table=None, select_columns=[], filters=[], limit=10,
+            needs_clarification=True, clarification_message="?",
+        )
+        result = await svc.process("s1", "yanlış hesapladın tekrar bak", plan)
+
+        merged = result.merged_plan
+        assert merged is not None
+        assert merged.partition_by == ["LOCATION_ADI"]
+        assert merged.rank_limit == 1
+        assert merged.order_by == list(_partition_plan().order_by)
+
+    @pytest.mark.asyncio
+    async def test_fresh_query_does_not_inherit_partition(
+        self, svc: FollowupContextMergeService,
+    ) -> None:
+        """A completely new query should NOT inherit partition_by from previous."""
+        svc.record_success("s1", _partition_plan())
+
+        fresh = QueryPlan(
+            intent="Toplam çalışan sayısı",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["PERSON_ID"],
+        )
+        result = await svc.process("s1", "Toplam çalışan sayısını getir", fresh)
+
+        # Fresh queries are not merged (different intent, no refinement signals)
+        if result.merged_plan is not None:
+            # If merged, partition should NOT leak
+            assert result.merged_plan.partition_by == [] or not result.merged_plan.partition_by
+
+
 # ── Test: comparison entity synthesis ─────────────────────────────────────────
 
 
@@ -796,3 +917,113 @@ class TestComparisonEntitySynthesis:
         assert result.merged_plan is not None
         assert result.merged_plan.needs_clarification is False
         assert result.merged_plan.clarification_message is None
+
+
+# ── Test: Query shape change (listing → aggregation) ─────────────────────────
+
+
+from app.domain.query_plan import AggregationSpec
+
+
+def _simple_listing_plan() -> QueryPlan:
+    """Simple listing plan — no aggregations."""
+    return QueryPlan(
+        intent="Çalışanları listele",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        select_columns=["FULL_NAME", "SICIL_NO", "AD", "SOYAD"],
+        filters=[],
+        limit=1000,
+    )
+
+
+def _turnover_rate_plan() -> QueryPlan:
+    """Turnover rate plan — has aggregations."""
+    return QueryPlan(
+        intent="Turnover rate hesapla",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        select_columns=["TURNOVER_RATE_PCT", "AYRILAN_SAYISI"],
+        filters=[],
+        aggregations=[
+            AggregationSpec(function="COUNT", column="CIKIS_TARIHI", alias="AYRILAN_SAYISI"),
+        ],
+        limit=1000,
+    )
+
+
+class TestQueryShapeChangeGuard:
+    """Tests for listing → aggregation query shape change guard."""
+
+    @pytest.mark.asyncio
+    async def test_listing_to_aggregation_treated_as_fresh(
+        self, svc: FollowupContextMergeService,
+    ) -> None:
+        """When new plan has aggregations but snapshot didn't, no merge should happen."""
+        svc.record_success("s1", _simple_listing_plan())
+
+        result = await svc.process(
+            "s1",
+            "peki turnover rate hesapla",  # 'peki' triggers followup_refinement in heuristic
+            _turnover_rate_plan(),
+        )
+
+        assert result.followup_detected is False
+        assert result.merge_strategy == "none"
+        assert result.merged_plan is None
+        assert "query_shape_changed_to_aggregation" in result.reason_codes
+
+    @pytest.mark.asyncio
+    async def test_aggregation_to_aggregation_still_merges(
+        self, svc: FollowupContextMergeService,
+    ) -> None:
+        """When both snapshot and new plan have aggregations, merge is allowed."""
+        agg_plan = _turnover_rate_plan()
+        svc.record_success("s1", agg_plan)
+
+        new_plan = QueryPlan(
+            intent="Birim bazında turnover rate",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["BIRIM_ADI", "TURNOVER_RATE_PCT"],
+            filters=[],
+            aggregations=[
+                AggregationSpec(function="COUNT", column="CIKIS_TARIHI", alias="AYRILAN"),
+            ],
+            group_by=["BIRIM_ADI"],
+            limit=1000,
+        )
+        result = await svc.process(
+            "s1",
+            "peki birim bazında göster",
+            new_plan,
+        )
+
+        # Both have aggregations → allowed to merge
+        assert result.followup_detected is True
+        assert result.merge_strategy == "patch"
+
+    @pytest.mark.asyncio
+    async def test_merge_preserve_filters_skips_projection_on_shape_change(
+        self, svc: FollowupContextMergeService,
+    ) -> None:
+        """_merge_preserve_filters should not carry forward old columns when shape changes."""
+        from app.services.followup_context_merge import _merge_preserve_filters, SuccessfulTurnSnapshot
+
+        snapshot = SuccessfulTurnSnapshot(
+            session_id="s1",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            filters=(),
+            select_columns=("FULL_NAME", "SICIL_NO", "AD", "SOYAD"),
+            order_by=(),
+            aggregations=(),
+            group_by=(),
+            limit=1000,
+            semantic_intent=None,
+        )
+        new_plan = _turnover_rate_plan()
+
+        merged, preserved, added, dropped, preserved_proj = _merge_preserve_filters(snapshot, new_plan)
+
+        # New plan's columns should NOT be overwritten by old listing columns
+        assert preserved_proj is False
+        cols_upper = [c.upper() for c in merged.select_columns]
+        assert "FULL_NAME" not in cols_upper, "Old listing column should not leak into aggregation plan"
+        assert "TURNOVER_RATE_PCT" in cols_upper

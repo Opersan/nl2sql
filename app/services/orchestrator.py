@@ -147,6 +147,7 @@ class Orchestrator:
         validation_started = time.perf_counter()
         validation = await self._validator.validate(plan)
         validation_ms = int((time.perf_counter() - validation_started) * 1000)
+
         self._last_trace["validation"] = {
             "ok": validation.ok,
             "errors": [issue.model_dump(mode="json") for issue in validation.errors],
@@ -461,6 +462,7 @@ class Orchestrator:
             "effective_limit": execution_plan.limit,
             "latency_ms": int((time.perf_counter() - execute_started) * 1000),
         }
+
         if execution.status == ExecutionStatus.ERROR:
             self._last_trace["current_stage_at_failure"] = "execute"
             self._last_trace["root_cause_stage"] = "execute"
@@ -541,6 +543,14 @@ class ChatOrchestrator:
         self._clarification_manager = clarification_manager
         self._run_store = run_store
         self._followup_merge = followup_merge or FollowupContextMergeService(llm=planner._llm)
+
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
+
+    def has_data_context(self, session_id: str) -> bool:
+        """Check if there is an active followup context (snapshot) for this session."""
+        return self._followup_merge.get_snapshot(session_id) is not None
 
     async def _persist_stage_from_event(self, run_id: str, event: Any, order: int) -> None:
         """Persist a StageEvent to the run store.
@@ -651,6 +661,7 @@ class ChatOrchestrator:
         *,
         trace_collector: TraceCollector | None = None,
         openwebui_chat_id: str | None = None,
+        conversation_history: list[tuple[str, str]] | None = None,
     ) -> ChatResult:
         """Process a single user turn end-to-end.
 
@@ -797,7 +808,9 @@ class ChatOrchestrator:
             self._emit_planner_trace_stages(tc, _plan_mono)
 
         # 2.5 – Follow-up context merge (single stage; no-op for fresh queries)
-        _merge_result = await self._followup_merge.process(session_id, message, plan)
+        _merge_result = await self._followup_merge.process(
+            session_id, message, plan,
+        )
         if _merge_result.merge_strategy == "patch" and _merge_result.merged_plan is not None:
             plan = _merge_result.merged_plan
             self._sessions.set_last_plan(session_id, plan)
@@ -847,6 +860,11 @@ class ChatOrchestrator:
                     },
                 )
             self._sessions.append_assistant_message(session_id, answer)
+
+            # Save a partial snapshot so the follow-up context merge can
+            # preserve the original intent/table/filters when the user
+            # answers the clarification question on the next turn.
+            self._followup_merge.record_success(session_id, plan, answer_preview=answer)
 
             # Build structured clarification payload if a filter-value
             # clarification was persisted in the state manager during planning.

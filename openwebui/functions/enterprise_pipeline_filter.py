@@ -178,7 +178,15 @@ class Filter:
 
         UI helper messages are detected and force enterprise_mode = false
         regardless of toggle state.
+
+        Non-nl2sql models (e.g. raw Qwen) are passed through unchanged.
         """
+        # 0 — Skip processing for non-nl2sql models (raw LLM passthrough)
+        model_id = body.get("model", "")
+        if model_id != "nl2sql":
+            self._log(f"Non-nl2sql model '{model_id}' → skipping filter")
+            return body
+
         # 1 — Determine enterprise_mode from toggle
         enterprise_mode = bool(self.toggle)
 
@@ -215,6 +223,10 @@ class Filter:
         **kwargs,
     ) -> dict:
         """Clean leaked artifacts from the LLM response."""
+        # Skip for non-nl2sql models (raw LLM passthrough)
+        if body.get("model", "") != "nl2sql":
+            return body
+
         messages = self._extract_messages(body)
         if not messages:
             return body

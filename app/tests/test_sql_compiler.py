@@ -774,6 +774,109 @@ class TestAggGroupBySelectConsistency:
 
 
 # ---------------------------------------------------------------------------
+# Partition-by / Per-group top-N (ROW_NUMBER analytic)
+# ---------------------------------------------------------------------------
+
+
+class TestPartitionBy:
+    """Tests for ROW_NUMBER() OVER (PARTITION BY ...) SQL generation."""
+
+    @pytest.mark.asyncio
+    async def test_partition_by_generates_row_number(
+        self, compiler: SQLCompiler, employee_table
+    ) -> None:
+        """partition_by + order_by → ROW_NUMBER OVER SQL."""
+        plan = QueryPlan(
+            intent="Her lokasyon icin en kidemli calisan",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["full_name", "location_name", "start_date"],
+            partition_by=["location_name"],
+            order_by=[OrderSpec(column="start_date", direction=SortDirection.ASC)],
+            rank_limit=1,
+            limit=100,
+        )
+        result = compiler.compile(plan, employee_table)
+
+        assert "ROW_NUMBER() OVER" in result.sql
+        assert "PARTITION BY LOCATION_ADI" in result.sql
+        assert "ORDER BY ISE_GIRIS_TARIHI ASC" in result.sql
+        assert "rn <= :p1" in result.sql
+        assert "ROWNUM <= :p2" in result.sql
+        assert result.params["p1"] == 1
+        assert result.params["p2"] == 100
+
+    @pytest.mark.asyncio
+    async def test_partition_by_with_filter(
+        self, compiler: SQLCompiler, employee_table
+    ) -> None:
+        """partition_by with a WHERE filter should include the filter inside the subquery."""
+        plan = QueryPlan(
+            intent="Her birim icin en kidemli aktif calisan",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["full_name", "unit_name", "start_date"],
+            partition_by=["unit_name"],
+            order_by=[OrderSpec(column="start_date", direction=SortDirection.ASC)],
+            filters=[FilterSpec(column="CIKIS_TARIHI", op=FilterOp.IS_NULL)],
+            rank_limit=1,
+        )
+        result = compiler.compile(plan, employee_table)
+
+        assert "ROW_NUMBER() OVER" in result.sql
+        assert "PARTITION BY BIRIM_ADI" in result.sql
+        assert "CIKIS_TARIHI IS NULL" in result.sql
+
+    @pytest.mark.asyncio
+    async def test_partition_by_rank_limit_greater_than_one(
+        self, compiler: SQLCompiler, employee_table
+    ) -> None:
+        """rank_limit > 1 returns top-N per group."""
+        plan = QueryPlan(
+            intent="Her lokasyon icin en kidemli 3 calisan",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["full_name", "location_name"],
+            partition_by=["location_name"],
+            order_by=[OrderSpec(column="start_date", direction=SortDirection.ASC)],
+            rank_limit=3,
+            limit=500,
+        )
+        result = compiler.compile(plan, employee_table)
+
+        assert result.params["p1"] == 3
+        assert result.params["p2"] == 500
+
+    @pytest.mark.asyncio
+    async def test_partition_by_without_order_by_raises(
+        self, compiler: SQLCompiler, employee_table
+    ) -> None:
+        """partition_by without order_by must raise CompilationError."""
+        plan = QueryPlan(
+            intent="broken partition",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["full_name"],
+            partition_by=["location_name"],
+        )
+        with pytest.raises(CompilationError):
+            compiler.compile(plan, employee_table)
+
+    @pytest.mark.asyncio
+    async def test_partition_by_no_fetch_first(
+        self, compiler: SQLCompiler, employee_table
+    ) -> None:
+        """Partition queries must never emit FETCH FIRST."""
+        plan = QueryPlan(
+            intent="partition no fetch",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["full_name"],
+            partition_by=["location_name"],
+            order_by=[OrderSpec(column="start_date", direction=SortDirection.ASC)],
+        )
+        result = compiler.compile(plan, employee_table)
+
+        assert "FETCH" not in result.sql.upper()
+        assert "OFFSET" not in result.sql.upper()
+
+
+# ---------------------------------------------------------------------------
 # Oracle legacy ROWNUM regression
 # ---------------------------------------------------------------------------
 

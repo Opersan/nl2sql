@@ -47,3 +47,6 @@
 {"raw_term": "material master", "language": "en", "normalized": "material master", "canonical": "INV_ITEMS", "match_type": "phrase", "confidence": 0.93, "domain": "INV", "source": "curated"}
 {"raw_term": "item", "language": "en", "normalized": "item", "canonical": "INV_ITEMS", "match_type": "exact", "confidence": 0.84, "domain": "INV", "source": "curated"}
 {"raw_term": "satın alınabilir item", "language": "tr", "normalized": "satin alinabilir item", "canonical": "INV_ITEMS", "match_type": "filter_alias", "confidence": 0.88, "domain": "INV", "source": "curated"}
+{"raw_term": "kıdemli", "language": "tr", "normalized": "kidemli", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "kıdem", "language": "tr", "normalized": "kidem", "canonical": "HR_EMPLOYEES", "match_type": "exact", "confidence": 0.95, "domain": "HR", "source": "curated"}
+{"raw_term": "en kıdemli", "language": "tr", "normalized": "en kidemli", "canonical": "HR_EMPLOYEES", "match_type": "phrase", "confidence": 0.97, "domain": "HR", "source": "curated"}

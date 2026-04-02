@@ -597,8 +597,12 @@ class NarratorService:
         if top_group_label:
             payload.append(f"top_group_label={top_group_label}")
 
-        # ── Inline row preview (≤5 rows): expose actual values to narrator ──
-        if er.rows and er.row_count <= 5:
+        # ── Inline row data: expose actual values to narrator ──
+        # For grouped aggregates, include up to 100 rows so the narrator
+        # can compute derived metrics (percentages, totals, ratios).
+        # For other shapes, keep the ≤5 row preview.
+        max_inline_rows = 100 if shape == "grouped_aggregate" else 5
+        if er.rows and er.row_count <= max_inline_rows:
             payload.append("satır_verileri:")
             for idx, row in enumerate(er.rows, 1):
                 row_parts = []

@@ -40,6 +40,7 @@ class ClarificationDecisionService:
             parse_error_taxonomy=parse_error_taxonomy,
             salvage_applied=salvage_applied,
             catalog_snapshot=catalog_snapshot,
+            planner_plan_snapshot=planner_plan_snapshot,
         )
         plan = self.enforce_aggregation_intent_guard(
             plan,
@@ -185,6 +186,7 @@ class ClarificationDecisionService:
         parse_error_taxonomy: str | None,
         salvage_applied: bool,
         catalog_snapshot: CatalogSnapshot | None,
+        planner_plan_snapshot: QueryPlan | None = None,
     ) -> QueryPlan:
         # Allow recovery for malformed_json (e.g. LLM returned {}) when
         # query_understanding provides strong context.  Other taxonomies
@@ -195,6 +197,15 @@ class ClarificationDecisionService:
         if parse_error_taxonomy and not _recoverable_taxonomy:
             return plan
         if salvage_applied:
+            return plan
+
+        # If the planner's *original* plan (before normalization cleared
+        # fields) had substantive content (select_columns, group_by,
+        # order_by, partition_by, aggregations), the planner understood the
+        # query but genuinely needed clarification — do NOT auto-recover.
+        if planner_plan_snapshot is not None and self._planner_had_substantive_plan(
+            planner_plan_snapshot
+        ):
             return plan
 
         # When the planner returned {} the plan has no table.  Fall back to
@@ -318,4 +329,22 @@ class ClarificationDecisionService:
         return any(
             token in folded
             for token in ("kisitli", "erişime kapali", "erışıme kapali", "güvenlik", "guvenlik", "yasal")
+        )
+
+    @staticmethod
+    def _planner_had_substantive_plan(snapshot: QueryPlan) -> bool:
+        """Return True when the pre-normalization plan had meaningful content.
+
+        When the planner filled in select_columns, group_by, order_by,
+        partition_by, or aggregations alongside needs_clarification=True, it
+        means the LLM understood the query structure but genuinely required
+        clarification for a specific aspect.  Auto-recovery should NOT
+        override such a decision.
+        """
+        return bool(
+            snapshot.select_columns
+            or snapshot.group_by
+            or snapshot.order_by
+            or snapshot.partition_by
+            or snapshot.aggregations
         )

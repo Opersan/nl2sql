@@ -554,6 +554,19 @@ async def _build_chat_completion_result(
 
     # ── enterprise_mode=true → classify intent & route ───────────────
     intent = await _classify_intent_llm(llm, user_msg)
+
+    # Override CLARIFICATION/GENERAL → DATA when the session has a pending
+    # pipeline clarification.  The user's message is most likely an answer
+    # to the previous clarification question and MUST go through the
+    # pipeline so context is preserved.
+    if intent in ("CLARIFICATION", "GENERAL") and orchestrator._sessions.is_pending_clarification(session_id):
+        logger.info(
+            "[openwebui] session=%s intent %s → DATA override (pending pipeline clarification)",
+            session_id,
+            intent,
+        )
+        intent = "DATA"
+
     logger.info(
         "[openwebui] session=%s enterprise_mode=true intent=%s message=%r",
         session_id,
@@ -863,6 +876,19 @@ async def _build_streaming_chat_completion(
 
     # ── enterprise_mode=true → classify intent ────────────────────────────
     intent = await _classify_intent_llm(llm, user_msg)
+
+    # Override CLARIFICATION/GENERAL → DATA when the session has a pending
+    # pipeline clarification.  The user's message is most likely an answer
+    # to the previous clarification question and MUST go through the
+    # pipeline so context is preserved.
+    if intent in ("CLARIFICATION", "GENERAL") and orchestrator._sessions.is_pending_clarification(session_id):
+        logger.info(
+            "[openwebui-stream] session=%s intent %s → DATA override (pending pipeline clarification)",
+            session_id,
+            intent,
+        )
+        intent = "DATA"
+
     logger.info(
         "[openwebui-stream] session=%s intent=%s message=%r",
         session_id,
@@ -988,10 +1014,8 @@ async def _build_streaming_chat_completion(
 async def openai_models() -> OAIModelListResponse:
     """Expose a minimal OpenAI-compatible model list for Open WebUI."""
     now = int(time.time())
-    model_ids = [settings.openai_model, "nl2sql"]
-    unique_ids = list(dict.fromkeys(mid for mid in model_ids if mid))
     return OAIModelListResponse(
-        data=[OAIModelCard(id=model_id, created=now) for model_id in unique_ids]
+        data=[OAIModelCard(id="nl2sql", created=now)]
     )
 
 

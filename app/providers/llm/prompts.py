@@ -177,7 +177,9 @@ Kurallar:
 clarification_message dolu olsun, query alanlarını boş listeye indir.
 5. intent alanını Türkçe yaz.
 6. Alias kullanabilirsin; validation katmanı çözecektir.
-7. Aktif çalışan = CIKIS_TARIHI IS NULL (CIKIS_TARIHI boşsa çalışan aktiftir).
+7. Aktif çalışan = CIKIS_TARIHI IS NULL. Bu filtreyi SADECE kullanıcı açıkça "aktif", \
+"mevcut", "hâlâ çalışan" gibi ifadeler kullandığında ekle. Kullanıcı sadece \
+"çalışanları listele" diyorsa CIKIS_TARIHI filtresi EKLEME.
 
 Hibrit bağlam kuralları:
 8. Yapısal katalog (yukarıdaki tablo listesi) asıl referans kaynağıdır.
@@ -190,7 +192,7 @@ tablo veya kolonları kullanma.
 12. Çıktı yalnızca QueryPlan JSON formatında olmalı, başka hiçbir format \
 kabul edilmez.
 13. Zorunlu anahtarlar: intent, table, select_columns, filters, aggregations,
-group_by, order_by, joins, limit, needs_clarification, clarification_message.
+group_by, order_by, joins, partition_by, rank_limit, limit, needs_clarification, clarification_message.
 13a. Kullanıcı limit belirtirse bunu limit alanına yaz (örn. "ilk 50", "en fazla 200", "top 10", "limit 100").
 13b. Kullanıcı limit belirtmezse varsayılan limiti kullan.
 14. select_columns ve group_by yalnızca string listesi olmalı; object listesi yazma.
@@ -210,7 +212,9 @@ filters, aggregations, group_by, order_by, joins alanlarını boş liste ver.
 21. Tek tablo yeterliyse JOIN kullanma.
 22. Önce root entity seç, sonra root tablodan child tablolara canonical join path ile ilerle.
 23. Child tabloya doğrudan düşme; child kolonlara yalnızca joins üzerinden eriş.
-24. Ölçü/hesaplama gereken sorularda önce measure seç, gerekirse computed_measures / expression_ref kullan.
+24. Oran/rate/yüzde hesaplama gerektiren sorularda (turnover rate, devir oranı vb.) \
+ilgili kolonlar üzerinde standart aggregation (COUNT, SUM) kullan. \
+Formül veya expression yazma  narrator sonucu yorumlayıp oranı hesaplayacak.
 25. Durum ve zaman semantiklerini metadata’daki iş tanımlarına göre uygula.
 
 Çıktı formatı (JSON):
@@ -230,6 +234,8 @@ filters, aggregations, group_by, order_by, joins alanlarını boş liste ver.
       "on": [{{"left_table": "...", "left_column": "...", "right_table": "...", "right_column": "..."}}]
     }}
   ],
+  "partition_by": [],
+  "rank_limit": 1,
     "limit": 10000,
   "needs_clarification": false,
   "clarification_message": null
@@ -271,6 +277,26 @@ Plan: {{"intent": "Root ve child tablo bilgilerini birlikte getir", \
 "join_type": "INNER", \
 "on": [{{"left_table": "<ROOT_TABLE>", "left_column": "<root_pk>", \
 "right_table": "<CHILD_TABLE>", "right_column": "<child_fk>"}}]}}]}}
+
+Soru: "Her X için en Y olan kaydı getir"
+Plan: {{"intent": "Her X için en Y olan kaydı getir", \
+"table": "<ROOT_TABLE>", \
+"select_columns": ["<partition_column>", "<detail_columns>", "<sort_column>"], \
+"partition_by": ["<partition_column>"], \
+"order_by": [{{"column": "<sort_column>", "direction": "ASC"}}], \
+"rank_limit": 1}}
+
+Soru: "Son 1 yılın turnover rate'ini hesapla"
+Plan: {{"intent": "Son 1 yılın personel devir oranını hesapla", \
+"table": "XXBT_PDKS_PER_DETAILS_V", \
+"select_columns": [], \
+"filters": [{{"column": "ISE_GIRIS_TARIHI", "op": "<=", "value": "2026-04-01"}}], \
+"aggregations": [\
+{{"function": "COUNT", "column": "*", "alias": "TOPLAM_CALISAN"}}, \
+{{"function": "COUNT", "column": "CIKIS_TARIHI", "alias": "AYRILAN_CALISAN"}}], \
+"group_by": [], "order_by": [], "joins": [], \
+"partition_by": [], "rank_limit": 1, "limit": 10000, \
+"needs_clarification": false, "clarification_message": null}}
 """
 
 
@@ -804,12 +830,15 @@ def _join_sections_two_tier(
     docs_block: str = "",
     examples_block: str = "",
     query_context_block: str = "",
+    semantic_grounding_block: str = "",
 ) -> str:
     """Join two-tier prompt sections with double-newline separators."""
     ctx_block = ContextBuilder().build().to_prompt_block()
     sections = [_PLANNER_SYSTEM, ctx_block, compact_index, detail_section]
     if query_context_block:
         sections.append(query_context_block)
+    if semantic_grounding_block:
+        sections.append(semantic_grounding_block)
     if docs_block:
         sections.append(docs_block)
     if examples_block:
@@ -909,6 +938,7 @@ def build_two_tier_planner_prompt_debug(
     max_doc_content_chars: int = DEFAULT_DOC_CONTENT_CHARS,
     max_explanation_chars: int = DEFAULT_EXPLANATION_CHARS,
     max_prompt_chars: int = DEFAULT_PROMPT_MAX_CHARS,
+    semantic_grounding_block: str = "",
 ) -> tuple[str, dict[str, Any]]:
     """Build the two-tier planner prompt with debug metadata.
 
@@ -930,6 +960,7 @@ def build_two_tier_planner_prompt_debug(
     cur_content_chars = max_doc_content_chars
     cur_secondary_table_columns = 8
     include_secondary_details = True
+    cur_semantic_block = semantic_grounding_block
     reduction_steps: list[str] = []
 
     def _build() -> str:
@@ -965,6 +996,7 @@ def build_two_tier_planner_prompt_debug(
             docs_block=docs_block,
             examples_block=ex_block,
             query_context_block=query_ctx_block,
+            semantic_grounding_block=cur_semantic_block,
         )
 
     def _debug(prompt_text: str) -> dict[str, Any]:
@@ -1054,6 +1086,14 @@ def build_two_tier_planner_prompt_debug(
     prompt = _build()
     if len(prompt) <= max_prompt_chars:
         return prompt, _debug(prompt)
+
+    # Step 6b – drop semantic grounding block
+    if cur_semantic_block:
+        cur_semantic_block = ""
+        reduction_steps.append("drop_semantic_grounding")
+        prompt = _build()
+        if len(prompt) <= max_prompt_chars:
+            return prompt, _debug(prompt)
 
     # Step 7 – drop optional sections
     cur_examples = 0

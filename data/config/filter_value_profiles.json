@@ -45,14 +45,6 @@
         {
           "value": "İstanbul",
           "aliases": ["istanbul", "istanbul buro", "merkez ofis"]
-        },
-        {
-          "value": "Ankara",
-          "aliases": ["ankara"]
-        },
-        {
-          "value": "İzmir",
-          "aliases": ["izmir"]
         }
       ]
     },

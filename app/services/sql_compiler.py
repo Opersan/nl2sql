@@ -265,6 +265,10 @@ class SQLCompiler:
     def _compile_single(
         self, plan: QueryPlan, table: TableMetadata,
     ) -> CompiledQuery:
+        # Delegate to the analytic-rank path when partition_by is present.
+        if plan.partition_by:
+            return self._compile_single_with_partition(plan, table)
+
         params: dict[str, object] = {}
         param_counter = _ParamCounter()
 
@@ -284,6 +288,83 @@ class SQLCompiler:
 
         inner_sql = "\n".join(parts)
         sql = self._wrap_with_rownum(inner_sql, plan, params, param_counter)
+        selected = self._selected_column_names(plan, table)
+        column_map = self._build_column_map(plan, table)
+
+        return CompiledQuery(
+            sql=sql,
+            params=params,
+            table=table.name,
+            selected_columns=selected,
+            debug_plan=plan,
+            column_map=column_map,
+        )
+
+    # ------------------------------------------------------------------
+    # Single-table with per-group analytic ranking (ROW_NUMBER)
+    # ------------------------------------------------------------------
+
+    def _compile_single_with_partition(
+        self, plan: QueryPlan, table: TableMetadata,
+    ) -> CompiledQuery:
+        """Generate ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...) SQL.
+
+        Produces:
+            SELECT <cols> FROM (
+              SELECT <cols>,
+                     ROW_NUMBER() OVER (PARTITION BY <part> ORDER BY <ord>) AS rn
+              FROM <table>
+              WHERE <filters>
+            ) WHERE rn <= <rank_limit>
+            AND ROWNUM <= <limit>
+        """
+        params: dict[str, object] = {}
+        param_counter = _ParamCounter()
+
+        # Resolve partition columns
+        partition_cols = [self._resolve(c, table) for c in plan.partition_by]
+
+        # Resolve order_by for the OVER clause
+        over_order_parts: list[str] = []
+        for spec in plan.order_by:
+            col = self._resolve(spec.column, table)
+            over_order_parts.append(f"{col} {spec.direction.value}")
+        if not over_order_parts:
+            raise CompilationError(
+                "partition_by kullanıldığında order_by zorunludur."
+            )
+
+        # Build inner SELECT columns
+        select_clause = self._build_select(plan, table)
+
+        rn_expr = (
+            f"ROW_NUMBER() OVER ("
+            f"PARTITION BY {', '.join(partition_cols)} "
+            f"ORDER BY {', '.join(over_order_parts)}"
+            f") AS rn"
+        )
+
+        from_clause = f"FROM {table.name}"
+        where_clause = self._build_where(plan, table, params, param_counter)
+
+        # Inner query: SELECT cols, ROW_NUMBER() ... FROM table WHERE ...
+        inner_parts = [f"{select_clause}, {rn_expr}", from_clause]
+        if where_clause:
+            inner_parts.append(where_clause)
+        inner_sql = "\n".join(inner_parts)
+
+        # Outer query: filter to top rank_limit per partition + global ROWNUM
+        rank_param = param_counter.next()
+        params[rank_param] = plan.rank_limit
+        limit_param = param_counter.next()
+        params[limit_param] = plan.limit
+
+        sql = (
+            f"SELECT *\nFROM (\n{inner_sql}\n)\n"
+            f"WHERE rn <= :{rank_param}\n"
+            f"AND ROWNUM <= :{limit_param}"
+        )
+
         selected = self._selected_column_names(plan, table)
         column_map = self._build_column_map(plan, table)
 
@@ -489,11 +570,41 @@ class SQLCompiler:
             parts.append(where_clause)
         if group_by_clause:
             parts.append(group_by_clause)
-        if order_by_clause:
-            parts.append(order_by_clause)
 
-        inner_sql = "\n".join(parts)
-        sql = self._wrap_with_rownum(inner_sql, plan, params, param_counter)
+        # Analytic-rank wrapping for multi-table plans
+        if plan.partition_by:
+            partition_cols = [_resolve_multi(c) for c in plan.partition_by]
+            over_order_parts: list[str] = []
+            for spec in plan.order_by:
+                col_ref = _resolve_multi(spec.column, spec.table)
+                over_order_parts.append(f"{col_ref} {spec.direction.value}")
+            if not over_order_parts:
+                raise CompilationError(
+                    "partition_by kullanıldığında order_by zorunludur."
+                )
+            rn_expr = (
+                f"ROW_NUMBER() OVER ("
+                f"PARTITION BY {', '.join(partition_cols)} "
+                f"ORDER BY {', '.join(over_order_parts)}"
+                f") AS rn"
+            )
+            # Append ROW_NUMBER to inner SELECT
+            parts[0] = f"{select_clause}, {rn_expr}"
+            inner_sql = "\n".join(parts)
+            rank_param = param_counter.next()
+            params[rank_param] = plan.rank_limit
+            limit_param = param_counter.next()
+            params[limit_param] = plan.limit
+            sql = (
+                f"SELECT *\nFROM (\n{inner_sql}\n)\n"
+                f"WHERE rn <= :{rank_param}\n"
+                f"AND ROWNUM <= :{limit_param}"
+            )
+        else:
+            if order_by_clause:
+                parts.append(order_by_clause)
+            inner_sql = "\n".join(parts)
+            sql = self._wrap_with_rownum(inner_sql, plan, params, param_counter)
 
         # Selected column names
         selected: list[str] = []
