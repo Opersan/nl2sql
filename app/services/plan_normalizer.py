@@ -330,6 +330,12 @@ def normalize_raw_plan(
 
     out: dict[str, Any] = dict(raw)  # shallow copy
 
+    # --- Strip explicit None from int-defaulted fields so Pydantic uses defaults ---
+    for int_field in ("rank_limit", "limit"):
+        if int_field in out and out[int_field] is None:
+            del out[int_field]
+            stats.whitespace_trimmed += 1
+
     # --- 0. Coerce common field-shape drift into QueryPlan-compatible lists ---
     for key in _LIST_LIKE_PLAN_FIELDS:
         value = out.get(key)
@@ -824,6 +830,17 @@ def canonicalize_columns(
         new_group_by.append(resolved)
     if new_group_by != list(plan.group_by):
         mutations["group_by"] = new_group_by
+
+    # -- partition_by --
+    new_partition_by: list[str] = []
+    for col in plan.partition_by:
+        resolved = _resolve(col)
+        if resolved != col:
+            logger.debug("Column canonicalised: %r -> %r (partition_by)", col, resolved)
+            stats.column_canonicalized += 1
+        new_partition_by.append(resolved)
+    if new_partition_by != list(plan.partition_by):
+        mutations["partition_by"] = new_partition_by
 
     # -- order_by --
     from app.domain.query_plan import OrderSpec

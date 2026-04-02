@@ -283,6 +283,18 @@ class QueryPlan(BaseModel):
     measures: list[NonEmptyStr] = Field(default_factory=list)
     join_path_id: str | None = Field(default=None, min_length=1)
     computed_measures: list[ComputedMeasureSpec] = Field(default_factory=list)
+    partition_by: list[NonEmptyStr] = Field(
+        default_factory=list,
+        description=(
+            "Per-group ranking columns.  When non-empty the compiler wraps "
+            "the query with ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...) "
+            "and filters to the top rank_limit rows per partition."
+        ),
+    )
+    rank_limit: int = Field(
+        default=1, ge=1,
+        description="Maximum rows per partition (only used when partition_by is non-empty).",
+    )
     limit: int = Field(default=10000, ge=1, le=10000)
     needs_clarification: bool = False
     clarification_message: str | None = Field(default=None, min_length=1)

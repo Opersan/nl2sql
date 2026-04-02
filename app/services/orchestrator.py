@@ -861,6 +861,11 @@ class ChatOrchestrator:
                 )
             self._sessions.append_assistant_message(session_id, answer)
 
+            # Save a partial snapshot so the follow-up context merge can
+            # preserve the original intent/table/filters when the user
+            # answers the clarification question on the next turn.
+            self._followup_merge.record_success(session_id, plan, answer_preview=answer)
+
             # Build structured clarification payload if a filter-value
             # clarification was persisted in the state manager during planning.
             clar_payload = None

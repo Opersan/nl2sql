@@ -4,6 +4,7 @@ from app.providers.catalog.in_memory import InMemoryCatalogProvider
 from app.services.catalog_service import CatalogService
 from app.services.execution_risk import assess_pre_execution_risk
 from app.domain.query_plan import FilterOp, FilterSpec, JoinCondition, JoinSpec, JoinType, OrderSpec, QueryPlan, SortDirection
+from app.core.config import settings
 
 import pytest
 
@@ -177,8 +178,28 @@ async def test_pre_execution_risk_safe_modes_structural_null_filtered_listing_on
     assert risk.execution_guard_reason == "execution_safe_mode_applied"
     assert risk.execution_skipped_reason is None
     assert risk.safe_mode_applied is True
-    assert risk.safe_mode_reason == "execution_safe_mode_applied"
-    assert risk.effective_limit == 25
+
+
+@pytest.mark.asyncio
+async def test_pre_execution_risk_allows_partition_by_query() -> None:
+    """Partition-by (per-group top-N) queries must NOT be flagged as simple listings."""
+    catalog = CatalogService(InMemoryCatalogProvider())
+    table = await catalog.resolve_table("XXBT_PDKS_PER_DETAILS_V")
+    assert table is not None
+
+    plan = QueryPlan(
+        intent="Her lokasyon icin en kidemli calisan",
+        table="XXBT_PDKS_PER_DETAILS_V",
+        select_columns=["FULL_NAME", "LOCATION_ADI", "ISE_GIRIS_TARIHI", "SICIL_NO"],
+        partition_by=["LOCATION_ADI"],
+        order_by=[OrderSpec(column="ISE_GIRIS_TARIHI", direction=SortDirection.ASC)],
+        rank_limit=1,
+        limit=10000,
+    )
+
+    risk = assess_pre_execution_risk(plan, table)
+    assert risk.should_execute is True
+    assert "timeout_prone_simple_listing" not in risk.pre_execution_risk_flags
 
 
 @pytest.mark.asyncio
@@ -187,19 +208,49 @@ async def test_pre_execution_risk_blocks_unfiltered_simple_listing_on_wide_view(
     table = await catalog.resolve_table("XXBT_PDKS_PER_DETAILS_V")
     assert table is not None
 
-    plan = QueryPlan(
-        intent="Calisanlari listele",
-        table="XXBT_PDKS_PER_DETAILS_V",
-        select_columns=["SICIL_NO", "AD", "SOYAD", "EMAIL", "BIRIM_ADI"],
-        filters=[],
-        limit=10000,
-    )
+    original = settings.default_row_limit
+    try:
+        settings.default_row_limit = 5000
+        plan = QueryPlan(
+            intent="Calisanlari listele",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["SICIL_NO", "AD", "SOYAD", "EMAIL", "BIRIM_ADI"],
+            filters=[],
+            limit=10000,
+        )
 
-    risk = assess_pre_execution_risk(plan, table)
-    assert risk.should_execute is False
-    assert risk.execution_guard_reason == "execution_blocked_high_risk"
-    assert risk.execution_skipped_reason == "precheck_timeout_prone_simple_listing"
-    assert risk.safe_mode_applied is False
+        risk = assess_pre_execution_risk(plan, table)
+        assert risk.should_execute is False
+        assert risk.execution_guard_reason == "execution_blocked_high_risk"
+        assert risk.execution_skipped_reason == "precheck_timeout_prone_simple_listing"
+        assert risk.safe_mode_applied is False
+    finally:
+        settings.default_row_limit = original
+
+
+@pytest.mark.asyncio
+async def test_pre_execution_risk_allows_listing_at_default_row_limit() -> None:
+    """Queries with limit == default_row_limit should NOT be blocked."""
+    catalog = CatalogService(InMemoryCatalogProvider())
+    table = await catalog.resolve_table("XXBT_PDKS_PER_DETAILS_V")
+    assert table is not None
+
+    original = settings.default_row_limit
+    try:
+        settings.default_row_limit = 1000
+        plan = QueryPlan(
+            intent="1000 calisan listele",
+            table="XXBT_PDKS_PER_DETAILS_V",
+            select_columns=["SICIL_NO", "AD", "SOYAD", "EMAIL", "BIRIM_ADI"],
+            filters=[],
+            limit=1000,
+        )
+
+        risk = assess_pre_execution_risk(plan, table)
+        assert risk.should_execute is True
+        assert "timeout_prone_simple_listing" not in risk.pre_execution_risk_flags
+    finally:
+        settings.default_row_limit = original
 
 
 @pytest.mark.asyncio

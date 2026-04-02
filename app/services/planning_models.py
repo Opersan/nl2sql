@@ -75,6 +75,10 @@ class PromptDiagnostics:
     example_count: int = 0
     doc_content_chars: int = 0
     example_explanation_chars: int = 0
+    # Semantic grounding
+    semantic_retrieval_used: bool = False
+    semantic_matches_total: int = 0
+    semantic_prompt_chars: int = 0
 
     @classmethod
     def from_debug_payload(cls, payload: dict[str, Any]) -> "PromptDiagnostics":
@@ -88,6 +92,9 @@ class PromptDiagnostics:
             example_count=int(payload.get("example_count", 0)),
             doc_content_chars=int(payload.get("doc_content_chars", 0)),
             example_explanation_chars=int(payload.get("example_explanation_chars", 0)),
+            semantic_retrieval_used=bool(payload.get("semantic_retrieval_used", False)),
+            semantic_matches_total=int(payload.get("semantic_matches_total", 0)),
+            semantic_prompt_chars=int(payload.get("semantic_prompt_chars", 0)),
         )
 
     def as_trace_dict(self) -> dict[str, Any]:
@@ -101,6 +108,9 @@ class PromptDiagnostics:
             "example_count": self.example_count,
             "doc_content_chars": self.doc_content_chars,
             "example_explanation_chars": self.example_explanation_chars,
+            "semantic_retrieval_used": self.semantic_retrieval_used,
+            "semantic_matches_total": self.semantic_matches_total,
+            "semantic_prompt_chars": self.semantic_prompt_chars,
         }
 
 
@@ -204,6 +214,7 @@ class PromptAssemblyResult:
 
     prompt: str
     context: PlanningContext
+    semantic_retrieval_trace: dict[str, Any] = field(default_factory=dict)
 
     @property
     def trace(self) -> dict[str, Any]:
@@ -214,6 +225,8 @@ class PromptAssemblyResult:
         }
         if self.context.prompt_diagnostics is not None:
             payload.update(self.context.prompt_diagnostics.as_trace_dict())
+        if self.semantic_retrieval_trace:
+            payload["semantic_retrieval"] = self.semantic_retrieval_trace
         return payload
 
 

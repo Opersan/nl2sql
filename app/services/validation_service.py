@@ -53,6 +53,7 @@ class ValidationService:
             self._check_aggregate_columns(plan, table, result, all_tables)
             self._check_group_by_columns(plan, table, result, all_tables)
             self._check_order_by_columns(plan, table, result, all_tables)
+            self._check_partition_by_columns(plan, table, result, all_tables)
             self._check_restricted_columns(plan, table, result, all_tables)
             self._check_aggregate_consistency(plan, table, result, all_tables)
 
@@ -356,6 +357,27 @@ class ValidationService:
                     "invalid_column",
                     f"GROUP BY kolonu bulunamadı: '{col_name}' (tablo: {table.name}).",
                     field="group_by",
+                )
+
+    def _check_partition_by_columns(
+        self, plan: QueryPlan, table: TableMetadata, result: ValidationResult,
+        all_tables: dict[str, TableMetadata] | None = None,
+    ) -> None:
+        if all_tables is None:
+            all_tables = {table.name.upper(): table}
+        for col_name in plan.partition_by:
+            if self._looks_like_expression(col_name):
+                continue
+            bare, qualifier = self._strip_qualifier(col_name)
+            bare = self._normalize_column_identifier(
+                bare,
+                table_name=qualifier or table.name,
+            )
+            if self._resolve_col_multi(bare, table, all_tables, table_qualifier=qualifier) is None:
+                result.add_error(
+                    "invalid_column",
+                    f"PARTITION BY kolonu bulunamadı: '{col_name}' (tablo: {table.name}).",
+                    field="partition_by",
                 )
 
     def _check_order_by_columns(

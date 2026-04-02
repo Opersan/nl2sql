@@ -17,6 +17,10 @@ from app.services.planning_models import (
     PromptDiagnostics,
     RetrievalDiagnostics,
 )
+from app.services.semantic_context_service import (
+    SemanticRetrievalTrace,
+    retrieve_semantic_context,
+)
 
 if TYPE_CHECKING:
     from app.services.query_understanding import QueryUnderstanding
@@ -53,6 +57,16 @@ class PromptAssemblyService:
         retrieval_diag = planning_context.retrieval_diagnostics
         doc_diag = self._doc_retrieval.last_retrieval_diagnostics if self._doc_retrieval is not None else None
 
+        # ── Semantic grounding retrieval ──────────────────────────────
+        sem_trace = SemanticRetrievalTrace()
+        semantic_block = ""
+        if query_understanding is not None:
+            _bundle, sem_trace = retrieve_semantic_context(
+                query_understanding=query_understanding,
+                retrieved_snapshot=planning_context.retrieved_snapshot,
+            )
+            semantic_block = sem_trace.semantic_prompt_section_text
+
         prompt, trace = build_two_tier_planner_prompt_debug(
             user_message,
             planning_context.full_snapshot,
@@ -63,7 +77,13 @@ class PromptAssemblyService:
             query_understanding_summary=query_understanding_summary,
             root_table_name=retrieval_diag.root_table_name,
             max_prompt_chars=settings.planner_prompt_max_chars,
+            semantic_grounding_block=semantic_block,
         )
+
+        # Propagate semantic trace fields into prompt debug payload
+        trace["semantic_retrieval_used"] = sem_trace.semantic_retrieval_used
+        trace["semantic_matches_total"] = sem_trace.semantic_matches_total
+        trace["semantic_prompt_chars"] = sem_trace.semantic_prompt_chars
 
         kept_candidates_reason = dict(retrieval_diag.kept_candidates_reason)
         dropped_candidates = list(retrieval_diag.dropped_candidates)
@@ -124,4 +144,8 @@ class PromptAssemblyService:
         updated_context = planning_context.with_retrieved_context(retrieved_context).with_prompt_diagnostics(
             PromptDiagnostics.from_debug_payload(trace)
         )
-        return PromptAssemblyResult(prompt=prompt, context=updated_context)
+        return PromptAssemblyResult(
+            prompt=prompt,
+            context=updated_context,
+            semantic_retrieval_trace=sem_trace.as_trace_dict(),
+        )

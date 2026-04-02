@@ -46,7 +46,9 @@ def _simple_listing_risk_mode(plan: QueryPlan, table: TableMetadata) -> str | No
         return None
     if plan.aggregations or plan.group_by or plan.computed_measures:
         return None
-    if plan.limit < settings.default_row_limit:
+    if plan.partition_by:
+        return None
+    if plan.limit <= settings.default_row_limit:
         return None
     if len(plan.select_columns) < 4:
         return None

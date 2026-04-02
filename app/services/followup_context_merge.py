@@ -77,6 +77,8 @@ class SuccessfulTurnSnapshot:
     semantic_intent: str | None
     active_entities: tuple[ActiveEntity, ...] = ()
     answer_preview: str = ""
+    partition_by: tuple[str, ...] = ()
+    rank_limit: int = 1
 
 
 def _extract_entities_from_plan(plan: QueryPlan) -> tuple[ActiveEntity, ...]:
@@ -266,6 +268,8 @@ def _heuristic_classify(
         "ayrıca ", "bir de ", "ek olarak",
         "bunları da ekle", "bunu da ekle",
         "bunları çıkar", "bunu çıkar",
+        "da getir", "de getir", "da göster", "de göster",
+        "da ekle", "de ekle",
         "getirme ", "gösterme ",
         "peki ", "peki,",
     )
@@ -460,6 +464,8 @@ def _reduce_narrative_correction(
             "order_by": list(snapshot.order_by),
             "aggregations": list(snapshot.aggregations),
             "group_by": list(snapshot.group_by),
+            "partition_by": list(snapshot.partition_by),
+            "rank_limit": snapshot.rank_limit,
             "limit": snapshot.limit,
             "semantic_intent": snapshot.semantic_intent,
             "needs_clarification": False,
@@ -589,10 +595,18 @@ def _merge_preserve_filters(
             merged_filters.append(prev_filter)
             preserved.append(prev_filter.column)
 
+    # When the new plan introduces aggregations/group_by that the snapshot
+    # didn't have, the query shape changed fundamentally (e.g. listing →
+    # aggregation).  Do NOT carry forward the old projection — those columns
+    # would conflict with the analytical query.
+    new_has_analytics = bool(new_plan.aggregations or new_plan.group_by or new_plan.computed_measures)
+    prev_had_analytics = bool(snapshot.aggregations or snapshot.group_by)
+    shape_changed = new_has_analytics and not prev_had_analytics
+
     prev_cols = list(snapshot.select_columns)
     new_cols = list(new_plan.select_columns)
     preserved_proj = False
-    if prev_cols:
+    if prev_cols and not shape_changed:
         prev_upper = {c.upper() for c in prev_cols}
         extra_cols = [c for c in new_cols if c.upper() not in prev_upper]
         merged_cols = prev_cols + extra_cols
@@ -600,15 +614,21 @@ def _merge_preserve_filters(
     else:
         merged_cols = new_cols
 
-    merged_plan = new_plan.model_copy(
-        update={
-            "table": new_plan.table or snapshot.table,
-            "filters": merged_filters,
-            "select_columns": merged_cols,
-            "needs_clarification": False,
-            "clarification_message": None,
-        }
-    )
+    # Carry forward analytic / structural fields when new plan lacks them
+    update: dict[str, object] = {
+        "table": new_plan.table or snapshot.table,
+        "filters": merged_filters,
+        "select_columns": merged_cols,
+        "needs_clarification": False,
+        "clarification_message": None,
+    }
+    if not new_plan.partition_by and snapshot.partition_by:
+        update["partition_by"] = list(snapshot.partition_by)
+        update["rank_limit"] = snapshot.rank_limit
+    if not new_plan.order_by and snapshot.order_by:
+        update["order_by"] = list(snapshot.order_by)
+
+    merged_plan = new_plan.model_copy(update=update)
     return merged_plan, preserved, added, [], preserved_proj
 
 
@@ -714,6 +734,8 @@ class FollowupContextMergeService:
             semantic_intent=plan.semantic_intent,
             active_entities=entities,
             answer_preview=answer_preview[:300] if answer_preview else "",
+            partition_by=tuple(plan.partition_by),
+            rank_limit=plan.rank_limit,
         )
         logger.debug(
             "[followup] snapshot recorded: session=%s table=%s filters=%d entities=%s",
@@ -783,6 +805,41 @@ class FollowupContextMergeService:
 
         # B. Continuation Interpreter (LLM or heuristic fallback)
         classification = await _classify_continuation(self._llm, message, snapshot)
+
+        # Query-shape change guard: when the new plan introduces aggregations
+        # that the previous turn didn't have (e.g. listing → turnover rate),
+        # force fresh_query even if the LLM classified it as a refinement.
+        # Filters may still be carried forward via the reducer's filter merge,
+        # but the projection must not be overwritten.
+        new_has_analytics = bool(
+            new_plan.aggregations or new_plan.group_by or new_plan.computed_measures
+        )
+        prev_had_analytics = bool(snapshot.aggregations or snapshot.group_by)
+        if (
+            new_has_analytics
+            and not prev_had_analytics
+            and classification.message_type in ("followup_refinement", "narrative_correction")
+        ):
+            logger.info(
+                "[followup] query shape changed (listing→aggregation): "
+                "overriding %s → fresh_query for session=%s",
+                classification.message_type,
+                session_id,
+            )
+            return MergeResult(
+                followup_detected=False,
+                followup_confidence="low",
+                merge_strategy="none",
+                merged_plan=None,
+                preserved_filters=[],
+                added_filters=[],
+                dropped_filters=[],
+                preserved_projection=False,
+                reason_codes=["query_shape_changed_to_aggregation"],
+                previous_snapshot_found=True,
+                previous_snapshot_status="success",
+                message_type="fresh_query",
+            )
 
         logger.info(
             "[followup] classification: session=%s type=%s llm=%s refs=%s",

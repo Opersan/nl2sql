@@ -354,10 +354,11 @@ class PlannerService:
             "schema_docs": prompt_trace.get("schema_docs", []),
             "examples": prompt_trace.get("examples", []),
         }
+        trace["semantic_retrieval"] = prompt_trace.get("semantic_retrieval", {})
         trace["prompt"] = {
             key: value
             for key, value in prompt_trace.items()
-            if key not in {"schema_docs", "examples", "retrieval_assessment"}
+            if key not in {"schema_docs", "examples", "retrieval_assessment", "semantic_retrieval"}
         }
         trace["prompt"]["full_prompt_text"] = prompt
 

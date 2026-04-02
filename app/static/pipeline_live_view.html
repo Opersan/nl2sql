@@ -503,9 +503,9 @@
       <div class="sidebar-section-header">Messages</div>
       <div class="list-scroll" id="msgList" style="max-height: 200px;"></div>
     </div>
-    <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column;">
+    <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;">
       <div class="sidebar-section-header">Runs</div>
-      <div class="list-scroll" id="runList" style="flex: 1;"></div>
+      <div class="list-scroll" id="runList" style="flex: 1; overflow-y: auto; min-height: 0;"></div>
     </div>
   </div>
 
@@ -661,6 +661,23 @@ async function copyRunToClipboard() {
   }
 }
 
+function downloadRunAsTxt() {
+  const rd = state.runDetail;
+  if (!rd) return;
+  const text = JSON.stringify(rd, null, 2);
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const runId = rd.run_id ? rd.run_id.slice(0, 12) : 'run';
+  a.download = `run_${runId}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('💾 Run detayları .txt olarak indirildi');
+}
+
 // ---- Rendering ----
 function renderConvList() {
   const el = document.getElementById('convList');
@@ -782,6 +799,7 @@ function renderCenter() {
     </div>
     <div class="run-actions">
       <button class="btn-action" id="copyRunBtn" onclick="copyRunToClipboard()">📋 Tümünü Kopyala</button>
+      <button class="btn-action" onclick="downloadRunAsTxt()">💾 .txt İndir</button>
     </div>
   </div>`;
 
@@ -932,7 +950,7 @@ function renderPayloadValue(val, depth) {
       inner += `<div style="margin-left:12px;">[${i}]: ${renderPayloadValue(item, depth + 1)}</div>`;
     });
     if (depth > 0) {
-      return `<details><summary>${esc(label)}</summary>${inner}</details>`;
+      return `<details open><summary>${esc(label)}</summary>${inner}</details>`;
     }
     return inner;
   }
@@ -945,7 +963,7 @@ function renderPayloadValue(val, depth) {
       inner += `<div style="margin-left:12px;"><span class="payload-key">${esc(k)}:</span> ${renderPayloadValue(val[k], depth + 1)}</div>`;
     }
     if (depth > 1) {
-      return `<details><summary>${esc(label)}</summary>${inner}</details>`;
+      return `<details open><summary>${esc(label)}</summary>${inner}</details>`;
     }
     return inner;
   }
