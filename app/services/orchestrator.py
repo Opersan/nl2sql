@@ -1323,6 +1323,19 @@ class ChatOrchestrator:
         pt = self._planner.last_trace or {}
         planner_request_started = tc._started_at_mono.get("planner_llm_request", plan_request_mono)
 
+        policy_guard = pt.get("policy_guard")
+        if policy_guard is not None:
+            triggered = policy_guard.get("triggered", False)
+            tc.stage_completed(
+                "policy_guard",
+                summary=(
+                    f"Policy guard triggered: {policy_guard.get('guard_reason_code', 'unknown')}"
+                    if triggered
+                    else f"Policy guard passed (action={policy_guard.get('guard_action', 'allow')})"
+                ),
+                payload=safe_payload(policy_guard),
+            )
+
         qu = pt.get("query_understanding")
         if qu is not None:
             tc.stage_completed(
@@ -1447,6 +1460,26 @@ class ChatOrchestrator:
                     canonicalize.get("after"),
                     {"stats": canonicalize.get("stats")},
                 ),
+            )
+
+        intent_guard = pt.get("intent_guard")
+        if intent_guard is not None:
+            clar_required = intent_guard.get("clarification_required", False)
+            confidence = intent_guard.get("confidence_band") or intent_guard.get("plan_confidence_band", "")
+            tc.stage_completed(
+                "intent_guard",
+                summary=(
+                    f"Intent guard — clarification_required={clar_required}, confidence={confidence}"
+                ),
+                payload=safe_payload(intent_guard),
+            )
+
+        final_plan = pt.get("final_plan")
+        if final_plan is not None:
+            tc.stage_completed(
+                "final_plan",
+                summary=f"Final plan — table={final_plan.get('table')}, intent={final_plan.get('intent')}",
+                payload=safe_payload(final_plan),
             )
 
         filter_column_resolution = pt.get("filter_column_resolution") or {
