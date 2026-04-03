@@ -27,6 +27,7 @@ from app.domain.query_plan import (
 )
 from app.domain.semantic_models import BusinessEntitySemantic, IntentDefaults, SemanticRegistry
 from app.services.semantic_planning import _joins_from_path, _load_registry
+from app.utils.turkish import casefold_tr
 
 logger = get_logger(__name__)
 
@@ -193,6 +194,8 @@ class QueryPlanRepairEngine:
 
         plan = self._normalize_syntax(plan, result)
         plan = self._resolve_filter_aliases(plan, result)
+        plan = self._prune_aggregate_alias_select_columns(plan, result)
+        plan = self._prune_non_group_select_columns(plan, result)
         plan = self._enforce_semantics(plan, result)
         plan = self._apply_clarification_policy(plan, result)
 
@@ -203,6 +206,64 @@ class QueryPlanRepairEngine:
                 ", ".join(a.repair_type for a in result.actions),
             )
         return plan, result
+
+    def _prune_aggregate_alias_select_columns(self, plan: QueryPlan, result: RepairResult) -> QueryPlan:
+        if not plan.aggregations or not plan.select_columns:
+            return plan
+
+        agg_aliases = {casefold_tr(agg.effective_alias()) for agg in plan.aggregations}
+        group_by_folded = {casefold_tr(col) for col in plan.group_by}
+        updated: list[str] = []
+        changed = False
+
+        for i, col in enumerate(plan.select_columns):
+            if _is_expression(col):
+                updated.append(col)
+                continue
+            folded = casefold_tr(col)
+            if folded in agg_aliases and folded not in group_by_folded:
+                changed = True
+                result.record(
+                    RepairAction(
+                        repair_type="aggregate_alias_pruned",
+                        description="Removed aggregate alias from select_columns",
+                        field_path=f"select_columns[{i}]",
+                        original_value=col,
+                        repaired_value=None,
+                    )
+                )
+                continue
+            updated.append(col)
+
+        return plan.model_copy(update={"select_columns": updated}) if changed else plan
+
+    def _prune_non_group_select_columns(self, plan: QueryPlan, result: RepairResult) -> QueryPlan:
+        if not plan.aggregations or not plan.select_columns or not plan.group_by:
+            return plan
+
+        group_by_folded = {casefold_tr(col) for col in plan.group_by}
+        updated: list[str] = []
+        changed = False
+
+        for i, col in enumerate(plan.select_columns):
+            if _is_expression(col):
+                updated.append(col)
+                continue
+            if casefold_tr(col) not in group_by_folded:
+                changed = True
+                result.record(
+                    RepairAction(
+                        repair_type="aggregate_select_pruned",
+                        description="Removed non-group select column in aggregate query",
+                        field_path=f"select_columns[{i}]",
+                        original_value=col,
+                        repaired_value=None,
+                    )
+                )
+                continue
+            updated.append(col)
+
+        return plan.model_copy(update={"select_columns": updated}) if changed else plan
 
     def _resolve_filter_aliases(self, plan: QueryPlan, result: RepairResult) -> QueryPlan:
         """Pass J – remap aliased filter column names to canonical names via registry."""
@@ -593,6 +654,23 @@ class QueryPlanRepairEngine:
 
         defaults = entity.intent_defaults.get(semantic_intent)
         if defaults is None or not defaults.stable:
+            return plan
+
+        has_substantive_fields = bool(
+            plan.select_columns
+            or plan.filters
+            or plan.aggregations
+            or plan.group_by
+            or plan.order_by
+            or plan.computed_measures
+        )
+        has_defaults_payload = bool(
+            defaults.aggregations
+            or defaults.filters
+            or defaults.group_by
+            or defaults.computed_measures
+        )
+        if not has_substantive_fields and not has_defaults_payload:
             return plan
 
         result.record(

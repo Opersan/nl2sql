@@ -82,8 +82,8 @@ class ValidationRepairService:
             trace["skipped_reason_codes"].append("repair_skipped_low_confidence")
             return plan, result, trace
 
-        invalid_errors = [issue for issue in validation.errors if issue.code == "invalid_column"]
-        if not invalid_errors or len(invalid_errors) != len(validation.errors):
+        allowed_error_codes = {"invalid_column", "aggregate_select_mismatch"}
+        if not validation.errors or any(issue.code not in allowed_error_codes for issue in validation.errors):
             trace["skipped_reason_codes"].append("repair_skipped_low_confidence")
             return plan, result, trace
 
@@ -92,6 +92,8 @@ class ValidationRepairService:
         all_tables.update({name.upper(): table for name, table in validation.resolved_tables.items()})
 
         repaired = plan
+        repaired = self._prune_aggregate_alias_select_columns(repaired, validation.resolved_table, all_tables, result, trace)
+        repaired = self._prune_non_group_select_columns(repaired, result, trace)
         repaired = self._repair_select_columns(repaired, validation.resolved_table, all_tables, result, trace)
         repaired = self._repair_filters(repaired, validation.resolved_table, all_tables, result, trace)
         repaired = self._repair_aggregations(repaired, validation.resolved_table, all_tables, result, trace)
@@ -102,6 +104,79 @@ class ValidationRepairService:
             trace["skipped_reason_codes"].append("repair_skipped_low_confidence")
         trace["repaired"] = result.repair_applied
         return repaired, result, trace
+
+    def _is_real_column(self, name: str, all_tables: dict[str, TableMetadata]) -> bool:
+        for meta in all_tables.values():
+            if meta.resolve_column_name(name) is not None:
+                return True
+        return False
+
+    def _prune_aggregate_alias_select_columns(
+        self,
+        plan: QueryPlan,
+        primary_table: TableMetadata,
+        all_tables: dict[str, TableMetadata],
+        result: RepairResult,
+        trace: dict[str, Any],
+    ) -> QueryPlan:
+        if not plan.aggregations or not plan.select_columns:
+            return plan
+
+        agg_aliases = {casefold_tr(agg.effective_alias()) for agg in plan.aggregations}
+        group_by_folded = {casefold_tr(col) for col in plan.group_by}
+        updated: list[str] = []
+        changed = False
+
+        for index, column in enumerate(plan.select_columns):
+            folded = casefold_tr(column)
+            if folded in agg_aliases and folded not in group_by_folded:
+                if not self._is_real_column(column, all_tables):
+                    changed = True
+                    trace["reasons"].append("aggregate_alias_pruned")
+                    result.record(
+                        RepairAction(
+                            repair_type="aggregate_alias_pruned",
+                            description=f"Removed aggregate alias from select_columns: {column}",
+                            field_path=f"select_columns[{index}]",
+                            original_value=column,
+                            repaired_value=None,
+                        )
+                    )
+                    continue
+            updated.append(column)
+
+        return plan.model_copy(update={"select_columns": updated}) if changed else plan
+
+    def _prune_non_group_select_columns(
+        self,
+        plan: QueryPlan,
+        result: RepairResult,
+        trace: dict[str, Any],
+    ) -> QueryPlan:
+        if not plan.aggregations or not plan.select_columns or not plan.group_by:
+            return plan
+
+        group_by_folded = {casefold_tr(col) for col in plan.group_by}
+        updated: list[str] = []
+        changed = False
+
+        for index, column in enumerate(plan.select_columns):
+            if casefold_tr(column) not in group_by_folded:
+                changed = True
+                trace["reasons"].append("aggregate_select_pruned")
+                result.record(
+                    RepairAction(
+                        repair_type="aggregate_select_pruned",
+                        description=f"Removed non-group select column in aggregate query: {column}",
+                        field_path=f"select_columns[{index}]",
+                        original_value=column,
+                        repaired_value=None,
+                    )
+                )
+                continue
+            updated.append(column)
+
+        return plan.model_copy(update={"select_columns": updated}) if changed else plan
 
     def _registry_alias_maps(self) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
         registry = _load_registry()

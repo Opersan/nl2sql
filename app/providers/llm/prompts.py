@@ -197,6 +197,9 @@ group_by, order_by, joins, partition_by, rank_limit, limit, needs_clarification,
 13b. Kullanıcı limit belirtmezse varsayılan limiti kullan.
 14. select_columns ve group_by yalnızca string listesi olmalı; object listesi yazma.
 15. filters içindeki value scalar veya liste olmalı; serbest şema object'i yazma.
+15e. aggregations varsa select_columns sadece boyut kolonları içermeli; aggregate alias (örn. COUNT(*) alias) select_columns içinde yer almamalı.
+15f. aggregate alias'ları yalnızca aggregations.alias ve gerekiyorsa order_by.column için kullan.
+15g. aggregations + group_by varsa select_columns sadece group_by kolonları olmalı; filtre kolonlarını select_columns içine ekleme.
 15a. >=, <=, >, < operatörleri için value ASLA null olamaz — somut bir değer hesapla ve yaz.
 15b. Tarih filtreleri için sistem tarihini (system prompt'taki SYSTEM_DATE) baz alarak YYYY-MM-DD formatında somut tarih yaz.
 15c. MySQL DATE_SUB() veya "last_3_months_start" gibi placeholder değer yazma — hesaplanmış YYYY-MM-DD yaz.
