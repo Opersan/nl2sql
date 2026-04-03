@@ -258,39 +258,124 @@
       "canonical_values": [
         {
           "value": "GOKZIRVE_MUHASEBE_DEFTERI",
-          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+          "aliases": [
+            "gokzirve",
+            "gokzirve muhasebe",
+            "2061",
+            "gökzirve",
+            "gökzirve muhasebe",
+            "gökzirve muhasebe defteri"
+          ]
         },
         {
           "value": "KARLITEPE_MUHASEBE_DEFTERI",
-          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+          "aliases": [
+            "karlitepe",
+            "karlitepe muhasebe",
+            "2063",
+            "karlitepe muhasebe defteri",
+            "karlitepe defter",
+            "karlitepe muhasebe"
+          ]
         },
         {
           "value": "HOLDING_MUHASEBE_DEFTERI",
-          "aliases": ["holding", "holding muhasebe", "2123"]
+          "aliases": [
+            "holding",
+            "holding muhasebe",
+            "2123",
+            "holding muhasebe defteri",
+            "holding defter",
+            "holding muhasebe",
+            "yircali holding",
+            "yircali holding muhasebe",
+            "yircali holding muhasebe defteri"
+          ]
         },
         {
           "value": "AKHISAR_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+          "aliases": [
+            "akhisar",
+            "akhisar muhasebe",
+            "2041",
+            "akhisar muhasebe defteri",
+            "akhisar defter",
+            "akhisar muhasebe",
+            "akhisar yedek defter",
+            "akhisar yedek"
+          ]
         },
         {
           "value": "BESTAS_MUHASEBE_DEFTERI",
-          "aliases": ["bestas", "bestas muhasebe", "2023"]
+          "aliases": [
+            "bestas",
+            "bestas muhasebe",
+            "2023",
+            "bestas muhasebe defteri",
+            "bestas defter",
+            "bestas",
+            "bestas muhasebe",
+            "bestas yedek defter",
+            "bestas yedek"
+          ]
         },
         {
           "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+          "aliases": [
+            "akhisar res",
+            "akhisar res muhasebe",
+            "2101",
+            "akhisar res muhasebe defteri",
+            "akhisar res defter",
+            "akhisar res",
+            "akhisar res yedek defter",
+            "akhisar res yedek"
+          ]
         },
         {
           "value": "BEST_MUHASEBE_DEFTERI",
-          "aliases": ["best", "best muhasebe", "2021"]
+          "aliases": [
+            "best",
+            "best muhasebe",
+            "2021",
+            "best defter",
+            "best muhasebe defteri",
+            "best muhasebe",
+            "best",
+            "best transformer",
+            "best ana",
+            "best tl",
+            "ana defter"
+          ]
         },
         {
           "value": "BEST_EUR_MUHASEBE_DEFTERI",
-          "aliases": ["best eur", "best eur muhasebe", "2161"]
+          "aliases": [
+            "best eur",
+            "best eur muhasebe",
+            "2161",
+            "best eur defter",
+            "best eur muhasebe defteri",
+            "best eur muhasebe",
+            "best eur",
+            "best eur transformer",
+            "best eur ana",
+            "best eur tl",
+            "ana eur defter"
+          ]
         },
         {
           "value": "KARESI_MUHASEBE_DEFTERI",
-          "aliases": ["karesi", "karesi muhasebe", "2043"]
+          "aliases": [
+            "karesi",
+            "karesi muhasebe",
+            "2043",
+            "karesi muhasebe defteri",
+            "karesi defter",
+            "karesi muhasebe",
+            "karesi yedek defter",
+            "karesi yedek"
+          ]
         }
       ]
     },
@@ -301,39 +386,124 @@
       "canonical_values": [
         {
           "value": "GOKZIRVE_MUHASEBE_DEFTERI",
-          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+          "aliases": [
+            "gokzirve",
+            "gokzirve muhasebe",
+            "2061",
+            "gökzirve",
+            "gökzirve muhasebe",
+            "gökzirve muhasebe defteri"
+          ]
         },
         {
           "value": "KARLITEPE_MUHASEBE_DEFTERI",
-          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+          "aliases": [
+            "karlitepe",
+            "karlitepe muhasebe",
+            "2063",
+            "karlitepe muhasebe defteri",
+            "karlitepe defter",
+            "karlitepe muhasebe"
+          ]
         },
         {
           "value": "HOLDING_MUHASEBE_DEFTERI",
-          "aliases": ["holding", "holding muhasebe", "2123"]
+          "aliases": [
+            "holding",
+            "holding muhasebe",
+            "2123",
+            "holding muhasebe defteri",
+            "holding defter",
+            "holding muhasebe",
+            "yircali holding",
+            "yircali holding muhasebe",
+            "yircali holding muhasebe defteri"
+          ]
         },
         {
           "value": "AKHISAR_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+          "aliases": [
+            "akhisar",
+            "akhisar muhasebe",
+            "2041",
+            "akhisar muhasebe defteri",
+            "akhisar defter",
+            "akhisar muhasebe",
+            "akhisar yedek defter",
+            "akhisar yedek"
+          ]
         },
         {
           "value": "BESTAS_MUHASEBE_DEFTERI",
-          "aliases": ["bestas", "bestas muhasebe", "2023"]
+          "aliases": [
+            "bestas",
+            "bestas muhasebe",
+            "2023",
+            "bestas muhasebe defteri",
+            "bestas defter",
+            "bestas",
+            "bestas muhasebe",
+            "bestas yedek defter",
+            "bestas yedek"
+          ]
         },
         {
           "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+          "aliases": [
+            "akhisar res",
+            "akhisar res muhasebe",
+            "2101",
+            "akhisar res muhasebe defteri",
+            "akhisar res defter",
+            "akhisar res",
+            "akhisar res yedek defter",
+            "akhisar res yedek"
+          ]
         },
         {
           "value": "BEST_MUHASEBE_DEFTERI",
-          "aliases": ["best", "best muhasebe", "2021"]
+          "aliases": [
+            "best",
+            "best muhasebe",
+            "2021",
+            "best defter",
+            "best muhasebe defteri",
+            "best muhasebe",
+            "best",
+            "best transformer",
+            "best ana",
+            "best tl",
+            "ana defter"
+          ]
         },
         {
           "value": "BEST_EUR_MUHASEBE_DEFTERI",
-          "aliases": ["best eur", "best eur muhasebe", "2161"]
+          "aliases": [
+            "best eur",
+            "best eur muhasebe",
+            "2161",
+            "best eur defter",
+            "best eur muhasebe defteri",
+            "best eur muhasebe",
+            "best eur",
+            "best eur transformer",
+            "best eur ana",
+            "best eur tl",
+            "ana eur defter"
+          ]
         },
         {
           "value": "KARESI_MUHASEBE_DEFTERI",
-          "aliases": ["karesi", "karesi muhasebe", "2043"]
+          "aliases": [
+            "karesi",
+            "karesi muhasebe",
+            "2043",
+            "karesi muhasebe defteri",
+            "karesi defter",
+            "karesi muhasebe",
+            "karesi yedek defter",
+            "karesi yedek"
+          ]
         }
       ]
     },
@@ -344,39 +514,124 @@
       "canonical_values": [
         {
           "value": "GOKZIRVE_MUHASEBE_DEFTERI",
-          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+          "aliases": [
+            "gokzirve",
+            "gokzirve muhasebe",
+            "2061",
+            "gökzirve",
+            "gökzirve muhasebe",
+            "gökzirve muhasebe defteri"
+          ]
         },
         {
           "value": "KARLITEPE_MUHASEBE_DEFTERI",
-          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+          "aliases": [
+            "karlitepe",
+            "karlitepe muhasebe",
+            "2063",
+            "karlitepe muhasebe defteri",
+            "karlitepe defter",
+            "karlitepe muhasebe"
+          ]
         },
         {
           "value": "HOLDING_MUHASEBE_DEFTERI",
-          "aliases": ["holding", "holding muhasebe", "2123"]
+          "aliases": [
+            "holding",
+            "holding muhasebe",
+            "2123",
+            "holding muhasebe defteri",
+            "holding defter",
+            "holding muhasebe",
+            "yircali holding",
+            "yircali holding muhasebe",
+            "yircali holding muhasebe defteri"
+          ]
         },
         {
           "value": "AKHISAR_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+          "aliases": [
+            "akhisar",
+            "akhisar muhasebe",
+            "2041",
+            "akhisar muhasebe defteri",
+            "akhisar defter",
+            "akhisar muhasebe",
+            "akhisar yedek defter",
+            "akhisar yedek"
+          ]
         },
         {
           "value": "BESTAS_MUHASEBE_DEFTERI",
-          "aliases": ["bestas", "bestas muhasebe", "2023"]
+          "aliases": [
+            "bestas",
+            "bestas muhasebe",
+            "2023",
+            "bestas muhasebe defteri",
+            "bestas defter",
+            "bestas",
+            "bestas muhasebe",
+            "bestas yedek defter",
+            "bestas yedek"
+          ]
         },
         {
           "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+          "aliases": [
+            "akhisar res",
+            "akhisar res muhasebe",
+            "2101",
+            "akhisar res muhasebe defteri",
+            "akhisar res defter",
+            "akhisar res",
+            "akhisar res yedek defter",
+            "akhisar res yedek"
+          ]
         },
         {
           "value": "BEST_MUHASEBE_DEFTERI",
-          "aliases": ["best", "best muhasebe", "2021"]
+          "aliases": [
+            "best",
+            "best muhasebe",
+            "2021",
+            "best defter",
+            "best muhasebe defteri",
+            "best muhasebe",
+            "best",
+            "best transformer",
+            "best ana",
+            "best tl",
+            "ana defter"
+          ]
         },
         {
           "value": "BEST_EUR_MUHASEBE_DEFTERI",
-          "aliases": ["best eur", "best eur muhasebe", "2161"]
+          "aliases": [
+            "best eur",
+            "best eur muhasebe",
+            "2161",
+            "best eur defter",
+            "best eur muhasebe defteri",
+            "best eur muhasebe",
+            "best eur",
+            "best eur transformer",
+            "best eur ana",
+            "best eur tl",
+            "ana eur defter"
+          ]
         },
         {
           "value": "KARESI_MUHASEBE_DEFTERI",
-          "aliases": ["karesi", "karesi muhasebe", "2043"]
+          "aliases": [
+            "karesi",
+            "karesi muhasebe",
+            "2043",
+            "karesi muhasebe defteri",
+            "karesi defter",
+            "karesi muhasebe",
+            "karesi yedek defter",
+            "karesi yedek"
+          ]
         }
       ]
     },
@@ -387,39 +642,124 @@
       "canonical_values": [
         {
           "value": "GOKZIRVE_MUHASEBE_DEFTERI",
-          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+          "aliases": [
+            "gokzirve",
+            "gokzirve muhasebe",
+            "2061",
+            "gökzirve",
+            "gökzirve muhasebe",
+            "gökzirve muhasebe defteri"
+          ]
         },
         {
           "value": "KARLITEPE_MUHASEBE_DEFTERI",
-          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+          "aliases": [
+            "karlitepe",
+            "karlitepe muhasebe",
+            "2063",
+            "karlitepe muhasebe defteri",
+            "karlitepe defter",
+            "karlitepe muhasebe"
+          ]
         },
         {
           "value": "HOLDING_MUHASEBE_DEFTERI",
-          "aliases": ["holding", "holding muhasebe", "2123"]
+          "aliases": [
+            "holding",
+            "holding muhasebe",
+            "2123",
+            "holding muhasebe defteri",
+            "holding defter",
+            "holding muhasebe",
+            "yircali holding",
+            "yircali holding muhasebe",
+            "yircali holding muhasebe defteri"
+          ]
         },
         {
           "value": "AKHISAR_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+          "aliases": [
+            "akhisar",
+            "akhisar muhasebe",
+            "2041",
+            "akhisar muhasebe defteri",
+            "akhisar defter",
+            "akhisar muhasebe",
+            "akhisar yedek defter",
+            "akhisar yedek"
+          ]
         },
         {
           "value": "BESTAS_MUHASEBE_DEFTERI",
-          "aliases": ["bestas", "bestas muhasebe", "2023"]
+          "aliases": [
+            "bestas",
+            "bestas muhasebe",
+            "2023",
+            "bestas muhasebe defteri",
+            "bestas defter",
+            "bestas",
+            "bestas muhasebe",
+            "bestas yedek defter",
+            "bestas yedek"
+          ]
         },
         {
           "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+          "aliases": [
+            "akhisar res",
+            "akhisar res muhasebe",
+            "2101",
+            "akhisar res muhasebe defteri",
+            "akhisar res defter",
+            "akhisar res",
+            "akhisar res yedek defter",
+            "akhisar res yedek"
+          ]
         },
         {
           "value": "BEST_MUHASEBE_DEFTERI",
-          "aliases": ["best", "best muhasebe", "2021"]
+          "aliases": [
+            "best",
+            "best muhasebe",
+            "2021",
+            "best defter",
+            "best muhasebe defteri",
+            "best muhasebe",
+            "best",
+            "best transformer",
+            "best ana",
+            "best tl",
+            "ana defter"
+          ]
         },
         {
           "value": "BEST_EUR_MUHASEBE_DEFTERI",
-          "aliases": ["best eur", "best eur muhasebe", "2161"]
+          "aliases": [
+            "best eur",
+            "best eur muhasebe",
+            "2161",
+            "best eur defter",
+            "best eur muhasebe defteri",
+            "best eur muhasebe",
+            "best eur",
+            "best eur transformer",
+            "best eur ana",
+            "best eur tl",
+            "ana eur defter"
+          ]
         },
         {
           "value": "KARESI_MUHASEBE_DEFTERI",
-          "aliases": ["karesi", "karesi muhasebe", "2043"]
+          "aliases": [
+            "karesi",
+            "karesi muhasebe",
+            "2043",
+            "karesi muhasebe defteri",
+            "karesi defter",
+            "karesi muhasebe",
+            "karesi yedek defter",
+            "karesi yedek"
+          ]
         }
       ]
     },
@@ -430,39 +770,124 @@
       "canonical_values": [
         {
           "value": "GOKZIRVE_MUHASEBE_DEFTERI",
-          "aliases": ["gokzirve", "gokzirve muhasebe", "2061"]
+          "aliases": [
+            "gokzirve",
+            "gokzirve muhasebe",
+            "2061",
+            "gökzirve",
+            "gökzirve muhasebe",
+            "gökzirve muhasebe defteri"
+          ]
         },
         {
           "value": "KARLITEPE_MUHASEBE_DEFTERI",
-          "aliases": ["karlitepe", "karlitepe muhasebe", "2063"]
+          "aliases": [
+            "karlitepe",
+            "karlitepe muhasebe",
+            "2063",
+            "karlitepe muhasebe defteri",
+            "karlitepe defter",
+            "karlitepe muhasebe"
+          ]
         },
         {
           "value": "HOLDING_MUHASEBE_DEFTERI",
-          "aliases": ["holding", "holding muhasebe", "2123"]
+          "aliases": [
+            "holding",
+            "holding muhasebe",
+            "2123",
+            "holding muhasebe defteri",
+            "holding defter",
+            "holding muhasebe",
+            "yircali holding",
+            "yircali holding muhasebe",
+            "yircali holding muhasebe defteri"
+          ]
         },
         {
           "value": "AKHISAR_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar", "akhisar muhasebe", "2041"]
+          "aliases": [
+            "akhisar",
+            "akhisar muhasebe",
+            "2041",
+            "akhisar muhasebe defteri",
+            "akhisar defter",
+            "akhisar muhasebe",
+            "akhisar yedek defter",
+            "akhisar yedek"
+          ]
         },
         {
           "value": "BESTAS_MUHASEBE_DEFTERI",
-          "aliases": ["bestas", "bestas muhasebe", "2023"]
+          "aliases": [
+            "bestas",
+            "bestas muhasebe",
+            "2023",
+            "bestas muhasebe defteri",
+            "bestas defter",
+            "bestas",
+            "bestas muhasebe",
+            "bestas yedek defter",
+            "bestas yedek"
+          ]
         },
         {
           "value": "AKHISAR_RES_MUHASEBE_DEFTERI",
-          "aliases": ["akhisar res", "akhisar res muhasebe", "2101"]
+          "aliases": [
+            "akhisar res",
+            "akhisar res muhasebe",
+            "2101",
+            "akhisar res muhasebe defteri",
+            "akhisar res defter",
+            "akhisar res",
+            "akhisar res yedek defter",
+            "akhisar res yedek"
+          ]
         },
         {
           "value": "BEST_MUHASEBE_DEFTERI",
-          "aliases": ["best", "best muhasebe", "2021"]
+          "aliases": [
+            "best",
+            "best muhasebe",
+            "2021",
+            "best defter",
+            "best muhasebe defteri",
+            "best muhasebe",
+            "best",
+            "best transformer",
+            "best ana",
+            "best tl",
+            "ana defter"
+          ]
         },
         {
           "value": "BEST_EUR_MUHASEBE_DEFTERI",
-          "aliases": ["best eur", "best eur muhasebe", "2161"]
+          "aliases": [
+            "best eur",
+            "best eur muhasebe",
+            "2161",
+            "best eur defter",
+            "best eur muhasebe defteri",
+            "best eur muhasebe",
+            "best eur",
+            "best eur transformer",
+            "best eur ana",
+            "best eur tl",
+            "ana eur defter"
+          ]
         },
         {
           "value": "KARESI_MUHASEBE_DEFTERI",
-          "aliases": ["karesi", "karesi muhasebe", "2043"]
+          "aliases": [
+            "karesi",
+            "karesi muhasebe",
+            "2043",
+            "karesi muhasebe defteri",
+            "karesi defter",
+            "karesi muhasebe",
+            "karesi yedek defter",
+            "karesi yedek"
+          ]
         }
       ]
     },
@@ -477,19 +902,44 @@
             "hazır değerler",
             "hazir degerler",
             "nakit",
-            "nakit benzerleri"
+            "nakit benzerleri",
+            "kasa",
+            "banka",
+            "cash"
           ]
         },
         {
           "value": "B. Menkul Kıymetler",
           "aliases": ["menkul kıymetler", "menkul kiymetler"]
         },
-        { "value": "C. Ticari Alacaklar", "aliases": ["ticari alacaklar"] },
+        {
+          "value": "C. Ticari Alacaklar",
+          "aliases": [
+            "ticari alacaklar",
+            "müşteri alacakları",
+            "musteri alacaklari",
+            "receivables",
+            "trade receivables"
+          ]
+        },
         {
           "value": "D. Diğer Alacaklar",
           "aliases": ["diğer alacaklar", "diger alacaklar"]
         },
-        { "value": "E. Stoklar", "aliases": ["stoklar", "stok"] },
+        {
+          "value": "E. Stoklar",
+          "aliases": [
+            "stoklar",
+            "stok",
+            "envanter",
+            "stok",
+            "ticari mallar",
+            "yarı mamul",
+            "yari mamul",
+            "mamul",
+            "inventory"
+          ]
+        },
         {
           "value": "F. Yıllara Yaygın İnş. ve Ona. Maliyeti",
           "aliases": [
@@ -517,7 +967,17 @@
       "column": "LINE_TEXT",
       "supported_ops": ["=", "!=", "LIKE"],
       "canonical_values": [
-        { "value": "A. Ticari Alacaklar", "aliases": ["ticari alacaklar"] },
+        {
+          "value": "A. Ticari Alacaklar",
+          "aliases": [
+            "ticari alacaklar",
+            "ticari alacaklar",
+            "müşteri alacakları",
+            "musteri alacaklari",
+            "receivables",
+            "trade receivables"
+          ]
+        },
         {
           "value": "B. Diğer Alacaklar",
           "aliases": ["diğer alacaklar", "diger alacaklar"]
@@ -532,7 +992,12 @@
             "maddi duran varlıklar",
             "maddi duran varliklar",
             "sabit kıymetler",
-            "fixed assets"
+            "fixed assets",
+            "ticari alacaklar",
+            "müşteri alacakları",
+            "musteri alacaklari",
+            "receivables",
+            "trade receivables"
           ]
         },
         {
@@ -540,6 +1005,11 @@
           "aliases": [
             "maddi olmayan duran varlıklar",
             "maddi olmayan duran varliklar",
+            "intangible assets",
+            "haklar",
+            "yazılım",
+            "yazilim",
+            "lisans",
             "intangible assets"
           ]
         },
@@ -570,26 +1040,60 @@
       "canonical_values": [
         {
           "value": "A. Mali Borçlar",
-          "aliases": ["mali borçlar", "mali borclar", "financial debts"]
+          "aliases": [
+            "mali borçlar",
+            "mali borclar",
+            "financial debts",
+            "krediler",
+            "banka kredileri",
+            "financial debt"
+          ]
         },
         {
           "value": "B. Ticari Borçlar",
-          "aliases": ["ticari borçlar", "ticari borclar", "trade payables"]
+          "aliases": [
+            "ticari borçlar",
+            "ticari borclar",
+            "trade payables",
+            "ticari borçlar",
+            "ticari borclar",
+            "trade payables"
+          ]
         },
         {
           "value": "C. Diğer Borçlar",
-          "aliases": ["diğer borçlar", "diger borclar"]
+          "aliases": [
+            "diğer borçlar",
+            "diger borclar",
+            "other payables",
+            "other debts"
+          ]
         },
         {
           "value": "D. Alınan Avanslar",
-          "aliases": ["alınan avanslar", "alinan avanslar"]
+          "aliases": [
+            "alınan avanslar",
+            "alinan avanslar",
+            "advances received",
+            "received advances",
+            "avanslar",
+            "avans",
+            "advance",
+            "advances"
+          ]
         },
         {
           "value": "E. Ödenecek Vergi ve Diğer Yükümlülükler",
           "aliases": [
             "ödenecek vergiler",
             "vergi yükümlülükleri",
-            "odenecek vergiler"
+            "odenecek vergiler",
+            "ödenecek vergi",
+            "odenecek vergi",
+            "vergi borçları",
+            "vergi borclari",
+            "yükümlülükler",
+            "yukumlulukler"
           ]
         },
         {
@@ -597,7 +1101,13 @@
           "aliases": [
             "borç karşılıkları",
             "gider karşılıkları",
-            "borc ve gider karsiliklari"
+            "borc ve gider karsiliklari",
+            "kıdem tazminatı",
+            "kidem tazminati",
+            "karşılıklar",
+            "karsiliklar",
+            "provisions",
+            "provision"
           ]
         },
         {
@@ -620,19 +1130,45 @@
       "canonical_values": [
         {
           "value": "A. Mali Borçlar",
-          "aliases": ["mali borçlar", "mali borclar"]
+          "aliases": [
+            "mali borçlar",
+            "mali borclar",
+            "financial debts",
+            "krediler",
+            "banka kredileri",
+            "financial debt"
+          ]
         },
         {
           "value": "B. Ticari Borçlar",
-          "aliases": ["ticari borçlar", "ticari borclar"]
+          "aliases": [
+            "ticari borçlar",
+            "ticari borclar",
+            "trade payables",
+            "trade payables"
+          ]
         },
         {
           "value": "C. Diğer Borçlar",
-          "aliases": ["diğer borçlar", "diger borclar"]
+          "aliases": [
+            "diğer borçlar",
+            "diger borclar",
+            "other payables",
+            "other debts"
+          ]
         },
         {
           "value": "D. Alınan Avanslar",
-          "aliases": ["alınan avanslar", "alinan avanslar"]
+          "aliases": [
+            "alınan avanslar",
+            "alinan avanslar",
+            "advances received",
+            "received advances",
+            "avanslar",
+            "avans",
+            "advance",
+            "advances"
+          ]
         },
         {
           "value": "E. Borç ve Gider Karşılıkları",
@@ -640,7 +1176,9 @@
             "borç ve gider karşılıkları",
             "borc ve gider karsiliklari",
             "kıdem tazminatı karşılıkları",
-            "kidem tazminati karsiliklari"
+            "kidem tazminati karsiliklari",
+            "karşılıklar",
+            "karsiliklar"
           ]
         },
         {
@@ -666,23 +1204,51 @@
       "canonical_values": [
         {
           "value": "A. Ödenen Sermaye",
-          "aliases": ["ödenen sermaye", "odenen sermaye", "paid in capital"]
+          "aliases": [
+            "ödenen sermaye",
+            "odenen sermaye",
+            "paid in capital",
+            "paid-in capital",
+            "capital stock"
+          ]
         },
         {
           "value": "B. Sermaye Yedekleri",
-          "aliases": ["sermaye yedekleri", "capital reserves"]
+          "aliases": [
+            "sermaye yedekleri",
+            "capital reserves",
+            "sermaye yedekleri",
+            "capital reserves"
+          ]
         },
         {
           "value": "C. Kar Yedekleri",
-          "aliases": ["kar yedekleri", "profit reserves"]
+          "aliases": [
+            "kar yedekleri",
+            "profit reserves",
+            "kar yedekleri",
+            "profit reserves"
+          ]
         },
         {
           "value": "D. Geçmiş Yıllar Karları",
-          "aliases": ["geçmiş yıllar karları", "gecmis yillar karlari"]
+          "aliases": [
+            "geçmiş yıllar karları",
+            "gecmis yillar karlari",
+            "retained earnings",
+            "gecmis yillar karları",
+            "retained earnings"
+          ]
         },
         {
           "value": "E. Geçmiş Yıllar Zararları (-)",
-          "aliases": ["geçmiş yıllar zararları", "gecmis yillar zararlari"]
+          "aliases": [
+            "geçmiş yıllar zararları",
+            "gecmis yillar zararlari",
+            "retained losses",
+            "gecmis yillar zararlari",
+            "retained losses"
+          ]
         },
         {
           "value": "F. Dönem Net Karı (Zararı)",
@@ -692,7 +1258,14 @@
             "dönem net zararı",
             "donem net zarari",
             "net profit",
-            "net loss"
+            "net loss",
+            "period net profit",
+            "net kar",
+            "net zarar",
+            "net dönem karı",
+            "net donem kari",
+            "profit",
+            "loss"
           ]
         }
       ]
@@ -703,12 +1276,28 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-25",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
+          "value": "02-25",
+          "aliases": [
+            "şubat 2025",
+            "subat 2025",
+            "02/2025",
+            "2025 şubat",
+            "2025 subat",
+            "2025-02",
+            "02-2025"
+          ]
         },
         {
-          "value": "03-18",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
+          "value": "12-25",
+          "aliases": [
+            "aralık 2025",
+            "aralik 2025",
+            "12/2025",
+            "2025 aralık",
+            "2025 aralik",
+            "2025-12",
+            "12-2025"
+          ]
         }
       ]
     },
@@ -718,12 +1307,28 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-25",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
+          "value": "02-25",
+          "aliases": [
+            "şubat 2025",
+            "subat 2025",
+            "02/2025",
+            "2025 şubat",
+            "2025 subat",
+            "2025-02",
+            "02-2025"
+          ]
         },
         {
-          "value": "03-18",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
+          "value": "12-25",
+          "aliases": [
+            "aralık 2025",
+            "aralik 2025",
+            "12/2025",
+            "2025 aralık",
+            "2025 aralik",
+            "2025-12",
+            "12-2025"
+          ]
         }
       ]
     },
@@ -733,12 +1338,28 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-25",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
+          "value": "02-25",
+          "aliases": [
+            "şubat 2025",
+            "subat 2025",
+            "02/2025",
+            "2025 şubat",
+            "2025 subat",
+            "2025-02",
+            "02-2025"
+          ]
         },
         {
-          "value": "03-18",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
+          "value": "12-25",
+          "aliases": [
+            "aralık 2025",
+            "aralik 2025",
+            "12/2025",
+            "2025 aralık",
+            "2025 aralik",
+            "2025-12",
+            "12-2025"
+          ]
         }
       ]
     },
@@ -748,12 +1369,28 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-25",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
+          "value": "02-25",
+          "aliases": [
+            "şubat 2025",
+            "subat 2025",
+            "02/2025",
+            "2025 şubat",
+            "2025 subat",
+            "2025-02",
+            "02-2025"
+          ]
         },
         {
-          "value": "03-18",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
+          "value": "12-25",
+          "aliases": [
+            "aralık 2025",
+            "aralik 2025",
+            "12/2025",
+            "2025 aralık",
+            "2025 aralik",
+            "2025-12",
+            "12-2025"
+          ]
         }
       ]
     },
@@ -763,12 +1400,28 @@
       "supported_ops": ["=", "LIKE"],
       "canonical_values": [
         {
-          "value": "01-25",
-          "aliases": ["ocak 2025", "01/2025", "2025 ocak", "2025-01", "01-2025"]
+          "value": "02-25",
+          "aliases": [
+            "şubat 2025",
+            "subat 2025",
+            "02/2025",
+            "2025 şubat",
+            "2025 subat",
+            "2025-02",
+            "02-2025"
+          ]
         },
         {
-          "value": "03-18",
-          "aliases": ["mart 2018", "03/2018", "2018 mart", "2018-03", "03-2018"]
+          "value": "12-25",
+          "aliases": [
+            "aralık 2025",
+            "aralik 2025",
+            "12/2025",
+            "2025 aralık",
+            "2025 aralik",
+            "2025-12",
+            "12-2025"
+          ]
         }
       ]
     }

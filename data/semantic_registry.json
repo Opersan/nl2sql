@@ -205,7 +205,8 @@
         "donen varliklar",
         "aktif",
         "aktif varlıklar",
-        "current assets"
+        "current assets",
+        "cari varlıklar"
       ],
       "intent_rules": [
         {
@@ -223,7 +224,7 @@
         },
         {
           "intent": "balance_line_list",
-          "all_of": ["varlıklar"],
+          "all_of": ["aktif"],
           "any_of": [
             "listele",
             "getir",
@@ -237,11 +238,19 @@
         {
           "intent": "balance_value_lookup",
           "all_of": ["dönen"],
-          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+          "any_of": [
+            "tutar",
+            "değer",
+            "deger",
+            "kaç",
+            "kac",
+            "ne kadar",
+            "toplam"
+          ]
         },
         {
           "intent": "balance_header_only",
-          "all_of": ["dönen"],
+          "all_of": [],
           "any_of": [
             "başlık",
             "baslik",
@@ -273,27 +282,16 @@
           "all_of": [],
           "any_of": [
             "hazır değerler",
+            "hazir degerler",
+            "menkul kıymetler",
+            "menkul kiymetler",
+            "ticari alacaklar",
+            "diğer alacaklar",
+            "diger alacaklar",
             "stoklar",
-            "mali borçlar",
-            "ticari borçlar",
-            "ödenen sermaye",
-            "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
-          ]
-        },
-        {
-          "intent": "balance_line_lookup",
-          "all_of": [],
-          "any_of": [
-            "hazır değerler",
-            "stoklar",
-            "mali borçlar",
-            "ticari borçlar",
-            "ödenen sermaye",
-            "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
+            "stok",
+            "diğer dönen varlıklar",
+            "diger donen varliklar"
           ]
         }
       ],
@@ -385,9 +383,10 @@
         "bilanco",
         "duran varlıklar",
         "duran varliklar",
-        "aktif",
         "fixed assets",
-        "non current assets"
+        "non current assets",
+        "sabit kıymetler",
+        "sabit kiymetler"
       ],
       "intent_rules": [
         {
@@ -406,11 +405,19 @@
         {
           "intent": "balance_value_lookup",
           "all_of": ["duran"],
-          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+          "any_of": [
+            "tutar",
+            "değer",
+            "deger",
+            "kaç",
+            "kac",
+            "ne kadar",
+            "toplam"
+          ]
         },
         {
           "intent": "balance_header_only",
-          "all_of": ["duran"],
+          "all_of": [],
           "any_of": [
             "başlık",
             "baslik",
@@ -441,28 +448,17 @@
           "intent": "balance_line_lookup",
           "all_of": [],
           "any_of": [
-            "hazır değerler",
-            "stoklar",
-            "mali borçlar",
-            "ticari borçlar",
-            "ödenen sermaye",
-            "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
-          ]
-        },
-        {
-          "intent": "balance_line_lookup",
-          "all_of": [],
-          "any_of": [
-            "hazır değerler",
-            "stoklar",
-            "mali borçlar",
-            "ticari borçlar",
-            "ödenen sermaye",
-            "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
+            "ticari alacaklar",
+            "diğer alacaklar",
+            "diger alacaklar",
+            "mali duran varlıklar",
+            "mali duran varliklar",
+            "maddi duran varlıklar",
+            "maddi duran varliklar",
+            "maddi olmayan duran varlıklar",
+            "maddi olmayan duran varliklar",
+            "diğer duran varlıklar",
+            "diger duran varliklar"
           ]
         }
       ],
@@ -527,7 +523,7 @@
           "filters": [
             {
               "column": "IS_HEADER",
-              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
               "op": "=",
               "value": 0
             }
@@ -536,7 +532,7 @@
             {
               "function": "SUM",
               "column": "AMOUNT_VALUE",
-              "table": "XXBT_V_BILANCO_DONEN_VARLIKLAR",
+              "table": "XXBT_V_BILANCO_DURAN_VARLIKLAR",
               "alias": "detail_total_amount"
             }
           ]
@@ -589,11 +585,19 @@
         {
           "intent": "balance_value_lookup",
           "all_of": ["kısa"],
-          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+          "any_of": [
+            "tutar",
+            "değer",
+            "deger",
+            "kaç",
+            "kac",
+            "ne kadar",
+            "toplam"
+          ]
         },
         {
           "intent": "balance_header_only",
-          "all_of": ["kısa"],
+          "all_of": [],
           "any_of": [
             "başlık",
             "baslik",
@@ -624,28 +628,20 @@
           "intent": "balance_line_lookup",
           "all_of": [],
           "any_of": [
-            "hazır değerler",
-            "stoklar",
             "mali borçlar",
+            "mali borclar",
             "ticari borçlar",
-            "ödenen sermaye",
-            "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
-          ]
-        },
-        {
-          "intent": "balance_line_lookup",
-          "all_of": [],
-          "any_of": [
-            "hazır değerler",
-            "stoklar",
-            "mali borçlar",
-            "ticari borçlar",
-            "ödenen sermaye",
-            "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
+            "ticari borclar",
+            "diğer borçlar",
+            "diger borclar",
+            "alınan avanslar",
+            "alinan avanslar",
+            "ödenecek vergiler",
+            "odenecek vergiler",
+            "borç ve gider karşılıkları",
+            "borc ve gider karsiliklari",
+            "diğer kısa vadeli yabancı kaynaklar",
+            "diger kisa vadeli yabanci kaynaklar"
           ]
         }
       ],
@@ -672,6 +668,55 @@
               "table": "XXBT_V_BILANCO_KVYK",
               "op": "=",
               "value": 1
+            }
+          ]
+        },
+        "balance_detail_only": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_KVYK",
+              "op": "=",
+              "value": 0
+            }
+          ]
+        },
+        "balance_top_line": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_KVYK",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "order_by": [
+            {
+              "column": "AMOUNT_VALUE",
+              "direction": "DESC",
+              "table": "XXBT_V_BILANCO_KVYK"
+            }
+          ],
+          "limit": 1
+        },
+        "balance_total_excluding_headers": {
+          "stable": true,
+          "filters": [
+            {
+              "column": "IS_HEADER",
+              "table": "XXBT_V_BILANCO_KVYK",
+              "op": "=",
+              "value": 0
+            }
+          ],
+          "aggregations": [
+            {
+              "function": "SUM",
+              "column": "AMOUNT_VALUE",
+              "table": "XXBT_V_BILANCO_KVYK",
+              "alias": "detail_total_amount"
             }
           ]
         }
@@ -723,11 +768,19 @@
         {
           "intent": "balance_value_lookup",
           "all_of": ["uzun"],
-          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+          "any_of": [
+            "tutar",
+            "değer",
+            "deger",
+            "kaç",
+            "kac",
+            "ne kadar",
+            "toplam"
+          ]
         },
         {
           "intent": "balance_header_only",
-          "all_of": ["uzun"],
+          "all_of": [],
           "any_of": [
             "başlık",
             "baslik",
@@ -758,28 +811,20 @@
           "intent": "balance_line_lookup",
           "all_of": [],
           "any_of": [
-            "hazır değerler",
-            "stoklar",
             "mali borçlar",
+            "mali borclar",
             "ticari borçlar",
-            "ödenen sermaye",
-            "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
-          ]
-        },
-        {
-          "intent": "balance_line_lookup",
-          "all_of": [],
-          "any_of": [
-            "hazır değerler",
-            "stoklar",
-            "mali borçlar",
-            "ticari borçlar",
-            "ödenen sermaye",
-            "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
+            "ticari borclar",
+            "diğer borçlar",
+            "diger borclar",
+            "alınan avanslar",
+            "alinan avanslar",
+            "borç ve gider karşılıkları",
+            "borc ve gider karsiliklari",
+            "kıdem tazminatı karşılıkları",
+            "kidem tazminati karsiliklari",
+            "diğer uzun vadeli yabancı kaynaklar",
+            "diger uzun vadeli yabanci kaynaklar"
           ]
         }
       ],
@@ -873,7 +918,10 @@
         "ozkaynak",
         "özkaynaklar",
         "ozkaynaklar",
-        "equity"
+        "equity",
+        "öz sermaye",
+        "oz sermaye",
+        "sermaye"
       ],
       "intent_rules": [
         {
@@ -905,11 +953,19 @@
         {
           "intent": "balance_value_lookup",
           "all_of": ["özkaynak"],
-          "any_of": ["tutar", "değer", "deger", "kaç", "kac", "ne kadar"]
+          "any_of": [
+            "tutar",
+            "değer",
+            "deger",
+            "kaç",
+            "kac",
+            "ne kadar",
+            "toplam"
+          ]
         },
         {
           "intent": "balance_header_only",
-          "all_of": ["özkaynak"],
+          "all_of": [],
           "any_of": [
             "başlık",
             "baslik",
@@ -940,28 +996,18 @@
           "intent": "balance_line_lookup",
           "all_of": [],
           "any_of": [
-            "hazır değerler",
-            "stoklar",
-            "mali borçlar",
-            "ticari borçlar",
             "ödenen sermaye",
+            "odenen sermaye",
+            "sermaye yedekleri",
             "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
-          ]
-        },
-        {
-          "intent": "balance_line_lookup",
-          "all_of": [],
-          "any_of": [
-            "hazır değerler",
-            "stoklar",
-            "mali borçlar",
-            "ticari borçlar",
-            "ödenen sermaye",
-            "kar yedekleri",
-            "kıdem tazminatı",
-            "dönem net karı"
+            "geçmiş yıllar karları",
+            "gecmis yillar karlari",
+            "geçmiş yıllar zararları",
+            "gecmis yillar zararlari",
+            "dönem net karı",
+            "donem net kari",
+            "dönem net zararı",
+            "donem net zarari"
           ]
         }
       ],

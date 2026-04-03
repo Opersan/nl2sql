@@ -130,3 +130,6 @@
 {"raw_term":"yasal yedekler","language":"tr","normalized":"yasal yedekler","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.92,"domain":"GL","source":"curated"}
 {"raw_term":"olağanüstü yedekler","language":"tr","normalized":"olaganustu yedekler","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.92,"domain":"GL","source":"curated"}
 {"raw_term":"özel fonlar","language":"tr","normalized":"ozel fonlar","canonical":"GL_BALANCE_EQUITY","match_type":"phrase","confidence":0.91,"domain":"GL","source":"curated"}
+{"raw_term":"PERIOD_NAME","language":"en","normalized":"period_name","canonical":"filter:PERIOD_NAME","match_type":"filter_alias","confidence":0.9,"domain":"GL","source":"curated"}
+{"raw_term":"muhasebe dönemi","language":"tr","normalized":"muhasebe donemi","canonical":"filter:PERIOD_NAME","match_type":"phrase","confidence":0.96,"domain":"GL","source":"curated"}
+{"raw_term":"dönem formatı","language":"tr","normalized":"donem formati","canonical":"filter:PERIOD_NAME","match_type":"phrase","confidence":0.92,"domain":"GL","source":"curated"}
